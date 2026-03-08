@@ -1,37 +1,37 @@
 // options.proto defines custom proto annotations for configuring entity matching
-// behaviour. These annotations are consumed by protoc-gen-llm-extract to generate
+// behaviour. These annotations are consumed by protoc-gen-entitystore to generate
 // Go code that returns an EntityMatchConfig for each annotated message type.
 //
 // There are two extension points:
 //
-//   (llm_extract.v1.field)   — per-field options  (anchor, similarity, weight, …)
-//   (llm_extract.v1.message) — per-message options (thresholds, composite anchors, …)
+//   (entitystore.v1.field)   — per-field options  (anchor, similarity, weight, …)
+//   (entitystore.v1.message) — per-message options (thresholds, composite anchors, …)
 //
 // Three common annotation patterns:
 //
 //   1. Anchor field — identity lookup (email, invoice number):
 //
-//        string email = 1 [(llm_extract.v1.field) = {
+//        string email = 1 [(entitystore.v1.field) = {
 //          anchor: true
-//          similarity: EXACT
-//          normalizer: LOWERCASE_TRIM
+//          similarity: SIMILARITY_FUNCTION_EXACT
+//          normalizer: NORMALIZER_LOWERCASE_TRIM
 //          weight: 0.30
-//          conflict_strategy: FLAG_FOR_REVIEW
+//          conflict_strategy: CONFLICT_STRATEGY_FLAG_FOR_REVIEW
 //          embed: true
 //        }];
 //
 //   2. Fuzzy match field — similarity scoring (name, address):
 //
-//        string full_name = 2 [(llm_extract.v1.field) = {
-//          similarity: JARO_WINKLER
+//        string full_name = 2 [(entitystore.v1.field) = {
+//          similarity: SIMILARITY_FUNCTION_JARO_WINKLER
 //          weight: 0.30
 //          embed: true
 //          token_field: true
-//          normalizer: LOWERCASE_TRIM
+//          normalizer: NORMALIZER_LOWERCASE_TRIM
 //        }];
 //
 //   3. Extraction-only field — no annotations needed. Fields without
-//      (llm_extract.v1.field) are still extracted by the pipeline but
+//      (entitystore.v1.field) are still extracted by the pipeline but
 //      do not participate in matching or scoring. Use this for fields
 //      like line items, notes, or action items.
 
@@ -39,9 +39,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: llm_extract/v1/options.proto
+// source: entitystore/v1/options.proto
 
-package llmextractv1
+package entitystorev1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -65,38 +65,38 @@ type SimilarityFunction int32
 
 const (
 	SimilarityFunction_SIMILARITY_FUNCTION_UNSPECIFIED SimilarityFunction = 0
-	// EXACT — for structured identifiers (emails, phone numbers, dates, IDs).
+	// SIMILARITY_FUNCTION_EXACT — for structured identifiers (emails, phone numbers, dates, IDs).
 	// Values must match character-for-character after normalization.
-	SimilarityFunction_EXACT SimilarityFunction = 1
-	// JARO_WINKLER — for names and short strings where typos or transpositions
+	SimilarityFunction_SIMILARITY_FUNCTION_EXACT SimilarityFunction = 1
+	// SIMILARITY_FUNCTION_JARO_WINKLER — for names and short strings where typos or transpositions
 	// are common. Gives higher weight to matching prefixes, making it ideal for
 	// person names (e.g. "Jon Smith" vs "John Smith").
-	SimilarityFunction_JARO_WINKLER SimilarityFunction = 2
-	// LEVENSHTEIN — for strings where insertions and deletions matter, such as
+	SimilarityFunction_SIMILARITY_FUNCTION_JARO_WINKLER SimilarityFunction = 2
+	// SIMILARITY_FUNCTION_LEVENSHTEIN — for strings where insertions and deletions matter, such as
 	// street addresses with varying abbreviations (e.g. "123 Main Street" vs
 	// "123 Main St").
-	SimilarityFunction_LEVENSHTEIN SimilarityFunction = 3
-	// TOKEN_JACCARD — for multi-word fields where word order doesn't matter.
+	SimilarityFunction_SIMILARITY_FUNCTION_LEVENSHTEIN SimilarityFunction = 3
+	// SIMILARITY_FUNCTION_TOKEN_JACCARD — for multi-word fields where word order doesn't matter.
 	// Compares token sets, making it suitable for job titles, descriptions,
 	// or any field where the same words may appear in different order.
-	SimilarityFunction_TOKEN_JACCARD SimilarityFunction = 4
+	SimilarityFunction_SIMILARITY_FUNCTION_TOKEN_JACCARD SimilarityFunction = 4
 )
 
 // Enum value maps for SimilarityFunction.
 var (
 	SimilarityFunction_name = map[int32]string{
 		0: "SIMILARITY_FUNCTION_UNSPECIFIED",
-		1: "EXACT",
-		2: "JARO_WINKLER",
-		3: "LEVENSHTEIN",
-		4: "TOKEN_JACCARD",
+		1: "SIMILARITY_FUNCTION_EXACT",
+		2: "SIMILARITY_FUNCTION_JARO_WINKLER",
+		3: "SIMILARITY_FUNCTION_LEVENSHTEIN",
+		4: "SIMILARITY_FUNCTION_TOKEN_JACCARD",
 	}
 	SimilarityFunction_value = map[string]int32{
-		"SIMILARITY_FUNCTION_UNSPECIFIED": 0,
-		"EXACT":                           1,
-		"JARO_WINKLER":                    2,
-		"LEVENSHTEIN":                     3,
-		"TOKEN_JACCARD":                   4,
+		"SIMILARITY_FUNCTION_UNSPECIFIED":   0,
+		"SIMILARITY_FUNCTION_EXACT":         1,
+		"SIMILARITY_FUNCTION_JARO_WINKLER":  2,
+		"SIMILARITY_FUNCTION_LEVENSHTEIN":   3,
+		"SIMILARITY_FUNCTION_TOKEN_JACCARD": 4,
 	}
 )
 
@@ -111,11 +111,11 @@ func (x SimilarityFunction) String() string {
 }
 
 func (SimilarityFunction) Descriptor() protoreflect.EnumDescriptor {
-	return file_llm_extract_v1_options_proto_enumTypes[0].Descriptor()
+	return file_entitystore_v1_options_proto_enumTypes[0].Descriptor()
 }
 
 func (SimilarityFunction) Type() protoreflect.EnumType {
-	return &file_llm_extract_v1_options_proto_enumTypes[0]
+	return &file_entitystore_v1_options_proto_enumTypes[0]
 }
 
 func (x SimilarityFunction) Number() protoreflect.EnumNumber {
@@ -124,7 +124,7 @@ func (x SimilarityFunction) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use SimilarityFunction.Descriptor instead.
 func (SimilarityFunction) EnumDescriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{0}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{0}
 }
 
 // ConflictStrategy determines how to resolve a field-level conflict when
@@ -133,33 +133,33 @@ type ConflictStrategy int32
 
 const (
 	ConflictStrategy_CONFLICT_STRATEGY_UNSPECIFIED ConflictStrategy = 0
-	// FLAG_FOR_REVIEW — the field is critical and conflicts need human judgment.
+	// CONFLICT_STRATEGY_FLAG_FOR_REVIEW — the field is critical and conflicts need human judgment.
 	// Use for identity fields like email on a Person or invoice number on an
 	// Invoice where an unexpected change likely indicates a data quality issue.
-	ConflictStrategy_FLAG_FOR_REVIEW ConflictStrategy = 1
-	// LATEST_WINS — the most recently extracted value replaces the existing one.
+	ConflictStrategy_CONFLICT_STRATEGY_FLAG_FOR_REVIEW ConflictStrategy = 1
+	// CONFLICT_STRATEGY_LATEST_WINS — the most recently extracted value replaces the existing one.
 	// Use for fields that naturally evolve over time, such as job title, phone
 	// number, or mailing address.
-	ConflictStrategy_LATEST_WINS ConflictStrategy = 2
-	// HIGHEST_CONFIDENCE — keep whichever value came from the higher-confidence
+	ConflictStrategy_CONFLICT_STRATEGY_LATEST_WINS ConflictStrategy = 2
+	// CONFLICT_STRATEGY_HIGHEST_CONFIDENCE — keep whichever value came from the higher-confidence
 	// extraction. Use when extraction quality varies across documents and you
 	// want to converge on the most reliable value.
-	ConflictStrategy_HIGHEST_CONFIDENCE ConflictStrategy = 3
+	ConflictStrategy_CONFLICT_STRATEGY_HIGHEST_CONFIDENCE ConflictStrategy = 3
 )
 
 // Enum value maps for ConflictStrategy.
 var (
 	ConflictStrategy_name = map[int32]string{
 		0: "CONFLICT_STRATEGY_UNSPECIFIED",
-		1: "FLAG_FOR_REVIEW",
-		2: "LATEST_WINS",
-		3: "HIGHEST_CONFIDENCE",
+		1: "CONFLICT_STRATEGY_FLAG_FOR_REVIEW",
+		2: "CONFLICT_STRATEGY_LATEST_WINS",
+		3: "CONFLICT_STRATEGY_HIGHEST_CONFIDENCE",
 	}
 	ConflictStrategy_value = map[string]int32{
-		"CONFLICT_STRATEGY_UNSPECIFIED": 0,
-		"FLAG_FOR_REVIEW":               1,
-		"LATEST_WINS":                   2,
-		"HIGHEST_CONFIDENCE":            3,
+		"CONFLICT_STRATEGY_UNSPECIFIED":        0,
+		"CONFLICT_STRATEGY_FLAG_FOR_REVIEW":    1,
+		"CONFLICT_STRATEGY_LATEST_WINS":        2,
+		"CONFLICT_STRATEGY_HIGHEST_CONFIDENCE": 3,
 	}
 )
 
@@ -174,11 +174,11 @@ func (x ConflictStrategy) String() string {
 }
 
 func (ConflictStrategy) Descriptor() protoreflect.EnumDescriptor {
-	return file_llm_extract_v1_options_proto_enumTypes[1].Descriptor()
+	return file_entitystore_v1_options_proto_enumTypes[1].Descriptor()
 }
 
 func (ConflictStrategy) Type() protoreflect.EnumType {
-	return &file_llm_extract_v1_options_proto_enumTypes[1]
+	return &file_entitystore_v1_options_proto_enumTypes[1]
 }
 
 func (x ConflictStrategy) Number() protoreflect.EnumNumber {
@@ -187,7 +187,7 @@ func (x ConflictStrategy) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use ConflictStrategy.Descriptor instead.
 func (ConflictStrategy) EnumDescriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{1}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{1}
 }
 
 // Normalizer identifies a built-in normalization function applied to field
@@ -197,26 +197,26 @@ type Normalizer int32
 
 const (
 	Normalizer_NORMALIZER_UNSPECIFIED Normalizer = 0
-	// LOWERCASE_TRIM — converts to lowercase and trims leading/trailing
+	// NORMALIZER_LOWERCASE_TRIM — converts to lowercase and trims leading/trailing
 	// whitespace. Suitable for most string fields (names, emails, addresses).
-	Normalizer_LOWERCASE_TRIM Normalizer = 1
-	// PHONE_NORMALIZE — strips all non-digit characters except a leading '+'.
+	Normalizer_NORMALIZER_LOWERCASE_TRIM Normalizer = 1
+	// NORMALIZER_PHONE_NORMALIZE — strips all non-digit characters except a leading '+'.
 	// Converts formats like "(555) 867-5309" and "555.867.5309" into a
 	// canonical form. Use only for phone number fields.
-	Normalizer_PHONE_NORMALIZE Normalizer = 2
+	Normalizer_NORMALIZER_PHONE_NORMALIZE Normalizer = 2
 )
 
 // Enum value maps for Normalizer.
 var (
 	Normalizer_name = map[int32]string{
 		0: "NORMALIZER_UNSPECIFIED",
-		1: "LOWERCASE_TRIM",
-		2: "PHONE_NORMALIZE",
+		1: "NORMALIZER_LOWERCASE_TRIM",
+		2: "NORMALIZER_PHONE_NORMALIZE",
 	}
 	Normalizer_value = map[string]int32{
-		"NORMALIZER_UNSPECIFIED": 0,
-		"LOWERCASE_TRIM":         1,
-		"PHONE_NORMALIZE":        2,
+		"NORMALIZER_UNSPECIFIED":     0,
+		"NORMALIZER_LOWERCASE_TRIM":  1,
+		"NORMALIZER_PHONE_NORMALIZE": 2,
 	}
 )
 
@@ -231,11 +231,11 @@ func (x Normalizer) String() string {
 }
 
 func (Normalizer) Descriptor() protoreflect.EnumDescriptor {
-	return file_llm_extract_v1_options_proto_enumTypes[2].Descriptor()
+	return file_entitystore_v1_options_proto_enumTypes[2].Descriptor()
 }
 
 func (Normalizer) Type() protoreflect.EnumType {
-	return &file_llm_extract_v1_options_proto_enumTypes[2]
+	return &file_entitystore_v1_options_proto_enumTypes[2]
 }
 
 func (x Normalizer) Number() protoreflect.EnumNumber {
@@ -244,11 +244,11 @@ func (x Normalizer) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Normalizer.Descriptor instead.
 func (Normalizer) EnumDescriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{2}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{2}
 }
 
 // FieldOptions configures matching behaviour for a single proto field.
-// Apply via the (llm_extract.v1.field) extension on any string or scalar field.
+// Apply via the (entitystore.v1.field) extension on any string or scalar field.
 type FieldOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Whether this field is an identity anchor. Anchor values are stored in a
@@ -259,7 +259,7 @@ type FieldOptions struct {
 	// Similarity function to use when scoring this field against a candidate.
 	// Choose based on the nature of the field value — see SimilarityFunction
 	// enum comments for guidance.
-	Similarity SimilarityFunction `protobuf:"varint,2,opt,name=similarity,proto3,enum=llm_extract.v1.SimilarityFunction" json:"similarity,omitempty"`
+	Similarity SimilarityFunction `protobuf:"varint,2,opt,name=similarity,proto3,enum=entitystore.v1.SimilarityFunction" json:"similarity,omitempty"`
 	// Relative weight for composite scoring. All weights across fields in a
 	// message should sum to approximately 1.0. A field with weight 0.30
 	// contributes 30% of the composite match score.
@@ -267,10 +267,10 @@ type FieldOptions struct {
 	// How to handle conflicting values during entity merge. Only relevant when
 	// two records are determined to represent the same entity but have different
 	// values for this field. Can be omitted for immutable or non-critical fields.
-	ConflictStrategy ConflictStrategy `protobuf:"varint,4,opt,name=conflict_strategy,json=conflictStrategy,proto3,enum=llm_extract.v1.ConflictStrategy" json:"conflict_strategy,omitempty"`
+	ConflictStrategy ConflictStrategy `protobuf:"varint,4,opt,name=conflict_strategy,json=conflictStrategy,proto3,enum=entitystore.v1.ConflictStrategy" json:"conflict_strategy,omitempty"`
 	// Built-in normalizer to apply before comparison. Applied to both the
 	// incoming value and stored values so comparisons are consistent.
-	Normalizer Normalizer `protobuf:"varint,5,opt,name=normalizer,proto3,enum=llm_extract.v1.Normalizer" json:"normalizer,omitempty"`
+	Normalizer Normalizer `protobuf:"varint,5,opt,name=normalizer,proto3,enum=entitystore.v1.Normalizer" json:"normalizer,omitempty"`
 	// Whether to include this field's text value in the embedding vector input.
 	// Use for fields that carry semantic meaning (names, descriptions, titles),
 	// not for structured identifiers or codes. Multiple embed fields are
@@ -287,7 +287,7 @@ type FieldOptions struct {
 
 func (x *FieldOptions) Reset() {
 	*x = FieldOptions{}
-	mi := &file_llm_extract_v1_options_proto_msgTypes[0]
+	mi := &file_entitystore_v1_options_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -299,7 +299,7 @@ func (x *FieldOptions) String() string {
 func (*FieldOptions) ProtoMessage() {}
 
 func (x *FieldOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_llm_extract_v1_options_proto_msgTypes[0]
+	mi := &file_entitystore_v1_options_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -312,7 +312,7 @@ func (x *FieldOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FieldOptions.ProtoReflect.Descriptor instead.
 func (*FieldOptions) Descriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{0}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *FieldOptions) GetAnchor() bool {
@@ -379,7 +379,7 @@ type CompositeAnchor struct {
 
 func (x *CompositeAnchor) Reset() {
 	*x = CompositeAnchor{}
-	mi := &file_llm_extract_v1_options_proto_msgTypes[1]
+	mi := &file_entitystore_v1_options_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -391,7 +391,7 @@ func (x *CompositeAnchor) String() string {
 func (*CompositeAnchor) ProtoMessage() {}
 
 func (x *CompositeAnchor) ProtoReflect() protoreflect.Message {
-	mi := &file_llm_extract_v1_options_proto_msgTypes[1]
+	mi := &file_entitystore_v1_options_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -404,7 +404,7 @@ func (x *CompositeAnchor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompositeAnchor.ProtoReflect.Descriptor instead.
 func (*CompositeAnchor) Descriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{1}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CompositeAnchor) GetFields() []string {
@@ -440,7 +440,7 @@ type MatchThresholdsProto struct {
 
 func (x *MatchThresholdsProto) Reset() {
 	*x = MatchThresholdsProto{}
-	mi := &file_llm_extract_v1_options_proto_msgTypes[2]
+	mi := &file_entitystore_v1_options_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -452,7 +452,7 @@ func (x *MatchThresholdsProto) String() string {
 func (*MatchThresholdsProto) ProtoMessage() {}
 
 func (x *MatchThresholdsProto) ProtoReflect() protoreflect.Message {
-	mi := &file_llm_extract_v1_options_proto_msgTypes[2]
+	mi := &file_entitystore_v1_options_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -465,7 +465,7 @@ func (x *MatchThresholdsProto) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MatchThresholdsProto.ProtoReflect.Descriptor instead.
 func (*MatchThresholdsProto) Descriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{2}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MatchThresholdsProto) GetAutoMatch() float32 {
@@ -483,12 +483,12 @@ func (x *MatchThresholdsProto) GetReviewZone() float32 {
 }
 
 // MessageOptions configures matching behaviour for a proto message type.
-// Apply via the (llm_extract.v1.message) extension at the message level.
+// Apply via the (entitystore.v1.message) extension at the message level.
 //
 // Example:
 //
 //	message Person {
-//	  option (llm_extract.v1.message) = {
+//	  option (entitystore.v1.message) = {
 //	    match_thresholds: {auto_match: 0.85, review_zone: 0.60}
 //	    composite_anchors: [{fields: ["full_name", "date_of_birth"]}]
 //	    allowed_relations: ["affiliated_with", "same_as"]
@@ -516,7 +516,7 @@ type MessageOptions struct {
 
 func (x *MessageOptions) Reset() {
 	*x = MessageOptions{}
-	mi := &file_llm_extract_v1_options_proto_msgTypes[3]
+	mi := &file_entitystore_v1_options_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -528,7 +528,7 @@ func (x *MessageOptions) String() string {
 func (*MessageOptions) ProtoMessage() {}
 
 func (x *MessageOptions) ProtoReflect() protoreflect.Message {
-	mi := &file_llm_extract_v1_options_proto_msgTypes[3]
+	mi := &file_entitystore_v1_options_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -541,7 +541,7 @@ func (x *MessageOptions) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageOptions.ProtoReflect.Descriptor instead.
 func (*MessageOptions) Descriptor() ([]byte, []int) {
-	return file_llm_extract_v1_options_proto_rawDescGZIP(), []int{3}
+	return file_entitystore_v1_options_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MessageOptions) GetMatchThresholds() *MatchThresholdsProto {
@@ -565,51 +565,51 @@ func (x *MessageOptions) GetAllowedRelations() []string {
 	return nil
 }
 
-var file_llm_extract_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
+var file_entitystore_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
 		ExtensionType: (*FieldOptions)(nil),
 		Field:         50000,
-		Name:          "llm_extract.v1.field",
+		Name:          "entitystore.v1.field",
 		Tag:           "bytes,50000,opt,name=field",
-		Filename:      "llm_extract/v1/options.proto",
+		Filename:      "entitystore/v1/options.proto",
 	},
 	{
 		ExtendedType:  (*descriptorpb.MessageOptions)(nil),
 		ExtensionType: (*MessageOptions)(nil),
 		Field:         50000,
-		Name:          "llm_extract.v1.message",
+		Name:          "entitystore.v1.message",
 		Tag:           "bytes,50000,opt,name=message",
-		Filename:      "llm_extract/v1/options.proto",
+		Filename:      "entitystore/v1/options.proto",
 	},
 }
 
 // Extension fields to descriptorpb.FieldOptions.
 var (
-	// optional llm_extract.v1.FieldOptions field = 50000;
-	E_Field = &file_llm_extract_v1_options_proto_extTypes[0]
+	// optional entitystore.v1.FieldOptions field = 50000;
+	E_Field = &file_entitystore_v1_options_proto_extTypes[0]
 )
 
 // Extension fields to descriptorpb.MessageOptions.
 var (
-	// optional llm_extract.v1.MessageOptions message = 50000;
-	E_Message = &file_llm_extract_v1_options_proto_extTypes[1]
+	// optional entitystore.v1.MessageOptions message = 50000;
+	E_Message = &file_entitystore_v1_options_proto_extTypes[1]
 )
 
-var File_llm_extract_v1_options_proto protoreflect.FileDescriptor
+var File_entitystore_v1_options_proto protoreflect.FileDescriptor
 
-const file_llm_extract_v1_options_proto_rawDesc = "" +
+const file_entitystore_v1_options_proto_rawDesc = "" +
 	"\n" +
-	"\x1cllm_extract/v1/options.proto\x12\x0ellm_extract.v1\x1a google/protobuf/descriptor.proto\"\xc4\x02\n" +
+	"\x1centitystore/v1/options.proto\x12\x0eentitystore.v1\x1a google/protobuf/descriptor.proto\"\xc4\x02\n" +
 	"\fFieldOptions\x12\x16\n" +
 	"\x06anchor\x18\x01 \x01(\bR\x06anchor\x12B\n" +
 	"\n" +
-	"similarity\x18\x02 \x01(\x0e2\".llm_extract.v1.SimilarityFunctionR\n" +
+	"similarity\x18\x02 \x01(\x0e2\".entitystore.v1.SimilarityFunctionR\n" +
 	"similarity\x12\x16\n" +
 	"\x06weight\x18\x03 \x01(\x02R\x06weight\x12M\n" +
-	"\x11conflict_strategy\x18\x04 \x01(\x0e2 .llm_extract.v1.ConflictStrategyR\x10conflictStrategy\x12:\n" +
+	"\x11conflict_strategy\x18\x04 \x01(\x0e2 .entitystore.v1.ConflictStrategyR\x10conflictStrategy\x12:\n" +
 	"\n" +
-	"normalizer\x18\x05 \x01(\x0e2\x1a.llm_extract.v1.NormalizerR\n" +
+	"normalizer\x18\x05 \x01(\x0e2\x1a.entitystore.v1.NormalizerR\n" +
 	"normalizer\x12\x14\n" +
 	"\x05embed\x18\x06 \x01(\bR\x05embed\x12\x1f\n" +
 	"\vtoken_field\x18\a \x01(\bR\n" +
@@ -622,63 +622,63 @@ const file_llm_extract_v1_options_proto_rawDesc = "" +
 	"\vreview_zone\x18\x02 \x01(\x02R\n" +
 	"reviewZone\"\xdc\x01\n" +
 	"\x0eMessageOptions\x12O\n" +
-	"\x10match_thresholds\x18\x01 \x01(\v2$.llm_extract.v1.MatchThresholdsProtoR\x0fmatchThresholds\x12L\n" +
-	"\x11composite_anchors\x18\x02 \x03(\v2\x1f.llm_extract.v1.CompositeAnchorR\x10compositeAnchors\x12+\n" +
-	"\x11allowed_relations\x18\x03 \x03(\tR\x10allowedRelations*z\n" +
+	"\x10match_thresholds\x18\x01 \x01(\v2$.entitystore.v1.MatchThresholdsProtoR\x0fmatchThresholds\x12L\n" +
+	"\x11composite_anchors\x18\x02 \x03(\v2\x1f.entitystore.v1.CompositeAnchorR\x10compositeAnchors\x12+\n" +
+	"\x11allowed_relations\x18\x03 \x03(\tR\x10allowedRelations*\xca\x01\n" +
 	"\x12SimilarityFunction\x12#\n" +
-	"\x1fSIMILARITY_FUNCTION_UNSPECIFIED\x10\x00\x12\t\n" +
-	"\x05EXACT\x10\x01\x12\x10\n" +
-	"\fJARO_WINKLER\x10\x02\x12\x0f\n" +
-	"\vLEVENSHTEIN\x10\x03\x12\x11\n" +
-	"\rTOKEN_JACCARD\x10\x04*s\n" +
+	"\x1fSIMILARITY_FUNCTION_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19SIMILARITY_FUNCTION_EXACT\x10\x01\x12$\n" +
+	" SIMILARITY_FUNCTION_JARO_WINKLER\x10\x02\x12#\n" +
+	"\x1fSIMILARITY_FUNCTION_LEVENSHTEIN\x10\x03\x12%\n" +
+	"!SIMILARITY_FUNCTION_TOKEN_JACCARD\x10\x04*\xa9\x01\n" +
 	"\x10ConflictStrategy\x12!\n" +
-	"\x1dCONFLICT_STRATEGY_UNSPECIFIED\x10\x00\x12\x13\n" +
-	"\x0fFLAG_FOR_REVIEW\x10\x01\x12\x0f\n" +
-	"\vLATEST_WINS\x10\x02\x12\x16\n" +
-	"\x12HIGHEST_CONFIDENCE\x10\x03*Q\n" +
+	"\x1dCONFLICT_STRATEGY_UNSPECIFIED\x10\x00\x12%\n" +
+	"!CONFLICT_STRATEGY_FLAG_FOR_REVIEW\x10\x01\x12!\n" +
+	"\x1dCONFLICT_STRATEGY_LATEST_WINS\x10\x02\x12(\n" +
+	"$CONFLICT_STRATEGY_HIGHEST_CONFIDENCE\x10\x03*g\n" +
 	"\n" +
 	"Normalizer\x12\x1a\n" +
-	"\x16NORMALIZER_UNSPECIFIED\x10\x00\x12\x12\n" +
-	"\x0eLOWERCASE_TRIM\x10\x01\x12\x13\n" +
-	"\x0fPHONE_NORMALIZE\x10\x02:S\n" +
-	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18І\x03 \x01(\v2\x1c.llm_extract.v1.FieldOptionsR\x05field:[\n" +
-	"\amessage\x12\x1f.google.protobuf.MessageOptions\x18І\x03 \x01(\v2\x1e.llm_extract.v1.MessageOptionsR\amessageBHZFgithub.com/laenen-partners/entitystore/gen/llm_extract/v1;llmextractv1b\x06proto3"
+	"\x16NORMALIZER_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19NORMALIZER_LOWERCASE_TRIM\x10\x01\x12\x1e\n" +
+	"\x1aNORMALIZER_PHONE_NORMALIZE\x10\x02:S\n" +
+	"\x05field\x12\x1d.google.protobuf.FieldOptions\x18І\x03 \x01(\v2\x1c.entitystore.v1.FieldOptionsR\x05field:[\n" +
+	"\amessage\x12\x1f.google.protobuf.MessageOptions\x18І\x03 \x01(\v2\x1e.entitystore.v1.MessageOptionsR\amessageBIZGgithub.com/laenen-partners/entitystore/gen/entitystore/v1;entitystorev1b\x06proto3"
 
 var (
-	file_llm_extract_v1_options_proto_rawDescOnce sync.Once
-	file_llm_extract_v1_options_proto_rawDescData []byte
+	file_entitystore_v1_options_proto_rawDescOnce sync.Once
+	file_entitystore_v1_options_proto_rawDescData []byte
 )
 
-func file_llm_extract_v1_options_proto_rawDescGZIP() []byte {
-	file_llm_extract_v1_options_proto_rawDescOnce.Do(func() {
-		file_llm_extract_v1_options_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_llm_extract_v1_options_proto_rawDesc), len(file_llm_extract_v1_options_proto_rawDesc)))
+func file_entitystore_v1_options_proto_rawDescGZIP() []byte {
+	file_entitystore_v1_options_proto_rawDescOnce.Do(func() {
+		file_entitystore_v1_options_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_entitystore_v1_options_proto_rawDesc), len(file_entitystore_v1_options_proto_rawDesc)))
 	})
-	return file_llm_extract_v1_options_proto_rawDescData
+	return file_entitystore_v1_options_proto_rawDescData
 }
 
-var file_llm_extract_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_llm_extract_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
-var file_llm_extract_v1_options_proto_goTypes = []any{
-	(SimilarityFunction)(0),             // 0: llm_extract.v1.SimilarityFunction
-	(ConflictStrategy)(0),               // 1: llm_extract.v1.ConflictStrategy
-	(Normalizer)(0),                     // 2: llm_extract.v1.Normalizer
-	(*FieldOptions)(nil),                // 3: llm_extract.v1.FieldOptions
-	(*CompositeAnchor)(nil),             // 4: llm_extract.v1.CompositeAnchor
-	(*MatchThresholdsProto)(nil),        // 5: llm_extract.v1.MatchThresholdsProto
-	(*MessageOptions)(nil),              // 6: llm_extract.v1.MessageOptions
+var file_entitystore_v1_options_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_entitystore_v1_options_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_entitystore_v1_options_proto_goTypes = []any{
+	(SimilarityFunction)(0),             // 0: entitystore.v1.SimilarityFunction
+	(ConflictStrategy)(0),               // 1: entitystore.v1.ConflictStrategy
+	(Normalizer)(0),                     // 2: entitystore.v1.Normalizer
+	(*FieldOptions)(nil),                // 3: entitystore.v1.FieldOptions
+	(*CompositeAnchor)(nil),             // 4: entitystore.v1.CompositeAnchor
+	(*MatchThresholdsProto)(nil),        // 5: entitystore.v1.MatchThresholdsProto
+	(*MessageOptions)(nil),              // 6: entitystore.v1.MessageOptions
 	(*descriptorpb.FieldOptions)(nil),   // 7: google.protobuf.FieldOptions
 	(*descriptorpb.MessageOptions)(nil), // 8: google.protobuf.MessageOptions
 }
-var file_llm_extract_v1_options_proto_depIdxs = []int32{
-	0, // 0: llm_extract.v1.FieldOptions.similarity:type_name -> llm_extract.v1.SimilarityFunction
-	1, // 1: llm_extract.v1.FieldOptions.conflict_strategy:type_name -> llm_extract.v1.ConflictStrategy
-	2, // 2: llm_extract.v1.FieldOptions.normalizer:type_name -> llm_extract.v1.Normalizer
-	5, // 3: llm_extract.v1.MessageOptions.match_thresholds:type_name -> llm_extract.v1.MatchThresholdsProto
-	4, // 4: llm_extract.v1.MessageOptions.composite_anchors:type_name -> llm_extract.v1.CompositeAnchor
-	7, // 5: llm_extract.v1.field:extendee -> google.protobuf.FieldOptions
-	8, // 6: llm_extract.v1.message:extendee -> google.protobuf.MessageOptions
-	3, // 7: llm_extract.v1.field:type_name -> llm_extract.v1.FieldOptions
-	6, // 8: llm_extract.v1.message:type_name -> llm_extract.v1.MessageOptions
+var file_entitystore_v1_options_proto_depIdxs = []int32{
+	0, // 0: entitystore.v1.FieldOptions.similarity:type_name -> entitystore.v1.SimilarityFunction
+	1, // 1: entitystore.v1.FieldOptions.conflict_strategy:type_name -> entitystore.v1.ConflictStrategy
+	2, // 2: entitystore.v1.FieldOptions.normalizer:type_name -> entitystore.v1.Normalizer
+	5, // 3: entitystore.v1.MessageOptions.match_thresholds:type_name -> entitystore.v1.MatchThresholdsProto
+	4, // 4: entitystore.v1.MessageOptions.composite_anchors:type_name -> entitystore.v1.CompositeAnchor
+	7, // 5: entitystore.v1.field:extendee -> google.protobuf.FieldOptions
+	8, // 6: entitystore.v1.message:extendee -> google.protobuf.MessageOptions
+	3, // 7: entitystore.v1.field:type_name -> entitystore.v1.FieldOptions
+	6, // 8: entitystore.v1.message:type_name -> entitystore.v1.MessageOptions
 	9, // [9:9] is the sub-list for method output_type
 	9, // [9:9] is the sub-list for method input_type
 	7, // [7:9] is the sub-list for extension type_name
@@ -686,28 +686,28 @@ var file_llm_extract_v1_options_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_llm_extract_v1_options_proto_init() }
-func file_llm_extract_v1_options_proto_init() {
-	if File_llm_extract_v1_options_proto != nil {
+func init() { file_entitystore_v1_options_proto_init() }
+func file_entitystore_v1_options_proto_init() {
+	if File_entitystore_v1_options_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_llm_extract_v1_options_proto_rawDesc), len(file_llm_extract_v1_options_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_entitystore_v1_options_proto_rawDesc), len(file_entitystore_v1_options_proto_rawDesc)),
 			NumEnums:      3,
 			NumMessages:   4,
 			NumExtensions: 2,
 			NumServices:   0,
 		},
-		GoTypes:           file_llm_extract_v1_options_proto_goTypes,
-		DependencyIndexes: file_llm_extract_v1_options_proto_depIdxs,
-		EnumInfos:         file_llm_extract_v1_options_proto_enumTypes,
-		MessageInfos:      file_llm_extract_v1_options_proto_msgTypes,
-		ExtensionInfos:    file_llm_extract_v1_options_proto_extTypes,
+		GoTypes:           file_entitystore_v1_options_proto_goTypes,
+		DependencyIndexes: file_entitystore_v1_options_proto_depIdxs,
+		EnumInfos:         file_entitystore_v1_options_proto_enumTypes,
+		MessageInfos:      file_entitystore_v1_options_proto_msgTypes,
+		ExtensionInfos:    file_entitystore_v1_options_proto_extTypes,
 	}.Build()
-	File_llm_extract_v1_options_proto = out.File
-	file_llm_extract_v1_options_proto_goTypes = nil
-	file_llm_extract_v1_options_proto_depIdxs = nil
+	File_entitystore_v1_options_proto = out.File
+	file_entitystore_v1_options_proto_goTypes = nil
+	file_entitystore_v1_options_proto_depIdxs = nil
 }

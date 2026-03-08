@@ -69,6 +69,15 @@ const (
 	// EntityStoreServiceGetRelationsToEntityProcedure is the fully-qualified name of the
 	// EntityStoreService's GetRelationsToEntity RPC.
 	EntityStoreServiceGetRelationsToEntityProcedure = "/entitystore.v1.EntityStoreService/GetRelationsToEntity"
+	// EntityStoreServiceSetTagsProcedure is the fully-qualified name of the EntityStoreService's
+	// SetTags RPC.
+	EntityStoreServiceSetTagsProcedure = "/entitystore.v1.EntityStoreService/SetTags"
+	// EntityStoreServiceAddTagsProcedure is the fully-qualified name of the EntityStoreService's
+	// AddTags RPC.
+	EntityStoreServiceAddTagsProcedure = "/entitystore.v1.EntityStoreService/AddTags"
+	// EntityStoreServiceRemoveTagProcedure is the fully-qualified name of the EntityStoreService's
+	// RemoveTag RPC.
+	EntityStoreServiceRemoveTagProcedure = "/entitystore.v1.EntityStoreService/RemoveTag"
 )
 
 // EntityStoreServiceClient is a client for the entitystore.v1.EntityStoreService service.
@@ -83,8 +92,11 @@ type EntityStoreServiceClient interface {
 	FindByEmbedding(context.Context, *connect.Request[v1.FindByEmbeddingRequest]) (*connect.Response[v1.FindByEmbeddingResponse], error)
 	FindConnectedByType(context.Context, *connect.Request[v1.FindConnectedByTypeRequest]) (*connect.Response[v1.FindConnectedByTypeResponse], error)
 	UpsertRelation(context.Context, *connect.Request[v1.UpsertRelationRequest]) (*connect.Response[v1.UpsertRelationResponse], error)
-	GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error)
-	GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error)
+	GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error)
+	GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error)
+	SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error)
+	AddTags(context.Context, *connect.Request[v1.AddTagsRequest]) (*connect.Response[v1.AddTagsResponse], error)
+	RemoveTag(context.Context, *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error)
 }
 
 // NewEntityStoreServiceClient constructs a client for the entitystore.v1.EntityStoreService
@@ -158,16 +170,34 @@ func NewEntityStoreServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(entityStoreServiceMethods.ByName("UpsertRelation")),
 			connect.WithClientOptions(opts...),
 		),
-		getRelationsFromEntity: connect.NewClient[v1.GetRelationsFromEntityRequest, v1.GetRelationsResponse](
+		getRelationsFromEntity: connect.NewClient[v1.GetRelationsFromEntityRequest, v1.GetRelationsFromEntityResponse](
 			httpClient,
 			baseURL+EntityStoreServiceGetRelationsFromEntityProcedure,
 			connect.WithSchema(entityStoreServiceMethods.ByName("GetRelationsFromEntity")),
 			connect.WithClientOptions(opts...),
 		),
-		getRelationsToEntity: connect.NewClient[v1.GetRelationsToEntityRequest, v1.GetRelationsResponse](
+		getRelationsToEntity: connect.NewClient[v1.GetRelationsToEntityRequest, v1.GetRelationsToEntityResponse](
 			httpClient,
 			baseURL+EntityStoreServiceGetRelationsToEntityProcedure,
 			connect.WithSchema(entityStoreServiceMethods.ByName("GetRelationsToEntity")),
+			connect.WithClientOptions(opts...),
+		),
+		setTags: connect.NewClient[v1.SetTagsRequest, v1.SetTagsResponse](
+			httpClient,
+			baseURL+EntityStoreServiceSetTagsProcedure,
+			connect.WithSchema(entityStoreServiceMethods.ByName("SetTags")),
+			connect.WithClientOptions(opts...),
+		),
+		addTags: connect.NewClient[v1.AddTagsRequest, v1.AddTagsResponse](
+			httpClient,
+			baseURL+EntityStoreServiceAddTagsProcedure,
+			connect.WithSchema(entityStoreServiceMethods.ByName("AddTags")),
+			connect.WithClientOptions(opts...),
+		),
+		removeTag: connect.NewClient[v1.RemoveTagRequest, v1.RemoveTagResponse](
+			httpClient,
+			baseURL+EntityStoreServiceRemoveTagProcedure,
+			connect.WithSchema(entityStoreServiceMethods.ByName("RemoveTag")),
 			connect.WithClientOptions(opts...),
 		),
 	}
@@ -185,8 +215,11 @@ type entityStoreServiceClient struct {
 	findByEmbedding        *connect.Client[v1.FindByEmbeddingRequest, v1.FindByEmbeddingResponse]
 	findConnectedByType    *connect.Client[v1.FindConnectedByTypeRequest, v1.FindConnectedByTypeResponse]
 	upsertRelation         *connect.Client[v1.UpsertRelationRequest, v1.UpsertRelationResponse]
-	getRelationsFromEntity *connect.Client[v1.GetRelationsFromEntityRequest, v1.GetRelationsResponse]
-	getRelationsToEntity   *connect.Client[v1.GetRelationsToEntityRequest, v1.GetRelationsResponse]
+	getRelationsFromEntity *connect.Client[v1.GetRelationsFromEntityRequest, v1.GetRelationsFromEntityResponse]
+	getRelationsToEntity   *connect.Client[v1.GetRelationsToEntityRequest, v1.GetRelationsToEntityResponse]
+	setTags                *connect.Client[v1.SetTagsRequest, v1.SetTagsResponse]
+	addTags                *connect.Client[v1.AddTagsRequest, v1.AddTagsResponse]
+	removeTag              *connect.Client[v1.RemoveTagRequest, v1.RemoveTagResponse]
 }
 
 // GetEntity calls entitystore.v1.EntityStoreService.GetEntity.
@@ -240,13 +273,28 @@ func (c *entityStoreServiceClient) UpsertRelation(ctx context.Context, req *conn
 }
 
 // GetRelationsFromEntity calls entitystore.v1.EntityStoreService.GetRelationsFromEntity.
-func (c *entityStoreServiceClient) GetRelationsFromEntity(ctx context.Context, req *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error) {
+func (c *entityStoreServiceClient) GetRelationsFromEntity(ctx context.Context, req *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error) {
 	return c.getRelationsFromEntity.CallUnary(ctx, req)
 }
 
 // GetRelationsToEntity calls entitystore.v1.EntityStoreService.GetRelationsToEntity.
-func (c *entityStoreServiceClient) GetRelationsToEntity(ctx context.Context, req *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error) {
+func (c *entityStoreServiceClient) GetRelationsToEntity(ctx context.Context, req *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error) {
 	return c.getRelationsToEntity.CallUnary(ctx, req)
+}
+
+// SetTags calls entitystore.v1.EntityStoreService.SetTags.
+func (c *entityStoreServiceClient) SetTags(ctx context.Context, req *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error) {
+	return c.setTags.CallUnary(ctx, req)
+}
+
+// AddTags calls entitystore.v1.EntityStoreService.AddTags.
+func (c *entityStoreServiceClient) AddTags(ctx context.Context, req *connect.Request[v1.AddTagsRequest]) (*connect.Response[v1.AddTagsResponse], error) {
+	return c.addTags.CallUnary(ctx, req)
+}
+
+// RemoveTag calls entitystore.v1.EntityStoreService.RemoveTag.
+func (c *entityStoreServiceClient) RemoveTag(ctx context.Context, req *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error) {
+	return c.removeTag.CallUnary(ctx, req)
 }
 
 // EntityStoreServiceHandler is an implementation of the entitystore.v1.EntityStoreService service.
@@ -261,8 +309,11 @@ type EntityStoreServiceHandler interface {
 	FindByEmbedding(context.Context, *connect.Request[v1.FindByEmbeddingRequest]) (*connect.Response[v1.FindByEmbeddingResponse], error)
 	FindConnectedByType(context.Context, *connect.Request[v1.FindConnectedByTypeRequest]) (*connect.Response[v1.FindConnectedByTypeResponse], error)
 	UpsertRelation(context.Context, *connect.Request[v1.UpsertRelationRequest]) (*connect.Response[v1.UpsertRelationResponse], error)
-	GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error)
-	GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error)
+	GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error)
+	GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error)
+	SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error)
+	AddTags(context.Context, *connect.Request[v1.AddTagsRequest]) (*connect.Response[v1.AddTagsResponse], error)
+	RemoveTag(context.Context, *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error)
 }
 
 // NewEntityStoreServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -344,6 +395,24 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 		connect.WithSchema(entityStoreServiceMethods.ByName("GetRelationsToEntity")),
 		connect.WithHandlerOptions(opts...),
 	)
+	entityStoreServiceSetTagsHandler := connect.NewUnaryHandler(
+		EntityStoreServiceSetTagsProcedure,
+		svc.SetTags,
+		connect.WithSchema(entityStoreServiceMethods.ByName("SetTags")),
+		connect.WithHandlerOptions(opts...),
+	)
+	entityStoreServiceAddTagsHandler := connect.NewUnaryHandler(
+		EntityStoreServiceAddTagsProcedure,
+		svc.AddTags,
+		connect.WithSchema(entityStoreServiceMethods.ByName("AddTags")),
+		connect.WithHandlerOptions(opts...),
+	)
+	entityStoreServiceRemoveTagHandler := connect.NewUnaryHandler(
+		EntityStoreServiceRemoveTagProcedure,
+		svc.RemoveTag,
+		connect.WithSchema(entityStoreServiceMethods.ByName("RemoveTag")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/entitystore.v1.EntityStoreService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case EntityStoreServiceGetEntityProcedure:
@@ -370,6 +439,12 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 			entityStoreServiceGetRelationsFromEntityHandler.ServeHTTP(w, r)
 		case EntityStoreServiceGetRelationsToEntityProcedure:
 			entityStoreServiceGetRelationsToEntityHandler.ServeHTTP(w, r)
+		case EntityStoreServiceSetTagsProcedure:
+			entityStoreServiceSetTagsHandler.ServeHTTP(w, r)
+		case EntityStoreServiceAddTagsProcedure:
+			entityStoreServiceAddTagsHandler.ServeHTTP(w, r)
+		case EntityStoreServiceRemoveTagProcedure:
+			entityStoreServiceRemoveTagHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -419,10 +494,22 @@ func (UnimplementedEntityStoreServiceHandler) UpsertRelation(context.Context, *c
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.UpsertRelation is not implemented"))
 }
 
-func (UnimplementedEntityStoreServiceHandler) GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error) {
+func (UnimplementedEntityStoreServiceHandler) GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.GetRelationsFromEntity is not implemented"))
 }
 
-func (UnimplementedEntityStoreServiceHandler) GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsResponse], error) {
+func (UnimplementedEntityStoreServiceHandler) GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.GetRelationsToEntity is not implemented"))
+}
+
+func (UnimplementedEntityStoreServiceHandler) SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.SetTags is not implemented"))
+}
+
+func (UnimplementedEntityStoreServiceHandler) AddTags(context.Context, *connect.Request[v1.AddTagsRequest]) (*connect.Response[v1.AddTagsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.AddTags is not implemented"))
+}
+
+func (UnimplementedEntityStoreServiceHandler) RemoveTag(context.Context, *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.RemoveTag is not implemented"))
 }

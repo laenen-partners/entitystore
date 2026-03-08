@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: entitystore
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Buf lint
+        run: buf lint
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with coverage
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5433/entitystore?sslmode=disable
+          ENTITY_TEST_DB: postgres://postgres:postgres@localhost:5433/entitystore?sslmode=disable
+        run: go test -coverprofile=coverage.out -count=1 ./...

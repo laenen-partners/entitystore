@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pgvector/pgvector-go"
 
@@ -25,9 +26,32 @@ type Store struct {
 	ownPool bool
 }
 
+// PoolConfig holds optional connection pool tuning parameters.
+type PoolConfig struct {
+	MaxConns        int32 // maximum open connections (default: 4)
+	MinConns        int32 // minimum idle connections (default: 0)
+	MaxConnIdleTime time.Duration
+}
+
 // New creates a Store connected to the given PostgreSQL connection string.
-func New(ctx context.Context, connString string) (*Store, error) {
-	pool, err := pgxpool.New(ctx, connString)
+func New(ctx context.Context, connString string, opts ...PoolConfig) (*Store, error) {
+	cfg, err := pgxpool.ParseConfig(connString)
+	if err != nil {
+		return nil, fmt.Errorf("postgres store: parse config: %w", err)
+	}
+	if len(opts) > 0 {
+		pc := opts[0]
+		if pc.MaxConns > 0 {
+			cfg.MaxConns = pc.MaxConns
+		}
+		if pc.MinConns > 0 {
+			cfg.MinConns = pc.MinConns
+		}
+		if pc.MaxConnIdleTime > 0 {
+			cfg.MaxConnIdleTime = pc.MaxConnIdleTime
+		}
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres store: connect: %w", err)
 	}
@@ -202,8 +226,19 @@ func (s *Store) GetEntity(ctx context.Context, id string) (matching.StoredEntity
 	return entityFromRow(row), nil
 }
 
-func (s *Store) GetEntitiesByType(ctx context.Context, entityType string) ([]matching.StoredEntity, error) {
-	rows, err := s.queries.GetEntitiesByType(ctx, entityType)
+func (s *Store) GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
+	var pgCursor pgtype.Timestamptz
+	if cursor != nil {
+		pgCursor = pgtype.Timestamptz{Time: *cursor, Valid: true}
+	}
+	if pageSize <= 0 {
+		pageSize = 100
+	}
+	rows, err := s.queries.GetEntitiesByType(ctx, dbgen.GetEntitiesByTypeParams{
+		EntityType: entityType,
+		Cursor:     pgCursor,
+		PageSize:   pageSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get entities by type: %w", err)
 	}
@@ -267,13 +302,29 @@ func (s *Store) ConnectedEntities(ctx context.Context, entityID string) ([]match
 	if err != nil {
 		return nil, fmt.Errorf("parse entity id: %w", err)
 	}
-	rows, err := s.queries.ConnectedEntities(ctx, uid)
+	outRows, err := s.queries.ConnectedEntitiesOutbound(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("connected entities: %w", err)
+		return nil, fmt.Errorf("connected entities outbound: %w", err)
 	}
-	result := make([]matching.StoredEntity, len(rows))
-	for i, row := range rows {
-		result[i] = entityFromRow(row)
+	inRows, err := s.queries.ConnectedEntitiesInbound(ctx, uid)
+	if err != nil {
+		return nil, fmt.Errorf("connected entities inbound: %w", err)
+	}
+	seen := make(map[uuid.UUID]struct{})
+	var result []matching.StoredEntity
+	for _, row := range outRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, entityFromRow(row))
+	}
+	for _, row := range inRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, entityFromRow(row))
 	}
 	return result, nil
 }
@@ -286,34 +337,68 @@ func (s *Store) FindConnectedByType(ctx context.Context, entityID string, entity
 	if relationTypes == nil {
 		relationTypes = []string{}
 	}
-	rows, err := s.queries.FindConnectedByType(ctx, dbgen.FindConnectedByTypeParams{
+	params := dbgen.FindConnectedByTypeOutboundParams{
 		EntityID:      uid,
 		EntityType:    entityType,
 		RelationTypes: relationTypes,
 		Tags:          tagsParam(filter),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("find connected by type: %w", err)
 	}
-	result := make([]matching.StoredEntity, len(rows))
-	for i, row := range rows {
-		result[i] = entityFromRow(row)
+	outRows, err := s.queries.FindConnectedByTypeOutbound(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("find connected by type outbound: %w", err)
+	}
+	inRows, err := s.queries.FindConnectedByTypeInbound(ctx, dbgen.FindConnectedByTypeInboundParams(params))
+	if err != nil {
+		return nil, fmt.Errorf("find connected by type inbound: %w", err)
+	}
+	seen := make(map[uuid.UUID]struct{})
+	var result []matching.StoredEntity
+	for _, row := range outRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, entityFromRow(row))
+	}
+	for _, row := range inRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, entityFromRow(row))
 	}
 	return result, nil
 }
 
 func (s *Store) FindEntitiesByRelation(ctx context.Context, entityType string, relationType string, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
-	rows, err := s.queries.FindEntitiesByRelation(ctx, dbgen.FindEntitiesByRelationParams{
+	params := dbgen.FindEntitiesByRelationSourceParams{
 		EntityType:   entityType,
 		RelationType: relationType,
 		Tags:         tagsParam(filter),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("find entities by relation: %w", err)
 	}
-	result := make([]matching.StoredEntity, len(rows))
-	for i, row := range rows {
-		result[i] = entityFromRow(row)
+	srcRows, err := s.queries.FindEntitiesByRelationSource(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("find entities by relation source: %w", err)
+	}
+	tgtRows, err := s.queries.FindEntitiesByRelationTarget(ctx, dbgen.FindEntitiesByRelationTargetParams(params))
+	if err != nil {
+		return nil, fmt.Errorf("find entities by relation target: %w", err)
+	}
+	seen := make(map[uuid.UUID]struct{})
+	var result []matching.StoredEntity
+	for _, row := range srcRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, entityFromRow(row))
+	}
+	for _, row := range tgtRows {
+		if _, ok := seen[row.ID]; ok {
+			continue
+		}
+		seen[row.ID] = struct{}{}
+		result = append(result, entityFromRow(row))
 	}
 	return result, nil
 }
@@ -325,7 +410,9 @@ func (s *Store) FindEntitiesByRelation(ctx context.Context, entityType string, r
 type entityRow interface {
 	dbgen.FindByAnchorsRow | dbgen.FindByTokenOverlapRow | dbgen.FindByEmbeddingRow |
 		dbgen.GetEntityRow | dbgen.GetEntitiesByTypeRow | dbgen.InsertEntityRow |
-		dbgen.ConnectedEntitiesRow | dbgen.FindConnectedByTypeRow | dbgen.FindEntitiesByRelationRow
+		dbgen.ConnectedEntitiesOutboundRow | dbgen.ConnectedEntitiesInboundRow |
+		dbgen.FindConnectedByTypeOutboundRow | dbgen.FindConnectedByTypeInboundRow |
+		dbgen.FindEntitiesByRelationSourceRow | dbgen.FindEntitiesByRelationTargetRow
 }
 
 func entityFromRow[R entityRow](row R) matching.StoredEntity {
@@ -342,11 +429,17 @@ func entityFromRow[R entityRow](row R) matching.StoredEntity {
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
 	case dbgen.InsertEntityRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
-	case dbgen.ConnectedEntitiesRow:
+	case dbgen.ConnectedEntitiesOutboundRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
-	case dbgen.FindConnectedByTypeRow:
+	case dbgen.ConnectedEntitiesInboundRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
-	case dbgen.FindEntitiesByRelationRow:
+	case dbgen.FindConnectedByTypeOutboundRow:
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
+	case dbgen.FindConnectedByTypeInboundRow:
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
+	case dbgen.FindEntitiesByRelationSourceRow:
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
+	case dbgen.FindEntitiesByRelationTargetRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
 	default:
 		panic("unreachable")

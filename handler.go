@@ -3,6 +3,7 @@ package entitystore
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -29,19 +30,44 @@ func (h *Handler) GetEntity(ctx context.Context, req *connect.Request[entitystor
 }
 
 func (h *Handler) GetEntitiesByType(ctx context.Context, req *connect.Request[entitystorev1.GetEntitiesByTypeRequest]) (*connect.Response[entitystorev1.GetEntitiesByTypeResponse], error) {
-	entities, err := h.store.GetEntitiesByType(ctx, req.Msg.EntityType)
+	var cursor *time.Time
+	if req.Msg.PageToken != "" {
+		t, err := time.Parse(time.RFC3339Nano, req.Msg.PageToken)
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+		cursor = &t
+	}
+	pageSize := req.Msg.PageSize
+	if pageSize <= 0 {
+		pageSize = 100
+	}
+	entities, err := h.store.GetEntitiesByType(ctx, req.Msg.EntityType, pageSize, cursor)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&entitystorev1.GetEntitiesByTypeResponse{
+	resp := &entitystorev1.GetEntitiesByTypeResponse{
 		Entities: toProtoEntities(entities),
-	}), nil
+	}
+	// Set next_page_token if we got a full page (more results likely).
+	if int32(len(entities)) == pageSize {
+		last := entities[len(entities)-1]
+		resp.NextPageToken = last.UpdatedAt.Format(time.RFC3339Nano)
+	}
+	return connect.NewResponse(resp), nil
 }
 
 func (h *Handler) InsertEntity(ctx context.Context, req *connect.Request[entitystorev1.InsertEntityRequest]) (*connect.Response[entitystorev1.InsertEntityResponse], error) {
 	ent, err := h.store.InsertEntity(ctx, req.Msg.EntityType, json.RawMessage(req.Msg.Data), req.Msg.Confidence)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// Apply tags if provided (InsertEntity creates with empty tags by default).
+	if len(req.Msg.Tags) > 0 {
+		if err := h.store.SetTags(ctx, ent.ID, req.Msg.Tags); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+		ent.Tags = req.Msg.Tags
 	}
 	return connect.NewResponse(&entitystorev1.InsertEntityResponse{
 		Entity: toProtoEntity(ent),
@@ -129,24 +155,52 @@ func (h *Handler) UpsertRelation(ctx context.Context, req *connect.Request[entit
 	}), nil
 }
 
-func (h *Handler) GetRelationsFromEntity(ctx context.Context, req *connect.Request[entitystorev1.GetRelationsFromEntityRequest]) (*connect.Response[entitystorev1.GetRelationsResponse], error) {
+func (h *Handler) GetRelationsFromEntity(ctx context.Context, req *connect.Request[entitystorev1.GetRelationsFromEntityRequest]) (*connect.Response[entitystorev1.GetRelationsFromEntityResponse], error) {
 	rels, err := h.store.GetRelationsFromEntity(ctx, req.Msg.EntityId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&entitystorev1.GetRelationsResponse{
+	return connect.NewResponse(&entitystorev1.GetRelationsFromEntityResponse{
 		Relations: toProtoRelations(rels),
 	}), nil
 }
 
-func (h *Handler) GetRelationsToEntity(ctx context.Context, req *connect.Request[entitystorev1.GetRelationsToEntityRequest]) (*connect.Response[entitystorev1.GetRelationsResponse], error) {
+func (h *Handler) GetRelationsToEntity(ctx context.Context, req *connect.Request[entitystorev1.GetRelationsToEntityRequest]) (*connect.Response[entitystorev1.GetRelationsToEntityResponse], error) {
 	rels, err := h.store.GetRelationsToEntity(ctx, req.Msg.EntityId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	return connect.NewResponse(&entitystorev1.GetRelationsResponse{
+	return connect.NewResponse(&entitystorev1.GetRelationsToEntityResponse{
 		Relations: toProtoRelations(rels),
 	}), nil
+}
+
+func (h *Handler) SetTags(ctx context.Context, req *connect.Request[entitystorev1.SetTagsRequest]) (*connect.Response[entitystorev1.SetTagsResponse], error) {
+	if err := h.store.SetTags(ctx, req.Msg.EntityId, req.Msg.Tags); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.SetTagsResponse{}), nil
+}
+
+func (h *Handler) AddTags(ctx context.Context, req *connect.Request[entitystorev1.AddTagsRequest]) (*connect.Response[entitystorev1.AddTagsResponse], error) {
+	if err := h.store.AddTags(ctx, req.Msg.EntityId, req.Msg.Tags); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	// Fetch updated entity to return the resulting tag list.
+	ent, err := h.store.GetEntity(ctx, req.Msg.EntityId)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.AddTagsResponse{
+		Tags: ent.Tags,
+	}), nil
+}
+
+func (h *Handler) RemoveTag(ctx context.Context, req *connect.Request[entitystorev1.RemoveTagRequest]) (*connect.Response[entitystorev1.RemoveTagResponse], error) {
+	if err := h.store.RemoveTag(ctx, req.Msg.EntityId, req.Msg.Tag); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.RemoveTagResponse{}), nil
 }
 
 // ---------------------------------------------------------------------------

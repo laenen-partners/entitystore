@@ -10,6 +10,27 @@ tasks:
       - buf generate
       - cd store && sqlc generate
 
+  generate:plugin:
+    desc: Install the protoc-gen-entitystore plugin
+    cmds:
+      - go install ./cmd/protoc-gen-entitystore
+
+  proto:login:
+    desc: Log in to Buf Schema Registry
+    cmds:
+      - buf registry login
+
+  proto:create:
+    desc: Create BSR module (one-time)
+    cmds:
+      - buf registry module create buf.build/laenen-partners/entitystore --visibility public
+
+  proto:push:
+    desc: Lint and push proto module to BSR
+    cmds:
+      - buf lint
+      - buf push
+
   lint:
     desc: Run go vet
     cmds:
@@ -41,10 +62,24 @@ tasks:
     cmds:
       - go test -v -count=1 -run TestE2E ./...
 
+  test:cover:
+    desc: Run tests with coverage
+    env:
+      ENTITY_TEST_DB: '{{.DB_URL}}'
+      DATABASE_URL: '{{.DB_URL}}'
+    cmds:
+      - go test -coverprofile=coverage.out -count=1 ./...
+      - go tool cover -func=coverage.out
+
   tidy:
     desc: Tidy go.mod
     cmds:
       - go mod tidy
+
+  clean:
+    desc: Remove build artifacts and local data
+    cmds:
+      - rm -rf bin/ coverage.out
 
   migrate:up:
     desc: Apply all pending migrations
