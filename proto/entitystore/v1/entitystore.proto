@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package entitystore.v1;
+
+option go_package = "github.com/laenen-partners/entitystore/gen/entitystore/v1;entitystorev1";
+
+service EntityStoreService {
+  rpc GetEntity(GetEntityRequest) returns (GetEntityResponse);
+  rpc GetEntitiesByType(GetEntitiesByTypeRequest) returns (GetEntitiesByTypeResponse);
+  rpc InsertEntity(InsertEntityRequest) returns (InsertEntityResponse);
+  rpc UpdateEntity(UpdateEntityRequest) returns (UpdateEntityResponse);
+  rpc DeleteEntity(DeleteEntityRequest) returns (DeleteEntityResponse);
+  rpc FindByAnchors(FindByAnchorsRequest) returns (FindByAnchorsResponse);
+  rpc FindByTokens(FindByTokensRequest) returns (FindByTokensResponse);
+  rpc FindByEmbedding(FindByEmbeddingRequest) returns (FindByEmbeddingResponse);
+  rpc FindConnectedByType(FindConnectedByTypeRequest) returns (FindConnectedByTypeResponse);
+  rpc UpsertRelation(UpsertRelationRequest) returns (UpsertRelationResponse);
+  rpc GetRelationsFromEntity(GetRelationsFromEntityRequest) returns (GetRelationsResponse);
+  rpc GetRelationsToEntity(GetRelationsToEntityRequest) returns (GetRelationsResponse);
+}
+
+// --- Shared ---
+
+message Entity {
+  string id = 1;
+  string entity_type = 2;
+  bytes data = 3;
+  double confidence = 4;
+  repeated string tags = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message AnchorQuery {
+  string field = 1;
+  string value = 2;
+}
+
+message QueryFilter {
+  repeated string tags = 1;
+}
+
+message Relation {
+  string id = 1;
+  string source_id = 2;
+  string target_id = 3;
+  string relation_type = 4;
+  double confidence = 5;
+  string evidence = 6;
+  bool implied = 7;
+  string document_id = 8;
+  bytes data = 9;
+  string created_at = 10;
+}
+
+// --- GetEntity ---
+
+message GetEntityRequest {
+  string id = 1;
+}
+
+message GetEntityResponse {
+  Entity entity = 1;
+}
+
+// --- GetEntitiesByType ---
+
+message GetEntitiesByTypeRequest {
+  string entity_type = 1;
+}
+
+message GetEntitiesByTypeResponse {
+  repeated Entity entities = 1;
+}
+
+// --- InsertEntity ---
+
+message InsertEntityRequest {
+  string entity_type = 1;
+  bytes data = 2;
+  double confidence = 3;
+}
+
+message InsertEntityResponse {
+  Entity entity = 1;
+}
+
+// --- UpdateEntity ---
+
+message UpdateEntityRequest {
+  string id = 1;
+  bytes data = 2;
+  double confidence = 3;
+}
+
+message UpdateEntityResponse {}
+
+// --- DeleteEntity ---
+
+message DeleteEntityRequest {
+  string id = 1;
+}
+
+message DeleteEntityResponse {}
+
+// --- FindByAnchors ---
+
+message FindByAnchorsRequest {
+  string entity_type = 1;
+  repeated AnchorQuery anchors = 2;
+  QueryFilter filter = 3;
+}
+
+message FindByAnchorsResponse {
+  repeated Entity entities = 1;
+}
+
+// --- FindByTokens ---
+
+message FindByTokensRequest {
+  string entity_type = 1;
+  repeated string tokens = 2;
+  int32 limit = 3;
+  QueryFilter filter = 4;
+}
+
+message FindByTokensResponse {
+  repeated Entity entities = 1;
+}
+
+// --- FindByEmbedding ---
+
+message FindByEmbeddingRequest {
+  string entity_type = 1;
+  repeated float embedding = 2;
+  int32 top_k = 3;
+  QueryFilter filter = 4;
+}
+
+message FindByEmbeddingResponse {
+  repeated Entity entities = 1;
+}
+
+// --- FindConnectedByType ---
+
+message FindConnectedByTypeRequest {
+  string entity_id = 1;
+  string entity_type = 2;
+  repeated string relation_types = 3;
+  QueryFilter filter = 4;
+}
+
+message FindConnectedByTypeResponse {
+  repeated Entity entities = 1;
+}
+
+// --- UpsertRelation ---
+
+message UpsertRelationRequest {
+  string source_id = 1;
+  string target_id = 2;
+  string relation_type = 3;
+  double confidence = 4;
+  string evidence = 5;
+  bool implied = 6;
+  string document_id = 7;
+  bytes data = 8;
+}
+
+message UpsertRelationResponse {
+  Relation relation = 1;
+}
+
+// --- GetRelations ---
+
+message GetRelationsFromEntityRequest {
+  string entity_id = 1;
+}
+
+message GetRelationsToEntityRequest {
+  string entity_id = 1;
+}
+
+message GetRelationsResponse {
+  repeated Relation relations = 1;
+}

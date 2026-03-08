@@ -1,0 +1,231 @@
+// options.proto defines custom proto annotations for configuring entity matching
+// behaviour. These annotations are consumed by protoc-gen-llm-extract to generate
+// Go code that returns an EntityMatchConfig for each annotated message type.
+//
+// There are two extension points:
+//
+//   (llm_extract.v1.field)   — per-field options  (anchor, similarity, weight, …)
+//   (llm_extract.v1.message) — per-message options (thresholds, composite anchors, …)
+//
+// Three common annotation patterns:
+//
+//   1. Anchor field — identity lookup (email, invoice number):
+//
+//        string email = 1 [(llm_extract.v1.field) = {
+//          anchor: true
+//          similarity: EXACT
+//          normalizer: LOWERCASE_TRIM
+//          weight: 0.30
+//          conflict_strategy: FLAG_FOR_REVIEW
+//          embed: true
+//        }];
+//
+//   2. Fuzzy match field — similarity scoring (name, address):
+//
+//        string full_name = 2 [(llm_extract.v1.field) = {
+//          similarity: JARO_WINKLER
+//          weight: 0.30
+//          embed: true
+//          token_field: true
+//          normalizer: LOWERCASE_TRIM
+//        }];
+//
+//   3. Extraction-only field — no annotations needed. Fields without
+//      (llm_extract.v1.field) are still extracted by the pipeline but
+//      do not participate in matching or scoring. Use this for fields
+//      like line items, notes, or action items.
+
+syntax = "proto3";
+package llm_extract.v1;
+
+option go_package = "github.com/laenen-partners/entitystore/gen/llm_extract/v1;llmextractv1";
+
+import "google/protobuf/descriptor.proto";
+
+// SimilarityFunction identifies a string similarity algorithm used to score
+// how closely two field values match during entity deduplication.
+enum SimilarityFunction {
+  SIMILARITY_FUNCTION_UNSPECIFIED = 0;
+
+  // EXACT — for structured identifiers (emails, phone numbers, dates, IDs).
+  // Values must match character-for-character after normalization.
+  EXACT = 1;
+
+  // JARO_WINKLER — for names and short strings where typos or transpositions
+  // are common. Gives higher weight to matching prefixes, making it ideal for
+  // person names (e.g. "Jon Smith" vs "John Smith").
+  JARO_WINKLER = 2;
+
+  // LEVENSHTEIN — for strings where insertions and deletions matter, such as
+  // street addresses with varying abbreviations (e.g. "123 Main Street" vs
+  // "123 Main St").
+  LEVENSHTEIN = 3;
+
+  // TOKEN_JACCARD — for multi-word fields where word order doesn't matter.
+  // Compares token sets, making it suitable for job titles, descriptions,
+  // or any field where the same words may appear in different order.
+  TOKEN_JACCARD = 4;
+}
+
+// ConflictStrategy determines how to resolve a field-level conflict when
+// merging two entity records that represent the same real-world entity.
+enum ConflictStrategy {
+  CONFLICT_STRATEGY_UNSPECIFIED = 0;
+
+  // FLAG_FOR_REVIEW — the field is critical and conflicts need human judgment.
+  // Use for identity fields like email on a Person or invoice number on an
+  // Invoice where an unexpected change likely indicates a data quality issue.
+  FLAG_FOR_REVIEW = 1;
+
+  // LATEST_WINS — the most recently extracted value replaces the existing one.
+  // Use for fields that naturally evolve over time, such as job title, phone
+  // number, or mailing address.
+  LATEST_WINS = 2;
+
+  // HIGHEST_CONFIDENCE — keep whichever value came from the higher-confidence
+  // extraction. Use when extraction quality varies across documents and you
+  // want to converge on the most reliable value.
+  HIGHEST_CONFIDENCE = 3;
+}
+
+// Normalizer identifies a built-in normalization function applied to field
+// values before comparison. Normalization ensures minor formatting differences
+// don't prevent otherwise-identical values from matching.
+enum Normalizer {
+  NORMALIZER_UNSPECIFIED = 0;
+
+  // LOWERCASE_TRIM — converts to lowercase and trims leading/trailing
+  // whitespace. Suitable for most string fields (names, emails, addresses).
+  LOWERCASE_TRIM = 1;
+
+  // PHONE_NORMALIZE — strips all non-digit characters except a leading '+'.
+  // Converts formats like "(555) 867-5309" and "555.867.5309" into a
+  // canonical form. Use only for phone number fields.
+  PHONE_NORMALIZE = 2;
+}
+
+// FieldOptions configures matching behaviour for a single proto field.
+// Apply via the (llm_extract.v1.field) extension on any string or scalar field.
+message FieldOptions {
+  // Whether this field is an identity anchor. Anchor values are stored in a
+  // separate lookup table for O(1) deduplication. Use sparingly — only for
+  // fields that genuinely identify an entity (email, invoice number, SSN).
+  // Most messages have 0–2 anchor fields.
+  bool anchor = 1;
+
+  // Similarity function to use when scoring this field against a candidate.
+  // Choose based on the nature of the field value — see SimilarityFunction
+  // enum comments for guidance.
+  SimilarityFunction similarity = 2;
+
+  // Relative weight for composite scoring. All weights across fields in a
+  // message should sum to approximately 1.0. A field with weight 0.30
+  // contributes 30% of the composite match score.
+  float weight = 3;
+
+  // How to handle conflicting values during entity merge. Only relevant when
+  // two records are determined to represent the same entity but have different
+  // values for this field. Can be omitted for immutable or non-critical fields.
+  ConflictStrategy conflict_strategy = 4;
+
+  // Built-in normalizer to apply before comparison. Applied to both the
+  // incoming value and stored values so comparisons are consistent.
+  Normalizer normalizer = 5;
+
+  // Whether to include this field's text value in the embedding vector input.
+  // Use for fields that carry semantic meaning (names, descriptions, titles),
+  // not for structured identifiers or codes. Multiple embed fields are
+  // concatenated to form the embedding input.
+  bool embed = 6;
+
+  // Whether to tokenize this field for token-overlap blocking. Tokenized
+  // values are stored in a GIN-indexed text[] column for fast candidate
+  // retrieval before expensive similarity scoring. Use for names and
+  // multi-word text fields where token overlap is a good blocking signal.
+  bool token_field = 7;
+}
+
+// CompositeAnchor defines a multi-field composite identity anchor.
+// All listed fields must match for the anchor to fire.
+//
+// Example: full_name + date_of_birth uniquely identifies a Person even
+// when no email is available.
+message CompositeAnchor {
+  // Proto field names that together form the composite key.
+  repeated string fields = 1;
+}
+
+// MatchThresholdsProto defines scoring boundaries for match decisions.
+// These thresholds create three zones:
+//   - score >= auto_match:  automatic merge/update
+//   - review_zone <= score < auto_match:  flagged for human review
+//   - score < review_zone:  treated as a new entity
+//
+// Example — conservative thresholds for invoices:
+//   match_thresholds: {auto_match: 0.90, review_zone: 0.70}
+//
+// Example — relaxed thresholds for addresses:
+//   match_thresholds: {auto_match: 0.80, review_zone: 0.55}
+message MatchThresholdsProto {
+  // Minimum composite score for an automatic merge/update (default 0.85).
+  float auto_match = 1;
+
+  // Minimum score to enter the review/tiebreak zone (default 0.60).
+  // Scores below this threshold indicate a distinct entity.
+  float review_zone = 2;
+}
+
+// MessageOptions configures matching behaviour for a proto message type.
+// Apply via the (llm_extract.v1.message) extension at the message level.
+//
+// Example:
+//   message Person {
+//     option (llm_extract.v1.message) = {
+//       match_thresholds: {auto_match: 0.85, review_zone: 0.60}
+//       composite_anchors: [{fields: ["full_name", "date_of_birth"]}]
+//       allowed_relations: ["affiliated_with", "same_as"]
+//     };
+//     // ... fields ...
+//   }
+message MessageOptions {
+  // Scoring thresholds for match decisions. If omitted, defaults to
+  // auto_match: 0.85, review_zone: 0.60.
+  MatchThresholdsProto match_thresholds = 1;
+
+  // Multi-field composite anchors (in addition to per-field anchors).
+  // Use when no single field uniquely identifies the entity but a
+  // combination does (e.g. full_name + date_of_birth for a Person).
+  repeated CompositeAnchor composite_anchors = 2;
+
+  // Relation types this entity type is allowed to participate in.
+  // Restricts the relations the pipeline may propose for this entity type.
+  // Omit to allow all relation types.
+  //
+  // Example for Invoice: ["issuer_of", "buyer_on", "refers_to"]
+  repeated string allowed_relations = 3;
+}
+
+// Per-field matching configuration.
+//
+// Usage:
+//   string email = 1 [(llm_extract.v1.field) = {
+//     anchor: true
+//     similarity: EXACT
+//     normalizer: LOWERCASE_TRIM
+//     weight: 0.30
+//   }];
+extend google.protobuf.FieldOptions {
+  FieldOptions field = 50000;
+}
+
+// Per-message matching configuration.
+//
+// Usage:
+//   message Invoice {
+//     option (llm_extract.v1.message) = {
+//       match_thresholds: {auto_match: 0.90, review_zone: 0.70}
+//     };
+//   }
+extend google.protobuf.MessageOptions {
+  MessageOptions message = 50000;
+}
