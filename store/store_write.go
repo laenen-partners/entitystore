@@ -194,6 +194,202 @@ func (s *Store) ApplyMatchDecision(ctx context.Context, input MatchDecisionInput
 	return stored, nil
 }
 
+// ResolveEntity applies a match decision atomically. It supports three actions:
+//   - "create": inserts a new entity with anchors, tokens, provenance, and embedding.
+//   - "update": replaces the matched entity's data, then updates indexes and provenance.
+//   - "merge":  merges new fields into the matched entity's data (JSON ||), then updates indexes and provenance.
+func (s *Store) ResolveEntity(ctx context.Context, action string, entityID string, input MatchDecisionInput) (matching.StoredEntity, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := s.queries.WithTx(tx)
+
+	var stored matching.StoredEntity
+	switch action {
+	case "create":
+		stored, err = applyMatchDecision(ctx, q, input)
+	case "update", "merge":
+		stored, err = applyUpdateOrMerge(ctx, q, action, entityID, input)
+	default:
+		return matching.StoredEntity{}, fmt.Errorf("resolve entity: unknown action %q", action)
+	}
+	if err != nil {
+		return matching.StoredEntity{}, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("tx commit: %w", err)
+	}
+	return stored, nil
+}
+
+func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, action, entityID string, input MatchDecisionInput) (matching.StoredEntity, error) {
+	uid, err := uuid.Parse(entityID)
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("parse entity id: %w", err)
+	}
+
+	switch action {
+	case "update":
+		if err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
+			ID: uid, Data: input.Data, Confidence: input.Confidence,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx update entity: %w", err)
+		}
+	case "merge":
+		if err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
+			ID: uid, Data: input.Data, Confidence: input.Confidence,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx merge entity: %w", err)
+		}
+	}
+
+	// Update tags if provided.
+	if len(input.Tags) > 0 {
+		if err := q.AddEntityTags(ctx, dbgen.AddEntityTagsParams{
+			EntityID: uid, Tags: input.Tags,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx add tags: %w", err)
+		}
+	}
+
+	// Update anchors.
+	for _, aq := range input.Anchors {
+		if err := q.UpsertAnchor(ctx, dbgen.UpsertAnchorParams{
+			EntityID: uid, EntityType: input.EntityType,
+			AnchorField: aq.Field, NormalizedValue: aq.Value,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx upsert anchor: %w", err)
+		}
+	}
+
+	// Update tokens.
+	for field, toks := range input.Tokens {
+		if err := q.UpsertTokens(ctx, dbgen.UpsertTokensParams{
+			EntityID: uid, EntityType: input.EntityType,
+			TokenField: field, Tokens: toks,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx upsert tokens: %w", err)
+		}
+	}
+
+	// Insert provenance.
+	prov := input.Provenance
+	if prov.DocumentID != "" {
+		if prov.ExtractedAt.IsZero() {
+			prov.ExtractedAt = time.Now()
+		}
+		if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
+			EntityID: uid, DocumentID: prov.DocumentID,
+			ExtractedAt: prov.ExtractedAt, ModelID: prov.ModelID,
+			Confidence: prov.Confidence, Fields: prov.Fields,
+			MatchMethod: prov.MatchMethod, MatchConfidence: prov.MatchConfidence,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx insert provenance: %w", err)
+		}
+	}
+
+	// Update embedding.
+	if input.Embedding != nil {
+		if err := q.UpdateEntityEmbedding(ctx, dbgen.UpdateEntityEmbeddingParams{
+			EntityID: uid, Embedding: pgVec(input.Embedding),
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("tx update embedding: %w", err)
+		}
+	}
+
+	// Fetch and return the updated entity.
+	row, err := q.GetEntity(ctx, uid)
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("tx get entity: %w", err)
+	}
+	return entityFromRow(row), nil
+}
+
+// BatchInsertEntities inserts multiple entities in a single transaction.
+func (s *Store) BatchInsertEntities(ctx context.Context, items []BatchInsertItem) ([]matching.StoredEntity, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := s.queries.WithTx(tx)
+	result := make([]matching.StoredEntity, 0, len(items))
+	for _, item := range items {
+		tags := item.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		row, err := q.InsertEntity(ctx, dbgen.InsertEntityParams{
+			EntityType: item.EntityType,
+			Data:       item.Data,
+			Confidence: item.Confidence,
+			Tags:       tags,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("batch insert entity: %w", err)
+		}
+		result = append(result, entityFromRow(row))
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("tx commit: %w", err)
+	}
+	return result, nil
+}
+
+// BatchInsertItem holds the data for a single entity in a batch insert.
+type BatchInsertItem struct {
+	EntityType string
+	Data       json.RawMessage
+	Confidence float64
+	Tags       []string
+}
+
+// BatchResolveEntities resolves multiple entities in a single transaction.
+func (s *Store) BatchResolveEntities(ctx context.Context, items []BatchResolveItem) ([]matching.StoredEntity, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := s.queries.WithTx(tx)
+	result := make([]matching.StoredEntity, 0, len(items))
+	for i, item := range items {
+		var stored matching.StoredEntity
+		var err error
+		switch item.Action {
+		case "create":
+			stored, err = applyMatchDecision(ctx, q, item.Input)
+		case "update", "merge":
+			stored, err = applyUpdateOrMerge(ctx, q, item.Action, item.MatchedEntityID, item.Input)
+		default:
+			return nil, fmt.Errorf("batch resolve item %d: unknown action %q", i, item.Action)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("batch resolve item %d: %w", i, err)
+		}
+		result = append(result, stored)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("tx commit: %w", err)
+	}
+	return result, nil
+}
+
+// BatchResolveItem holds the data for a single entity resolution in a batch.
+type BatchResolveItem struct {
+	Action          string
+	MatchedEntityID string
+	Input           MatchDecisionInput
+}
+
 func applyMatchDecision(ctx context.Context, q *dbgen.Queries, input MatchDecisionInput) (matching.StoredEntity, error) {
 	tags := input.Tags
 	if tags == nil {

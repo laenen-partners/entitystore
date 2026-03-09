@@ -9,14 +9,22 @@ service EntityStoreService {
   rpc GetEntitiesByType(GetEntitiesByTypeRequest) returns (GetEntitiesByTypeResponse);
   rpc InsertEntity(InsertEntityRequest) returns (InsertEntityResponse);
   rpc UpdateEntity(UpdateEntityRequest) returns (UpdateEntityResponse);
+  rpc MergeEntity(MergeEntityRequest) returns (MergeEntityResponse);
   rpc DeleteEntity(DeleteEntityRequest) returns (DeleteEntityResponse);
+  rpc ResolveEntity(ResolveEntityRequest) returns (ResolveEntityResponse);
   rpc FindByAnchors(FindByAnchorsRequest) returns (FindByAnchorsResponse);
   rpc FindByTokens(FindByTokensRequest) returns (FindByTokensResponse);
   rpc FindByEmbedding(FindByEmbeddingRequest) returns (FindByEmbeddingResponse);
   rpc FindConnectedByType(FindConnectedByTypeRequest) returns (FindConnectedByTypeResponse);
   rpc UpsertRelation(UpsertRelationRequest) returns (UpsertRelationResponse);
-  rpc GetRelationsFromEntity(GetRelationsFromEntityRequest) returns (GetRelationsResponse);
-  rpc GetRelationsToEntity(GetRelationsToEntityRequest) returns (GetRelationsResponse);
+  rpc GetRelationsFromEntity(GetRelationsFromEntityRequest) returns (GetRelationsFromEntityResponse);
+  rpc GetRelationsToEntity(GetRelationsToEntityRequest) returns (GetRelationsToEntityResponse);
+  rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
+  rpc AddTags(AddTagsRequest) returns (AddTagsResponse);
+  rpc RemoveTag(RemoveTagRequest) returns (RemoveTagResponse);
+  // Batch operations for bulk extraction workflows.
+  rpc BatchInsertEntities(BatchInsertEntitiesRequest) returns (BatchInsertEntitiesResponse);
+  rpc BatchResolveEntities(BatchResolveEntitiesRequest) returns (BatchResolveEntitiesResponse);
 }
 
 // --- Shared ---
@@ -67,10 +75,13 @@ message GetEntityResponse {
 
 message GetEntitiesByTypeRequest {
   string entity_type = 1;
+  int32 page_size = 2;    // max entities to return (default 100)
+  string page_token = 3;  // cursor from previous response (RFC 3339 timestamp)
 }
 
 message GetEntitiesByTypeResponse {
   repeated Entity entities = 1;
+  string next_page_token = 2; // empty when no more results
 }
 
 // --- InsertEntity ---
@@ -79,6 +90,7 @@ message InsertEntityRequest {
   string entity_type = 1;
   bytes data = 2;
   double confidence = 3;
+  repeated string tags = 4;
 }
 
 message InsertEntityResponse {
@@ -181,6 +193,96 @@ message GetRelationsToEntityRequest {
   string entity_id = 1;
 }
 
-message GetRelationsResponse {
+message GetRelationsFromEntityResponse {
   repeated Relation relations = 1;
+}
+
+message GetRelationsToEntityResponse {
+  repeated Relation relations = 1;
+}
+
+// --- Tags ---
+
+message SetTagsRequest {
+  string entity_id = 1;
+  repeated string tags = 2;
+}
+
+message SetTagsResponse {}
+
+message AddTagsRequest {
+  string entity_id = 1;
+  repeated string tags = 2;
+}
+
+message AddTagsResponse {
+  repeated string tags = 1; // resulting tag list after addition
+}
+
+message RemoveTagRequest {
+  string entity_id = 1;
+  string tag = 2;
+}
+
+message RemoveTagResponse {}
+
+// --- MergeEntity ---
+
+message MergeEntityRequest {
+  string id = 1;
+  bytes data = 2;         // JSON fields to merge (overlays on existing data)
+  double confidence = 3;
+}
+
+message MergeEntityResponse {
+  Entity entity = 1;
+}
+
+// --- ResolveEntity ---
+
+message TokenList {
+  repeated string values = 1;
+}
+
+message ResolveEntityRequest {
+  // Action: "create", "update", or "merge".
+  string action = 1;
+  string entity_type = 2;
+  bytes data = 3;
+  double confidence = 4;
+  repeated string tags = 5;
+  // Required for "update" and "merge" actions.
+  string matched_entity_id = 6;
+  // Provenance fields.
+  string document_id = 7;
+  string model_id = 8;
+  repeated string fields = 9;
+  string match_method = 10;
+  double match_confidence = 11;
+  // Optional: anchors, tokens, embedding for index maintenance.
+  repeated AnchorQuery anchors = 12;
+  map<string, TokenList> tokens = 13;
+  repeated float embedding = 14;
+}
+
+message ResolveEntityResponse {
+  Entity entity = 1;
+}
+
+// --- Batch operations ---
+
+message BatchInsertEntitiesRequest {
+  repeated InsertEntityRequest entities = 1;
+}
+
+message BatchInsertEntitiesResponse {
+  repeated Entity entities = 1;
+}
+
+message BatchResolveEntitiesRequest {
+  repeated ResolveEntityRequest entities = 1;
+}
+
+message BatchResolveEntitiesResponse {
+  repeated Entity entities = 1;
 }

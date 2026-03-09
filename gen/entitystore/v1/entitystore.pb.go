@@ -1845,6 +1845,526 @@ func (*RemoveTagResponse) Descriptor() ([]byte, []int) {
 	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{33}
 }
 
+type MergeEntityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"` // JSON fields to merge (overlays on existing data)
+	Confidence    float64                `protobuf:"fixed64,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergeEntityRequest) Reset() {
+	*x = MergeEntityRequest{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergeEntityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergeEntityRequest) ProtoMessage() {}
+
+func (x *MergeEntityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergeEntityRequest.ProtoReflect.Descriptor instead.
+func (*MergeEntityRequest) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *MergeEntityRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *MergeEntityRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *MergeEntityRequest) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+type MergeEntityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entity        *Entity                `protobuf:"bytes,1,opt,name=entity,proto3" json:"entity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MergeEntityResponse) Reset() {
+	*x = MergeEntityResponse{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MergeEntityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MergeEntityResponse) ProtoMessage() {}
+
+func (x *MergeEntityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MergeEntityResponse.ProtoReflect.Descriptor instead.
+func (*MergeEntityResponse) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *MergeEntityResponse) GetEntity() *Entity {
+	if x != nil {
+		return x.Entity
+	}
+	return nil
+}
+
+type TokenList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Values        []string               `protobuf:"bytes,1,rep,name=values,proto3" json:"values,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TokenList) Reset() {
+	*x = TokenList{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TokenList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TokenList) ProtoMessage() {}
+
+func (x *TokenList) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TokenList.ProtoReflect.Descriptor instead.
+func (*TokenList) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *TokenList) GetValues() []string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+type ResolveEntityRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Action: "create", "update", or "merge".
+	Action     string   `protobuf:"bytes,1,opt,name=action,proto3" json:"action,omitempty"`
+	EntityType string   `protobuf:"bytes,2,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
+	Data       []byte   `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Confidence float64  `protobuf:"fixed64,4,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	Tags       []string `protobuf:"bytes,5,rep,name=tags,proto3" json:"tags,omitempty"`
+	// Required for "update" and "merge" actions.
+	MatchedEntityId string `protobuf:"bytes,6,opt,name=matched_entity_id,json=matchedEntityId,proto3" json:"matched_entity_id,omitempty"`
+	// Provenance fields.
+	DocumentId      string   `protobuf:"bytes,7,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	ModelId         string   `protobuf:"bytes,8,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	Fields          []string `protobuf:"bytes,9,rep,name=fields,proto3" json:"fields,omitempty"`
+	MatchMethod     string   `protobuf:"bytes,10,opt,name=match_method,json=matchMethod,proto3" json:"match_method,omitempty"`
+	MatchConfidence float64  `protobuf:"fixed64,11,opt,name=match_confidence,json=matchConfidence,proto3" json:"match_confidence,omitempty"`
+	// Optional: anchors, tokens, embedding for index maintenance.
+	Anchors       []*AnchorQuery        `protobuf:"bytes,12,rep,name=anchors,proto3" json:"anchors,omitempty"`
+	Tokens        map[string]*TokenList `protobuf:"bytes,13,rep,name=tokens,proto3" json:"tokens,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Embedding     []float32             `protobuf:"fixed32,14,rep,packed,name=embedding,proto3" json:"embedding,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveEntityRequest) Reset() {
+	*x = ResolveEntityRequest{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveEntityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveEntityRequest) ProtoMessage() {}
+
+func (x *ResolveEntityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveEntityRequest.ProtoReflect.Descriptor instead.
+func (*ResolveEntityRequest) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *ResolveEntityRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ResolveEntityRequest) GetEntityType() string {
+	if x != nil {
+		return x.EntityType
+	}
+	return ""
+}
+
+func (x *ResolveEntityRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ResolveEntityRequest) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *ResolveEntityRequest) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *ResolveEntityRequest) GetMatchedEntityId() string {
+	if x != nil {
+		return x.MatchedEntityId
+	}
+	return ""
+}
+
+func (x *ResolveEntityRequest) GetDocumentId() string {
+	if x != nil {
+		return x.DocumentId
+	}
+	return ""
+}
+
+func (x *ResolveEntityRequest) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *ResolveEntityRequest) GetFields() []string {
+	if x != nil {
+		return x.Fields
+	}
+	return nil
+}
+
+func (x *ResolveEntityRequest) GetMatchMethod() string {
+	if x != nil {
+		return x.MatchMethod
+	}
+	return ""
+}
+
+func (x *ResolveEntityRequest) GetMatchConfidence() float64 {
+	if x != nil {
+		return x.MatchConfidence
+	}
+	return 0
+}
+
+func (x *ResolveEntityRequest) GetAnchors() []*AnchorQuery {
+	if x != nil {
+		return x.Anchors
+	}
+	return nil
+}
+
+func (x *ResolveEntityRequest) GetTokens() map[string]*TokenList {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+func (x *ResolveEntityRequest) GetEmbedding() []float32 {
+	if x != nil {
+		return x.Embedding
+	}
+	return nil
+}
+
+type ResolveEntityResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entity        *Entity                `protobuf:"bytes,1,opt,name=entity,proto3" json:"entity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveEntityResponse) Reset() {
+	*x = ResolveEntityResponse{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveEntityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveEntityResponse) ProtoMessage() {}
+
+func (x *ResolveEntityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveEntityResponse.ProtoReflect.Descriptor instead.
+func (*ResolveEntityResponse) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *ResolveEntityResponse) GetEntity() *Entity {
+	if x != nil {
+		return x.Entity
+	}
+	return nil
+}
+
+type BatchInsertEntitiesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entities      []*InsertEntityRequest `protobuf:"bytes,1,rep,name=entities,proto3" json:"entities,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchInsertEntitiesRequest) Reset() {
+	*x = BatchInsertEntitiesRequest{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchInsertEntitiesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchInsertEntitiesRequest) ProtoMessage() {}
+
+func (x *BatchInsertEntitiesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchInsertEntitiesRequest.ProtoReflect.Descriptor instead.
+func (*BatchInsertEntitiesRequest) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *BatchInsertEntitiesRequest) GetEntities() []*InsertEntityRequest {
+	if x != nil {
+		return x.Entities
+	}
+	return nil
+}
+
+type BatchInsertEntitiesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entities      []*Entity              `protobuf:"bytes,1,rep,name=entities,proto3" json:"entities,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchInsertEntitiesResponse) Reset() {
+	*x = BatchInsertEntitiesResponse{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchInsertEntitiesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchInsertEntitiesResponse) ProtoMessage() {}
+
+func (x *BatchInsertEntitiesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchInsertEntitiesResponse.ProtoReflect.Descriptor instead.
+func (*BatchInsertEntitiesResponse) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *BatchInsertEntitiesResponse) GetEntities() []*Entity {
+	if x != nil {
+		return x.Entities
+	}
+	return nil
+}
+
+type BatchResolveEntitiesRequest struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Entities      []*ResolveEntityRequest `protobuf:"bytes,1,rep,name=entities,proto3" json:"entities,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchResolveEntitiesRequest) Reset() {
+	*x = BatchResolveEntitiesRequest{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchResolveEntitiesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchResolveEntitiesRequest) ProtoMessage() {}
+
+func (x *BatchResolveEntitiesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchResolveEntitiesRequest.ProtoReflect.Descriptor instead.
+func (*BatchResolveEntitiesRequest) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *BatchResolveEntitiesRequest) GetEntities() []*ResolveEntityRequest {
+	if x != nil {
+		return x.Entities
+	}
+	return nil
+}
+
+type BatchResolveEntitiesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entities      []*Entity              `protobuf:"bytes,1,rep,name=entities,proto3" json:"entities,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchResolveEntitiesResponse) Reset() {
+	*x = BatchResolveEntitiesResponse{}
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchResolveEntitiesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchResolveEntitiesResponse) ProtoMessage() {}
+
+func (x *BatchResolveEntitiesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_entitystore_v1_entitystore_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchResolveEntitiesResponse.ProtoReflect.Descriptor instead.
+func (*BatchResolveEntitiesResponse) Descriptor() ([]byte, []int) {
+	return file_entitystore_v1_entitystore_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *BatchResolveEntitiesResponse) GetEntities() []*Entity {
+	if x != nil {
+		return x.Entities
+	}
+	return nil
+}
+
 var File_entitystore_v1_entitystore_proto protoreflect.FileDescriptor
 
 const file_entitystore_v1_entitystore_proto_rawDesc = "" +
@@ -1982,13 +2502,58 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"\x10RemoveTagRequest\x12\x1b\n" +
 	"\tentity_id\x18\x01 \x01(\tR\bentityId\x12\x10\n" +
 	"\x03tag\x18\x02 \x01(\tR\x03tag\"\x13\n" +
-	"\x11RemoveTagResponse2\xa5\v\n" +
+	"\x11RemoveTagResponse\"X\n" +
+	"\x12MergeEntityRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x03 \x01(\x01R\n" +
+	"confidence\"E\n" +
+	"\x13MergeEntityResponse\x12.\n" +
+	"\x06entity\x18\x01 \x01(\v2\x16.entitystore.v1.EntityR\x06entity\"#\n" +
+	"\tTokenList\x12\x16\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\xda\x04\n" +
+	"\x14ResolveEntityRequest\x12\x16\n" +
+	"\x06action\x18\x01 \x01(\tR\x06action\x12\x1f\n" +
+	"\ventity_type\x18\x02 \x01(\tR\n" +
+	"entityType\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x04 \x01(\x01R\n" +
+	"confidence\x12\x12\n" +
+	"\x04tags\x18\x05 \x03(\tR\x04tags\x12*\n" +
+	"\x11matched_entity_id\x18\x06 \x01(\tR\x0fmatchedEntityId\x12\x1f\n" +
+	"\vdocument_id\x18\a \x01(\tR\n" +
+	"documentId\x12\x19\n" +
+	"\bmodel_id\x18\b \x01(\tR\amodelId\x12\x16\n" +
+	"\x06fields\x18\t \x03(\tR\x06fields\x12!\n" +
+	"\fmatch_method\x18\n" +
+	" \x01(\tR\vmatchMethod\x12)\n" +
+	"\x10match_confidence\x18\v \x01(\x01R\x0fmatchConfidence\x125\n" +
+	"\aanchors\x18\f \x03(\v2\x1b.entitystore.v1.AnchorQueryR\aanchors\x12H\n" +
+	"\x06tokens\x18\r \x03(\v20.entitystore.v1.ResolveEntityRequest.TokensEntryR\x06tokens\x12\x1c\n" +
+	"\tembedding\x18\x0e \x03(\x02R\tembedding\x1aT\n" +
+	"\vTokensEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12/\n" +
+	"\x05value\x18\x02 \x01(\v2\x19.entitystore.v1.TokenListR\x05value:\x028\x01\"G\n" +
+	"\x15ResolveEntityResponse\x12.\n" +
+	"\x06entity\x18\x01 \x01(\v2\x16.entitystore.v1.EntityR\x06entity\"]\n" +
+	"\x1aBatchInsertEntitiesRequest\x12?\n" +
+	"\bentities\x18\x01 \x03(\v2#.entitystore.v1.InsertEntityRequestR\bentities\"Q\n" +
+	"\x1bBatchInsertEntitiesResponse\x122\n" +
+	"\bentities\x18\x01 \x03(\v2\x16.entitystore.v1.EntityR\bentities\"_\n" +
+	"\x1bBatchResolveEntitiesRequest\x12@\n" +
+	"\bentities\x18\x01 \x03(\v2$.entitystore.v1.ResolveEntityRequestR\bentities\"R\n" +
+	"\x1cBatchResolveEntitiesResponse\x122\n" +
+	"\bentities\x18\x01 \x03(\v2\x16.entitystore.v1.EntityR\bentities2\xbe\x0e\n" +
 	"\x12EntityStoreService\x12P\n" +
 	"\tGetEntity\x12 .entitystore.v1.GetEntityRequest\x1a!.entitystore.v1.GetEntityResponse\x12h\n" +
 	"\x11GetEntitiesByType\x12(.entitystore.v1.GetEntitiesByTypeRequest\x1a).entitystore.v1.GetEntitiesByTypeResponse\x12Y\n" +
 	"\fInsertEntity\x12#.entitystore.v1.InsertEntityRequest\x1a$.entitystore.v1.InsertEntityResponse\x12Y\n" +
-	"\fUpdateEntity\x12#.entitystore.v1.UpdateEntityRequest\x1a$.entitystore.v1.UpdateEntityResponse\x12Y\n" +
+	"\fUpdateEntity\x12#.entitystore.v1.UpdateEntityRequest\x1a$.entitystore.v1.UpdateEntityResponse\x12V\n" +
+	"\vMergeEntity\x12\".entitystore.v1.MergeEntityRequest\x1a#.entitystore.v1.MergeEntityResponse\x12Y\n" +
 	"\fDeleteEntity\x12#.entitystore.v1.DeleteEntityRequest\x1a$.entitystore.v1.DeleteEntityResponse\x12\\\n" +
+	"\rResolveEntity\x12$.entitystore.v1.ResolveEntityRequest\x1a%.entitystore.v1.ResolveEntityResponse\x12\\\n" +
 	"\rFindByAnchors\x12$.entitystore.v1.FindByAnchorsRequest\x1a%.entitystore.v1.FindByAnchorsResponse\x12Y\n" +
 	"\fFindByTokens\x12#.entitystore.v1.FindByTokensRequest\x1a$.entitystore.v1.FindByTokensResponse\x12b\n" +
 	"\x0fFindByEmbedding\x12&.entitystore.v1.FindByEmbeddingRequest\x1a'.entitystore.v1.FindByEmbeddingResponse\x12n\n" +
@@ -1998,7 +2563,9 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"\x14GetRelationsToEntity\x12+.entitystore.v1.GetRelationsToEntityRequest\x1a,.entitystore.v1.GetRelationsToEntityResponse\x12J\n" +
 	"\aSetTags\x12\x1e.entitystore.v1.SetTagsRequest\x1a\x1f.entitystore.v1.SetTagsResponse\x12J\n" +
 	"\aAddTags\x12\x1e.entitystore.v1.AddTagsRequest\x1a\x1f.entitystore.v1.AddTagsResponse\x12P\n" +
-	"\tRemoveTag\x12 .entitystore.v1.RemoveTagRequest\x1a!.entitystore.v1.RemoveTagResponseBIZGgithub.com/laenen-partners/entitystore/gen/entitystore/v1;entitystorev1b\x06proto3"
+	"\tRemoveTag\x12 .entitystore.v1.RemoveTagRequest\x1a!.entitystore.v1.RemoveTagResponse\x12n\n" +
+	"\x13BatchInsertEntities\x12*.entitystore.v1.BatchInsertEntitiesRequest\x1a+.entitystore.v1.BatchInsertEntitiesResponse\x12q\n" +
+	"\x14BatchResolveEntities\x12+.entitystore.v1.BatchResolveEntitiesRequest\x1a,.entitystore.v1.BatchResolveEntitiesResponseBIZGgithub.com/laenen-partners/entitystore/gen/entitystore/v1;entitystorev1b\x06proto3"
 
 var (
 	file_entitystore_v1_entitystore_proto_rawDescOnce sync.Once
@@ -2012,7 +2579,7 @@ func file_entitystore_v1_entitystore_proto_rawDescGZIP() []byte {
 	return file_entitystore_v1_entitystore_proto_rawDescData
 }
 
-var file_entitystore_v1_entitystore_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_entitystore_v1_entitystore_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_entitystore_v1_entitystore_proto_goTypes = []any{
 	(*Entity)(nil),                         // 0: entitystore.v1.Entity
 	(*AnchorQuery)(nil),                    // 1: entitystore.v1.AnchorQuery
@@ -2048,6 +2615,16 @@ var file_entitystore_v1_entitystore_proto_goTypes = []any{
 	(*AddTagsResponse)(nil),                // 31: entitystore.v1.AddTagsResponse
 	(*RemoveTagRequest)(nil),               // 32: entitystore.v1.RemoveTagRequest
 	(*RemoveTagResponse)(nil),              // 33: entitystore.v1.RemoveTagResponse
+	(*MergeEntityRequest)(nil),             // 34: entitystore.v1.MergeEntityRequest
+	(*MergeEntityResponse)(nil),            // 35: entitystore.v1.MergeEntityResponse
+	(*TokenList)(nil),                      // 36: entitystore.v1.TokenList
+	(*ResolveEntityRequest)(nil),           // 37: entitystore.v1.ResolveEntityRequest
+	(*ResolveEntityResponse)(nil),          // 38: entitystore.v1.ResolveEntityResponse
+	(*BatchInsertEntitiesRequest)(nil),     // 39: entitystore.v1.BatchInsertEntitiesRequest
+	(*BatchInsertEntitiesResponse)(nil),    // 40: entitystore.v1.BatchInsertEntitiesResponse
+	(*BatchResolveEntitiesRequest)(nil),    // 41: entitystore.v1.BatchResolveEntitiesRequest
+	(*BatchResolveEntitiesResponse)(nil),   // 42: entitystore.v1.BatchResolveEntitiesResponse
+	nil,                                    // 43: entitystore.v1.ResolveEntityRequest.TokensEntry
 }
 var file_entitystore_v1_entitystore_proto_depIdxs = []int32{
 	0,  // 0: entitystore.v1.GetEntityResponse.entity:type_name -> entitystore.v1.Entity
@@ -2065,41 +2642,58 @@ var file_entitystore_v1_entitystore_proto_depIdxs = []int32{
 	3,  // 12: entitystore.v1.UpsertRelationResponse.relation:type_name -> entitystore.v1.Relation
 	3,  // 13: entitystore.v1.GetRelationsFromEntityResponse.relations:type_name -> entitystore.v1.Relation
 	3,  // 14: entitystore.v1.GetRelationsToEntityResponse.relations:type_name -> entitystore.v1.Relation
-	4,  // 15: entitystore.v1.EntityStoreService.GetEntity:input_type -> entitystore.v1.GetEntityRequest
-	6,  // 16: entitystore.v1.EntityStoreService.GetEntitiesByType:input_type -> entitystore.v1.GetEntitiesByTypeRequest
-	8,  // 17: entitystore.v1.EntityStoreService.InsertEntity:input_type -> entitystore.v1.InsertEntityRequest
-	10, // 18: entitystore.v1.EntityStoreService.UpdateEntity:input_type -> entitystore.v1.UpdateEntityRequest
-	12, // 19: entitystore.v1.EntityStoreService.DeleteEntity:input_type -> entitystore.v1.DeleteEntityRequest
-	14, // 20: entitystore.v1.EntityStoreService.FindByAnchors:input_type -> entitystore.v1.FindByAnchorsRequest
-	16, // 21: entitystore.v1.EntityStoreService.FindByTokens:input_type -> entitystore.v1.FindByTokensRequest
-	18, // 22: entitystore.v1.EntityStoreService.FindByEmbedding:input_type -> entitystore.v1.FindByEmbeddingRequest
-	20, // 23: entitystore.v1.EntityStoreService.FindConnectedByType:input_type -> entitystore.v1.FindConnectedByTypeRequest
-	22, // 24: entitystore.v1.EntityStoreService.UpsertRelation:input_type -> entitystore.v1.UpsertRelationRequest
-	24, // 25: entitystore.v1.EntityStoreService.GetRelationsFromEntity:input_type -> entitystore.v1.GetRelationsFromEntityRequest
-	25, // 26: entitystore.v1.EntityStoreService.GetRelationsToEntity:input_type -> entitystore.v1.GetRelationsToEntityRequest
-	28, // 27: entitystore.v1.EntityStoreService.SetTags:input_type -> entitystore.v1.SetTagsRequest
-	30, // 28: entitystore.v1.EntityStoreService.AddTags:input_type -> entitystore.v1.AddTagsRequest
-	32, // 29: entitystore.v1.EntityStoreService.RemoveTag:input_type -> entitystore.v1.RemoveTagRequest
-	5,  // 30: entitystore.v1.EntityStoreService.GetEntity:output_type -> entitystore.v1.GetEntityResponse
-	7,  // 31: entitystore.v1.EntityStoreService.GetEntitiesByType:output_type -> entitystore.v1.GetEntitiesByTypeResponse
-	9,  // 32: entitystore.v1.EntityStoreService.InsertEntity:output_type -> entitystore.v1.InsertEntityResponse
-	11, // 33: entitystore.v1.EntityStoreService.UpdateEntity:output_type -> entitystore.v1.UpdateEntityResponse
-	13, // 34: entitystore.v1.EntityStoreService.DeleteEntity:output_type -> entitystore.v1.DeleteEntityResponse
-	15, // 35: entitystore.v1.EntityStoreService.FindByAnchors:output_type -> entitystore.v1.FindByAnchorsResponse
-	17, // 36: entitystore.v1.EntityStoreService.FindByTokens:output_type -> entitystore.v1.FindByTokensResponse
-	19, // 37: entitystore.v1.EntityStoreService.FindByEmbedding:output_type -> entitystore.v1.FindByEmbeddingResponse
-	21, // 38: entitystore.v1.EntityStoreService.FindConnectedByType:output_type -> entitystore.v1.FindConnectedByTypeResponse
-	23, // 39: entitystore.v1.EntityStoreService.UpsertRelation:output_type -> entitystore.v1.UpsertRelationResponse
-	26, // 40: entitystore.v1.EntityStoreService.GetRelationsFromEntity:output_type -> entitystore.v1.GetRelationsFromEntityResponse
-	27, // 41: entitystore.v1.EntityStoreService.GetRelationsToEntity:output_type -> entitystore.v1.GetRelationsToEntityResponse
-	29, // 42: entitystore.v1.EntityStoreService.SetTags:output_type -> entitystore.v1.SetTagsResponse
-	31, // 43: entitystore.v1.EntityStoreService.AddTags:output_type -> entitystore.v1.AddTagsResponse
-	33, // 44: entitystore.v1.EntityStoreService.RemoveTag:output_type -> entitystore.v1.RemoveTagResponse
-	30, // [30:45] is the sub-list for method output_type
-	15, // [15:30] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	0,  // 15: entitystore.v1.MergeEntityResponse.entity:type_name -> entitystore.v1.Entity
+	1,  // 16: entitystore.v1.ResolveEntityRequest.anchors:type_name -> entitystore.v1.AnchorQuery
+	43, // 17: entitystore.v1.ResolveEntityRequest.tokens:type_name -> entitystore.v1.ResolveEntityRequest.TokensEntry
+	0,  // 18: entitystore.v1.ResolveEntityResponse.entity:type_name -> entitystore.v1.Entity
+	8,  // 19: entitystore.v1.BatchInsertEntitiesRequest.entities:type_name -> entitystore.v1.InsertEntityRequest
+	0,  // 20: entitystore.v1.BatchInsertEntitiesResponse.entities:type_name -> entitystore.v1.Entity
+	37, // 21: entitystore.v1.BatchResolveEntitiesRequest.entities:type_name -> entitystore.v1.ResolveEntityRequest
+	0,  // 22: entitystore.v1.BatchResolveEntitiesResponse.entities:type_name -> entitystore.v1.Entity
+	36, // 23: entitystore.v1.ResolveEntityRequest.TokensEntry.value:type_name -> entitystore.v1.TokenList
+	4,  // 24: entitystore.v1.EntityStoreService.GetEntity:input_type -> entitystore.v1.GetEntityRequest
+	6,  // 25: entitystore.v1.EntityStoreService.GetEntitiesByType:input_type -> entitystore.v1.GetEntitiesByTypeRequest
+	8,  // 26: entitystore.v1.EntityStoreService.InsertEntity:input_type -> entitystore.v1.InsertEntityRequest
+	10, // 27: entitystore.v1.EntityStoreService.UpdateEntity:input_type -> entitystore.v1.UpdateEntityRequest
+	34, // 28: entitystore.v1.EntityStoreService.MergeEntity:input_type -> entitystore.v1.MergeEntityRequest
+	12, // 29: entitystore.v1.EntityStoreService.DeleteEntity:input_type -> entitystore.v1.DeleteEntityRequest
+	37, // 30: entitystore.v1.EntityStoreService.ResolveEntity:input_type -> entitystore.v1.ResolveEntityRequest
+	14, // 31: entitystore.v1.EntityStoreService.FindByAnchors:input_type -> entitystore.v1.FindByAnchorsRequest
+	16, // 32: entitystore.v1.EntityStoreService.FindByTokens:input_type -> entitystore.v1.FindByTokensRequest
+	18, // 33: entitystore.v1.EntityStoreService.FindByEmbedding:input_type -> entitystore.v1.FindByEmbeddingRequest
+	20, // 34: entitystore.v1.EntityStoreService.FindConnectedByType:input_type -> entitystore.v1.FindConnectedByTypeRequest
+	22, // 35: entitystore.v1.EntityStoreService.UpsertRelation:input_type -> entitystore.v1.UpsertRelationRequest
+	24, // 36: entitystore.v1.EntityStoreService.GetRelationsFromEntity:input_type -> entitystore.v1.GetRelationsFromEntityRequest
+	25, // 37: entitystore.v1.EntityStoreService.GetRelationsToEntity:input_type -> entitystore.v1.GetRelationsToEntityRequest
+	28, // 38: entitystore.v1.EntityStoreService.SetTags:input_type -> entitystore.v1.SetTagsRequest
+	30, // 39: entitystore.v1.EntityStoreService.AddTags:input_type -> entitystore.v1.AddTagsRequest
+	32, // 40: entitystore.v1.EntityStoreService.RemoveTag:input_type -> entitystore.v1.RemoveTagRequest
+	39, // 41: entitystore.v1.EntityStoreService.BatchInsertEntities:input_type -> entitystore.v1.BatchInsertEntitiesRequest
+	41, // 42: entitystore.v1.EntityStoreService.BatchResolveEntities:input_type -> entitystore.v1.BatchResolveEntitiesRequest
+	5,  // 43: entitystore.v1.EntityStoreService.GetEntity:output_type -> entitystore.v1.GetEntityResponse
+	7,  // 44: entitystore.v1.EntityStoreService.GetEntitiesByType:output_type -> entitystore.v1.GetEntitiesByTypeResponse
+	9,  // 45: entitystore.v1.EntityStoreService.InsertEntity:output_type -> entitystore.v1.InsertEntityResponse
+	11, // 46: entitystore.v1.EntityStoreService.UpdateEntity:output_type -> entitystore.v1.UpdateEntityResponse
+	35, // 47: entitystore.v1.EntityStoreService.MergeEntity:output_type -> entitystore.v1.MergeEntityResponse
+	13, // 48: entitystore.v1.EntityStoreService.DeleteEntity:output_type -> entitystore.v1.DeleteEntityResponse
+	38, // 49: entitystore.v1.EntityStoreService.ResolveEntity:output_type -> entitystore.v1.ResolveEntityResponse
+	15, // 50: entitystore.v1.EntityStoreService.FindByAnchors:output_type -> entitystore.v1.FindByAnchorsResponse
+	17, // 51: entitystore.v1.EntityStoreService.FindByTokens:output_type -> entitystore.v1.FindByTokensResponse
+	19, // 52: entitystore.v1.EntityStoreService.FindByEmbedding:output_type -> entitystore.v1.FindByEmbeddingResponse
+	21, // 53: entitystore.v1.EntityStoreService.FindConnectedByType:output_type -> entitystore.v1.FindConnectedByTypeResponse
+	23, // 54: entitystore.v1.EntityStoreService.UpsertRelation:output_type -> entitystore.v1.UpsertRelationResponse
+	26, // 55: entitystore.v1.EntityStoreService.GetRelationsFromEntity:output_type -> entitystore.v1.GetRelationsFromEntityResponse
+	27, // 56: entitystore.v1.EntityStoreService.GetRelationsToEntity:output_type -> entitystore.v1.GetRelationsToEntityResponse
+	29, // 57: entitystore.v1.EntityStoreService.SetTags:output_type -> entitystore.v1.SetTagsResponse
+	31, // 58: entitystore.v1.EntityStoreService.AddTags:output_type -> entitystore.v1.AddTagsResponse
+	33, // 59: entitystore.v1.EntityStoreService.RemoveTag:output_type -> entitystore.v1.RemoveTagResponse
+	40, // 60: entitystore.v1.EntityStoreService.BatchInsertEntities:output_type -> entitystore.v1.BatchInsertEntitiesResponse
+	42, // 61: entitystore.v1.EntityStoreService.BatchResolveEntities:output_type -> entitystore.v1.BatchResolveEntitiesResponse
+	43, // [43:62] is the sub-list for method output_type
+	24, // [24:43] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_entitystore_v1_entitystore_proto_init() }
@@ -2113,7 +2707,7 @@ func file_entitystore_v1_entitystore_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_entitystore_v1_entitystore_proto_rawDesc), len(file_entitystore_v1_entitystore_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   34,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

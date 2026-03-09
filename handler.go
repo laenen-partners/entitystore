@@ -81,11 +81,35 @@ func (h *Handler) UpdateEntity(ctx context.Context, req *connect.Request[entitys
 	return connect.NewResponse(&entitystorev1.UpdateEntityResponse{}), nil
 }
 
+func (h *Handler) MergeEntity(ctx context.Context, req *connect.Request[entitystorev1.MergeEntityRequest]) (*connect.Response[entitystorev1.MergeEntityResponse], error) {
+	if err := h.store.MergeEntity(ctx, req.Msg.Id, json.RawMessage(req.Msg.Data), req.Msg.Confidence); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	ent, err := h.store.GetEntity(ctx, req.Msg.Id)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.MergeEntityResponse{
+		Entity: toProtoEntity(ent),
+	}), nil
+}
+
 func (h *Handler) DeleteEntity(ctx context.Context, req *connect.Request[entitystorev1.DeleteEntityRequest]) (*connect.Response[entitystorev1.DeleteEntityResponse], error) {
 	if err := h.store.DeleteEntity(ctx, req.Msg.Id); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 	return connect.NewResponse(&entitystorev1.DeleteEntityResponse{}), nil
+}
+
+func (h *Handler) ResolveEntity(ctx context.Context, req *connect.Request[entitystorev1.ResolveEntityRequest]) (*connect.Response[entitystorev1.ResolveEntityResponse], error) {
+	input := toMatchDecisionInput(req.Msg)
+	ent, err := h.store.ResolveEntity(ctx, req.Msg.Action, req.Msg.MatchedEntityId, input)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.ResolveEntityResponse{
+		Entity: toProtoEntity(ent),
+	}), nil
 }
 
 func (h *Handler) FindByAnchors(ctx context.Context, req *connect.Request[entitystorev1.FindByAnchorsRequest]) (*connect.Response[entitystorev1.FindByAnchorsResponse], error) {
@@ -203,9 +227,86 @@ func (h *Handler) RemoveTag(ctx context.Context, req *connect.Request[entitystor
 	return connect.NewResponse(&entitystorev1.RemoveTagResponse{}), nil
 }
 
+func (h *Handler) BatchInsertEntities(ctx context.Context, req *connect.Request[entitystorev1.BatchInsertEntitiesRequest]) (*connect.Response[entitystorev1.BatchInsertEntitiesResponse], error) {
+	items := make([]entitystore.BatchInsertItem, len(req.Msg.Entities))
+	for i, e := range req.Msg.Entities {
+		items[i] = entitystore.BatchInsertItem{
+			EntityType: e.EntityType,
+			Data:       json.RawMessage(e.Data),
+			Confidence: e.Confidence,
+			Tags:       e.Tags,
+		}
+	}
+	entities, err := h.store.BatchInsertEntities(ctx, items)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.BatchInsertEntitiesResponse{
+		Entities: toProtoEntities(entities),
+	}), nil
+}
+
+func (h *Handler) BatchResolveEntities(ctx context.Context, req *connect.Request[entitystorev1.BatchResolveEntitiesRequest]) (*connect.Response[entitystorev1.BatchResolveEntitiesResponse], error) {
+	items := make([]entitystore.BatchResolveItem, len(req.Msg.Entities))
+	for i, e := range req.Msg.Entities {
+		items[i] = entitystore.BatchResolveItem{
+			Action:          e.Action,
+			MatchedEntityID: e.MatchedEntityId,
+			Input:           toMatchDecisionInput(e),
+		}
+	}
+	entities, err := h.store.BatchResolveEntities(ctx, items)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.BatchResolveEntitiesResponse{
+		Entities: toProtoEntities(entities),
+	}), nil
+}
+
 // ---------------------------------------------------------------------------
 // Conversion helpers
 // ---------------------------------------------------------------------------
+
+func toMatchDecisionInput(msg *entitystorev1.ResolveEntityRequest) entitystore.MatchDecisionInput {
+	anchors := make([]matching.AnchorQuery, len(msg.Anchors))
+	for i, a := range msg.Anchors {
+		anchors[i] = matching.AnchorQuery{Field: a.Field, Value: a.Value}
+	}
+
+	tokens := make(map[string][]string, len(msg.Tokens))
+	for field, tl := range msg.Tokens {
+		tokens[field] = tl.Values
+	}
+
+	var embedding []float32
+	if len(msg.Embedding) > 0 {
+		embedding = msg.Embedding
+	}
+
+	fields := msg.Fields
+	if fields == nil {
+		fields = []string{}
+	}
+
+	return entitystore.MatchDecisionInput{
+		EntityType: msg.EntityType,
+		Data:       json.RawMessage(msg.Data),
+		Confidence: msg.Confidence,
+		Tags:       msg.Tags,
+		Anchors:    anchors,
+		Tokens:     tokens,
+		Embedding:  embedding,
+		Provenance: matching.ProvenanceEntry{
+			DocumentID:      msg.DocumentId,
+			ModelID:         msg.ModelId,
+			Confidence:      msg.Confidence,
+			Fields:          fields,
+			MatchMethod:     msg.MatchMethod,
+			MatchConfidence: msg.MatchConfidence,
+		},
+	}
+}
 
 func toFilter(f *entitystorev1.QueryFilter) *matching.QueryFilter {
 	if f == nil || len(f.Tags) == 0 {

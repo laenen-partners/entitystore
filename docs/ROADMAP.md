@@ -39,9 +39,10 @@ Move protoc-gen-llm-extract into entitystore and rename.
 - [x] `.github/workflows/ci.yml` — mise-action, lint, build, vet, test:cover
 
 ### Phase 4 — API Completeness
-- [ ] Add `ResolveEntity` RPC — Expose `ApplyMatchDecision` for the extraction pipeline
-- [ ] Add `MergeEntity` RPC — Expose JSONB merge for partial updates
-- [ ] Consider batch RPCs for bulk extraction workflows
+- [x] Add `ResolveEntity` RPC — Expose `ApplyMatchDecision` for the extraction pipeline (create/update/merge with anchors, tokens, provenance, embedding)
+- [x] Add `MergeEntity` RPC — Expose JSONB merge for partial updates, returns merged entity
+- [x] Add `BatchInsertEntities` RPC — Bulk insert in a single transaction
+- [x] Add `BatchResolveEntities` RPC — Bulk resolve (create/update/merge) in a single transaction
 
 ## Downstream Impact
 
