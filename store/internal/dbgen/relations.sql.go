@@ -349,7 +349,7 @@ func (q *Queries) FindEntitiesByRelationTarget(ctx context.Context, arg FindEnti
 }
 
 const getRelationsByType = `-- name: GetRelationsByType :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
 WHERE relation_type = $1
 ORDER BY created_at DESC
@@ -372,7 +372,7 @@ func (q *Queries) GetRelationsByType(ctx context.Context, relationType string) (
 			&i.Confidence,
 			&i.Evidence,
 			&i.Implied,
-			&i.DocumentID,
+			&i.SourceUrn,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -386,15 +386,15 @@ func (q *Queries) GetRelationsByType(ctx context.Context, relationType string) (
 	return items, nil
 }
 
-const getRelationsForDocument = `-- name: GetRelationsForDocument :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+const getRelationsForSource = `-- name: GetRelationsForSource :many
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
-WHERE document_id = $1
+WHERE source_urn = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetRelationsForDocument(ctx context.Context, documentID pgtype.Text) ([]EntityRelation, error) {
-	rows, err := q.db.Query(ctx, getRelationsForDocument, documentID)
+func (q *Queries) GetRelationsForSource(ctx context.Context, sourceUrn pgtype.Text) ([]EntityRelation, error) {
+	rows, err := q.db.Query(ctx, getRelationsForSource, sourceUrn)
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +410,7 @@ func (q *Queries) GetRelationsForDocument(ctx context.Context, documentID pgtype
 			&i.Confidence,
 			&i.Evidence,
 			&i.Implied,
-			&i.DocumentID,
+			&i.SourceUrn,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -425,7 +425,7 @@ func (q *Queries) GetRelationsForDocument(ctx context.Context, documentID pgtype
 }
 
 const getRelationsFromEntity = `-- name: GetRelationsFromEntity :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
 WHERE source_id = $1
 ORDER BY created_at DESC
@@ -448,7 +448,7 @@ func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID
 			&i.Confidence,
 			&i.Evidence,
 			&i.Implied,
-			&i.DocumentID,
+			&i.SourceUrn,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -463,7 +463,7 @@ func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID
 }
 
 const getRelationsToEntity = `-- name: GetRelationsToEntity :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
 WHERE target_id = $1
 ORDER BY created_at DESC
@@ -486,7 +486,7 @@ func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) 
 			&i.Confidence,
 			&i.Evidence,
 			&i.Implied,
-			&i.DocumentID,
+			&i.SourceUrn,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -501,11 +501,11 @@ func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) 
 }
 
 const upsertRelation = `-- name: UpsertRelation :one
-INSERT INTO entity_relations (source_id, target_id, relation_type, confidence, evidence, implied, document_id, data)
+INSERT INTO entity_relations (source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-ON CONFLICT (source_id, target_id, relation_type) WHERE document_id IS NULL
+ON CONFLICT (source_id, target_id, relation_type) WHERE source_urn IS NULL
 DO UPDATE SET confidence = EXCLUDED.confidence, evidence = EXCLUDED.evidence, data = entity_relations.data || EXCLUDED.data
-RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 `
 
 type UpsertRelationParams struct {
@@ -515,7 +515,7 @@ type UpsertRelationParams struct {
 	Confidence   float64         `json:"confidence"`
 	Evidence     pgtype.Text     `json:"evidence"`
 	Implied      bool            `json:"implied"`
-	DocumentID   pgtype.Text     `json:"document_id"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
 	Data         json.RawMessage `json:"data"`
 }
 
@@ -527,7 +527,7 @@ func (q *Queries) UpsertRelation(ctx context.Context, arg UpsertRelationParams) 
 		arg.Confidence,
 		arg.Evidence,
 		arg.Implied,
-		arg.DocumentID,
+		arg.SourceUrn,
 		arg.Data,
 	)
 	var i EntityRelation
@@ -539,7 +539,7 @@ func (q *Queries) UpsertRelation(ctx context.Context, arg UpsertRelationParams) 
 		&i.Confidence,
 		&i.Evidence,
 		&i.Implied,
-		&i.DocumentID,
+		&i.SourceUrn,
 		&i.Data,
 		&i.CreatedAt,
 	)

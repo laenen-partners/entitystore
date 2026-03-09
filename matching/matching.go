@@ -65,7 +65,7 @@ type StoredEntity struct {
 type ProvenanceEntry struct {
 	ID              string    `json:"id"`
 	EntityID        string    `json:"entity_id"`
-	DocumentID      string    `json:"document_id"`
+	SourceURN      string    `json:"source_urn"`
 	ExtractedAt     time.Time `json:"extracted_at"`
 	ModelID         string    `json:"model_id"`
 	Confidence      float64   `json:"confidence"`
@@ -83,7 +83,7 @@ type StoredRelation struct {
 	Confidence   float64        `json:"confidence"`
 	Evidence     string         `json:"evidence"`
 	Implied      bool           `json:"implied"`
-	DocumentID   string         `json:"document_id,omitempty"`
+	SourceURN   string         `json:"source_urn,omitempty"`
 	Data         map[string]any `json:"data,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
 }

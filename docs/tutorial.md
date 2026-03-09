@@ -492,7 +492,7 @@ store.UpsertRelation(ctx, matching.StoredRelation{
     RelationType: "member_of",
     Confidence:   0.95,
     Evidence:     "Extracted from family registration document",
-    DocumentID:   documentID,
+    SourceURN:   documentID,
     Data: map[string]any{
         "role":       "head_of_household",
         "since":      "2020-01-15",

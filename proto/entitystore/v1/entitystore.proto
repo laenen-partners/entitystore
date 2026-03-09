@@ -56,7 +56,7 @@ message Relation {
   double confidence = 5;
   string evidence = 6;
   bool implied = 7;
-  string document_id = 8;
+  string source_urn = 8;
   bytes data = 9;
   string created_at = 10;
 }
@@ -175,7 +175,7 @@ message UpsertRelationRequest {
   double confidence = 4;
   string evidence = 5;
   bool implied = 6;
-  string document_id = 7;
+  string source_urn = 7;
   bytes data = 8;
 }
 
@@ -254,7 +254,7 @@ message ResolveEntityRequest {
   // Required for "update" and "merge" actions.
   string matched_entity_id = 6;
   // Provenance fields.
-  string document_id = 7;
+  string source_urn = 7;
   string model_id = 8;
   repeated string fields = 9;
   string match_method = 10;

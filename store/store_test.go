@@ -156,7 +156,7 @@ func TestApplyMatchDecision(t *testing.T) {
 			"description": {"consulting", "services", "q1"},
 		},
 		Provenance: matching.ProvenanceEntry{
-			DocumentID:      "doc-002",
+			SourceURN:      "doc-002",
 			ExtractedAt:     time.Now(),
 			ModelID:         "gemini-2.5-flash",
 			Confidence:      0.92,

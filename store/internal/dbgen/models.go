@@ -34,7 +34,7 @@ type EntityAnchor struct {
 type EntityProvenance struct {
 	ID              uuid.UUID `json:"id"`
 	EntityID        uuid.UUID `json:"entity_id"`
-	DocumentID      string    `json:"document_id"`
+	SourceUrn       string    `json:"source_urn"`
 	ExtractedAt     time.Time `json:"extracted_at"`
 	ModelID         string    `json:"model_id"`
 	Confidence      float64   `json:"confidence"`
@@ -51,7 +51,7 @@ type EntityRelation struct {
 	Confidence   float64         `json:"confidence"`
 	Evidence     pgtype.Text     `json:"evidence"`
 	Implied      bool            `json:"implied"`
-	DocumentID   pgtype.Text     `json:"document_id"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
 	Data         json.RawMessage `json:"data"`
 	CreatedAt    time.Time       `json:"created_at"`
 }

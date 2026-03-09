@@ -465,7 +465,7 @@ func provenanceFromRow(row dbgen.EntityProvenance) matching.ProvenanceEntry {
 	return matching.ProvenanceEntry{
 		ID:              row.ID.String(),
 		EntityID:        row.EntityID.String(),
-		DocumentID:      row.DocumentID,
+		SourceURN:      row.SourceUrn,
 		ExtractedAt:     row.ExtractedAt,
 		ModelID:         row.ModelID,
 		Confidence:      row.Confidence,
@@ -488,8 +488,8 @@ func relationFromRow(row dbgen.EntityRelation) matching.StoredRelation {
 	if row.Evidence.Valid {
 		rel.Evidence = row.Evidence.String
 	}
-	if row.DocumentID.Valid {
-		rel.DocumentID = row.DocumentID.String
+	if row.SourceUrn.Valid {
+		rel.SourceURN = row.SourceUrn.String
 	}
 	if len(row.Data) > 0 && string(row.Data) != "{}" {
 		_ = json.Unmarshal(row.Data, &rel.Data)

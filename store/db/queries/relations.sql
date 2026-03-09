@@ -1,32 +1,32 @@
 -- name: UpsertRelation :one
-INSERT INTO entity_relations (source_id, target_id, relation_type, confidence, evidence, implied, document_id, data)
+INSERT INTO entity_relations (source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-ON CONFLICT (source_id, target_id, relation_type) WHERE document_id IS NULL
+ON CONFLICT (source_id, target_id, relation_type) WHERE source_urn IS NULL
 DO UPDATE SET confidence = EXCLUDED.confidence, evidence = EXCLUDED.evidence, data = entity_relations.data || EXCLUDED.data
-RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at;
+RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at;
 
 -- name: GetRelationsFromEntity :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
 WHERE source_id = $1
 ORDER BY created_at DESC;
 
 -- name: GetRelationsToEntity :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
 WHERE target_id = $1
 ORDER BY created_at DESC;
 
 -- name: GetRelationsByType :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
 WHERE relation_type = $1
 ORDER BY created_at DESC;
 
--- name: GetRelationsForDocument :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, document_id, data, created_at
+-- name: GetRelationsForSource :many
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
 FROM entity_relations
-WHERE document_id = $1
+WHERE source_urn = $1
 ORDER BY created_at DESC;
 
 -- name: DeleteRelation :exec

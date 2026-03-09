@@ -21,45 +21,8 @@ func (q *Queries) DeleteProvenanceForEntity(ctx context.Context, entityID uuid.U
 	return err
 }
 
-const getProvenanceForDocument = `-- name: GetProvenanceForDocument :many
-SELECT id, entity_id, document_id, extracted_at, model_id, confidence, fields, match_method, match_confidence
-FROM entity_provenance
-WHERE document_id = $1
-ORDER BY extracted_at DESC
-`
-
-func (q *Queries) GetProvenanceForDocument(ctx context.Context, documentID string) ([]EntityProvenance, error) {
-	rows, err := q.db.Query(ctx, getProvenanceForDocument, documentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []EntityProvenance
-	for rows.Next() {
-		var i EntityProvenance
-		if err := rows.Scan(
-			&i.ID,
-			&i.EntityID,
-			&i.DocumentID,
-			&i.ExtractedAt,
-			&i.ModelID,
-			&i.Confidence,
-			&i.Fields,
-			&i.MatchMethod,
-			&i.MatchConfidence,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getProvenanceForEntity = `-- name: GetProvenanceForEntity :many
-SELECT id, entity_id, document_id, extracted_at, model_id, confidence, fields, match_method, match_confidence
+SELECT id, entity_id, source_urn, extracted_at, model_id, confidence, fields, match_method, match_confidence
 FROM entity_provenance
 WHERE entity_id = $1
 ORDER BY extracted_at DESC
@@ -77,7 +40,44 @@ func (q *Queries) GetProvenanceForEntity(ctx context.Context, entityID uuid.UUID
 		if err := rows.Scan(
 			&i.ID,
 			&i.EntityID,
-			&i.DocumentID,
+			&i.SourceUrn,
+			&i.ExtractedAt,
+			&i.ModelID,
+			&i.Confidence,
+			&i.Fields,
+			&i.MatchMethod,
+			&i.MatchConfidence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProvenanceForSource = `-- name: GetProvenanceForSource :many
+SELECT id, entity_id, source_urn, extracted_at, model_id, confidence, fields, match_method, match_confidence
+FROM entity_provenance
+WHERE source_urn = $1
+ORDER BY extracted_at DESC
+`
+
+func (q *Queries) GetProvenanceForSource(ctx context.Context, sourceUrn string) ([]EntityProvenance, error) {
+	rows, err := q.db.Query(ctx, getProvenanceForSource, sourceUrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EntityProvenance
+	for rows.Next() {
+		var i EntityProvenance
+		if err := rows.Scan(
+			&i.ID,
+			&i.EntityID,
+			&i.SourceUrn,
 			&i.ExtractedAt,
 			&i.ModelID,
 			&i.Confidence,
@@ -96,14 +96,14 @@ func (q *Queries) GetProvenanceForEntity(ctx context.Context, entityID uuid.UUID
 }
 
 const insertProvenance = `-- name: InsertProvenance :one
-INSERT INTO entity_provenance (entity_id, document_id, extracted_at, model_id, confidence, fields, match_method, match_confidence)
+INSERT INTO entity_provenance (entity_id, source_urn, extracted_at, model_id, confidence, fields, match_method, match_confidence)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, entity_id, document_id, extracted_at, model_id, confidence, fields, match_method, match_confidence
+RETURNING id, entity_id, source_urn, extracted_at, model_id, confidence, fields, match_method, match_confidence
 `
 
 type InsertProvenanceParams struct {
 	EntityID        uuid.UUID `json:"entity_id"`
-	DocumentID      string    `json:"document_id"`
+	SourceUrn       string    `json:"source_urn"`
 	ExtractedAt     time.Time `json:"extracted_at"`
 	ModelID         string    `json:"model_id"`
 	Confidence      float64   `json:"confidence"`
@@ -115,7 +115,7 @@ type InsertProvenanceParams struct {
 func (q *Queries) InsertProvenance(ctx context.Context, arg InsertProvenanceParams) (EntityProvenance, error) {
 	row := q.db.QueryRow(ctx, insertProvenance,
 		arg.EntityID,
-		arg.DocumentID,
+		arg.SourceUrn,
 		arg.ExtractedAt,
 		arg.ModelID,
 		arg.Confidence,
@@ -127,7 +127,7 @@ func (q *Queries) InsertProvenance(ctx context.Context, arg InsertProvenancePara
 	err := row.Scan(
 		&i.ID,
 		&i.EntityID,
-		&i.DocumentID,
+		&i.SourceUrn,
 		&i.ExtractedAt,
 		&i.ModelID,
 		&i.Confidence,

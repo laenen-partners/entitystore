@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -20,13 +21,33 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		return fmt.Errorf("read migrations dir: %w", err)
 	}
 	for _, entry := range entries {
-		sql, err := migrationsFS.ReadFile("db/migrations/" + entry.Name())
+		raw, err := migrationsFS.ReadFile("db/migrations/" + entry.Name())
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", entry.Name(), err)
 		}
-		if _, err := pool.Exec(ctx, string(sql)); err != nil {
+		sql := extractUpSection(string(raw))
+		if _, err := pool.Exec(ctx, sql); err != nil {
 			return fmt.Errorf("apply migration %s: %w", entry.Name(), err)
 		}
 	}
 	return nil
+}
+
+// extractUpSection extracts the "-- migrate:up" section from a dbmate-formatted
+// SQL file, stopping at "-- migrate:down" if present.
+func extractUpSection(sql string) string {
+	const upMarker = "-- migrate:up"
+	const downMarker = "-- migrate:down"
+
+	start := 0
+	if idx := strings.Index(sql, upMarker); idx >= 0 {
+		start = idx + len(upMarker)
+	}
+
+	end := len(sql)
+	if idx := strings.Index(sql[start:], downMarker); idx >= 0 {
+		end = start + idx
+	}
+
+	return strings.TrimSpace(sql[start:end])
 }

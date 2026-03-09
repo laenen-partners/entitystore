@@ -97,7 +97,7 @@ func (s *Store) InsertProvenance(ctx context.Context, p matching.ProvenanceEntry
 	}
 	row, err := s.queries.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
 		EntityID:        uid,
-		DocumentID:      p.DocumentID,
+		SourceUrn:      p.SourceURN,
 		ExtractedAt:     p.ExtractedAt,
 		ModelID:         p.ModelID,
 		Confidence:      p.Confidence,
@@ -129,9 +129,9 @@ func upsertRelation(ctx context.Context, q *dbgen.Queries, rel matching.StoredRe
 	if rel.Evidence != "" {
 		evidence = pgtype.Text{String: rel.Evidence, Valid: true}
 	}
-	docID := pgtype.Text{}
-	if rel.DocumentID != "" {
-		docID = pgtype.Text{String: rel.DocumentID, Valid: true}
+	srcURN := pgtype.Text{}
+	if rel.SourceURN != "" {
+		srcURN = pgtype.Text{String: rel.SourceURN, Valid: true}
 	}
 
 	dataJSON := json.RawMessage("{}")
@@ -150,7 +150,7 @@ func upsertRelation(ctx context.Context, q *dbgen.Queries, rel matching.StoredRe
 		Confidence:   rel.Confidence,
 		Evidence:     evidence,
 		Implied:      rel.Implied,
-		DocumentID:   docID,
+		SourceUrn:   srcURN,
 		Data:         dataJSON,
 	})
 	if err != nil {
@@ -278,12 +278,12 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, action, entityID 
 
 	// Insert provenance.
 	prov := input.Provenance
-	if prov.DocumentID != "" {
+	if prov.SourceURN != "" {
 		if prov.ExtractedAt.IsZero() {
 			prov.ExtractedAt = time.Now()
 		}
 		if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
-			EntityID: uid, DocumentID: prov.DocumentID,
+			EntityID: uid, SourceUrn: prov.SourceURN,
 			ExtractedAt: prov.ExtractedAt, ModelID: prov.ModelID,
 			Confidence: prov.Confidence, Fields: prov.Fields,
 			MatchMethod: prov.MatchMethod, MatchConfidence: prov.MatchConfidence,
@@ -434,7 +434,7 @@ func applyMatchDecision(ctx context.Context, q *dbgen.Queries, input MatchDecisi
 	}
 	if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
 		EntityID:        row.ID,
-		DocumentID:      prov.DocumentID,
+		SourceUrn:      prov.SourceURN,
 		ExtractedAt:     prov.ExtractedAt,
 		ModelID:         prov.ModelID,
 		Confidence:      prov.Confidence,

@@ -218,7 +218,7 @@ type Relation struct {
 	Confidence    float64                `protobuf:"fixed64,5,opt,name=confidence,proto3" json:"confidence,omitempty"`
 	Evidence      string                 `protobuf:"bytes,6,opt,name=evidence,proto3" json:"evidence,omitempty"`
 	Implied       bool                   `protobuf:"varint,7,opt,name=implied,proto3" json:"implied,omitempty"`
-	DocumentId    string                 `protobuf:"bytes,8,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	SourceUrn     string                 `protobuf:"bytes,8,opt,name=source_urn,json=sourceUrn,proto3" json:"source_urn,omitempty"`
 	Data          []byte                 `protobuf:"bytes,9,opt,name=data,proto3" json:"data,omitempty"`
 	CreatedAt     string                 `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -304,9 +304,9 @@ func (x *Relation) GetImplied() bool {
 	return false
 }
 
-func (x *Relation) GetDocumentId() string {
+func (x *Relation) GetSourceUrn() string {
 	if x != nil {
-		return x.DocumentId
+		return x.SourceUrn
 	}
 	return ""
 }
@@ -1261,7 +1261,7 @@ type UpsertRelationRequest struct {
 	Confidence    float64                `protobuf:"fixed64,4,opt,name=confidence,proto3" json:"confidence,omitempty"`
 	Evidence      string                 `protobuf:"bytes,5,opt,name=evidence,proto3" json:"evidence,omitempty"`
 	Implied       bool                   `protobuf:"varint,6,opt,name=implied,proto3" json:"implied,omitempty"`
-	DocumentId    string                 `protobuf:"bytes,7,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	SourceUrn     string                 `protobuf:"bytes,7,opt,name=source_urn,json=sourceUrn,proto3" json:"source_urn,omitempty"`
 	Data          []byte                 `protobuf:"bytes,8,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1339,9 +1339,9 @@ func (x *UpsertRelationRequest) GetImplied() bool {
 	return false
 }
 
-func (x *UpsertRelationRequest) GetDocumentId() string {
+func (x *UpsertRelationRequest) GetSourceUrn() string {
 	if x != nil {
-		return x.DocumentId
+		return x.SourceUrn
 	}
 	return ""
 }
@@ -2004,7 +2004,7 @@ type ResolveEntityRequest struct {
 	// Required for "update" and "merge" actions.
 	MatchedEntityId string `protobuf:"bytes,6,opt,name=matched_entity_id,json=matchedEntityId,proto3" json:"matched_entity_id,omitempty"`
 	// Provenance fields.
-	DocumentId      string   `protobuf:"bytes,7,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	SourceUrn       string   `protobuf:"bytes,7,opt,name=source_urn,json=sourceUrn,proto3" json:"source_urn,omitempty"`
 	ModelId         string   `protobuf:"bytes,8,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
 	Fields          []string `protobuf:"bytes,9,rep,name=fields,proto3" json:"fields,omitempty"`
 	MatchMethod     string   `protobuf:"bytes,10,opt,name=match_method,json=matchMethod,proto3" json:"match_method,omitempty"`
@@ -2089,9 +2089,9 @@ func (x *ResolveEntityRequest) GetMatchedEntityId() string {
 	return ""
 }
 
-func (x *ResolveEntityRequest) GetDocumentId() string {
+func (x *ResolveEntityRequest) GetSourceUrn() string {
 	if x != nil {
-		return x.DocumentId
+		return x.SourceUrn
 	}
 	return ""
 }
@@ -2387,7 +2387,7 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\"!\n" +
 	"\vQueryFilter\x12\x12\n" +
-	"\x04tags\x18\x01 \x03(\tR\x04tags\"\xa3\x02\n" +
+	"\x04tags\x18\x01 \x03(\tR\x04tags\"\xa1\x02\n" +
 	"\bRelation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tsource_id\x18\x02 \x01(\tR\bsourceId\x12\x1b\n" +
@@ -2397,9 +2397,9 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"confidence\x18\x05 \x01(\x01R\n" +
 	"confidence\x12\x1a\n" +
 	"\bevidence\x18\x06 \x01(\tR\bevidence\x12\x18\n" +
-	"\aimplied\x18\a \x01(\bR\aimplied\x12\x1f\n" +
-	"\vdocument_id\x18\b \x01(\tR\n" +
-	"documentId\x12\x12\n" +
+	"\aimplied\x18\a \x01(\bR\aimplied\x12\x1d\n" +
+	"\n" +
+	"source_urn\x18\b \x01(\tR\tsourceUrn\x12\x12\n" +
 	"\x04data\x18\t \x01(\fR\x04data\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\n" +
@@ -2467,7 +2467,7 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"\x0erelation_types\x18\x03 \x03(\tR\rrelationTypes\x123\n" +
 	"\x06filter\x18\x04 \x01(\v2\x1b.entitystore.v1.QueryFilterR\x06filter\"Q\n" +
 	"\x1bFindConnectedByTypeResponse\x122\n" +
-	"\bentities\x18\x01 \x03(\v2\x16.entitystore.v1.EntityR\bentities\"\x81\x02\n" +
+	"\bentities\x18\x01 \x03(\v2\x16.entitystore.v1.EntityR\bentities\"\xff\x01\n" +
 	"\x15UpsertRelationRequest\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x1b\n" +
 	"\ttarget_id\x18\x02 \x01(\tR\btargetId\x12#\n" +
@@ -2476,9 +2476,9 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"confidence\x18\x04 \x01(\x01R\n" +
 	"confidence\x12\x1a\n" +
 	"\bevidence\x18\x05 \x01(\tR\bevidence\x12\x18\n" +
-	"\aimplied\x18\x06 \x01(\bR\aimplied\x12\x1f\n" +
-	"\vdocument_id\x18\a \x01(\tR\n" +
-	"documentId\x12\x12\n" +
+	"\aimplied\x18\x06 \x01(\bR\aimplied\x12\x1d\n" +
+	"\n" +
+	"source_urn\x18\a \x01(\tR\tsourceUrn\x12\x12\n" +
 	"\x04data\x18\b \x01(\fR\x04data\"N\n" +
 	"\x16UpsertRelationResponse\x124\n" +
 	"\brelation\x18\x01 \x01(\v2\x18.entitystore.v1.RelationR\brelation\"<\n" +
@@ -2512,7 +2512,7 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"\x13MergeEntityResponse\x12.\n" +
 	"\x06entity\x18\x01 \x01(\v2\x16.entitystore.v1.EntityR\x06entity\"#\n" +
 	"\tTokenList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06values\"\xda\x04\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\xd8\x04\n" +
 	"\x14ResolveEntityRequest\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x1f\n" +
 	"\ventity_type\x18\x02 \x01(\tR\n" +
@@ -2522,9 +2522,9 @@ const file_entitystore_v1_entitystore_proto_rawDesc = "" +
 	"confidence\x18\x04 \x01(\x01R\n" +
 	"confidence\x12\x12\n" +
 	"\x04tags\x18\x05 \x03(\tR\x04tags\x12*\n" +
-	"\x11matched_entity_id\x18\x06 \x01(\tR\x0fmatchedEntityId\x12\x1f\n" +
-	"\vdocument_id\x18\a \x01(\tR\n" +
-	"documentId\x12\x19\n" +
+	"\x11matched_entity_id\x18\x06 \x01(\tR\x0fmatchedEntityId\x12\x1d\n" +
+	"\n" +
+	"source_urn\x18\a \x01(\tR\tsourceUrn\x12\x19\n" +
 	"\bmodel_id\x18\b \x01(\tR\amodelId\x12\x16\n" +
 	"\x06fields\x18\t \x03(\tR\x06fields\x12!\n" +
 	"\fmatch_method\x18\n" +

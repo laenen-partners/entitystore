@@ -168,7 +168,7 @@ func (h *Handler) UpsertRelation(ctx context.Context, req *connect.Request[entit
 		Confidence:   req.Msg.Confidence,
 		Evidence:     req.Msg.Evidence,
 		Implied:      req.Msg.Implied,
-		DocumentID:   req.Msg.DocumentId,
+		SourceURN:   req.Msg.SourceUrn,
 		Data:         data,
 	})
 	if err != nil {
@@ -298,7 +298,7 @@ func toMatchDecisionInput(msg *entitystorev1.ResolveEntityRequest) entitystore.M
 		Tokens:     tokens,
 		Embedding:  embedding,
 		Provenance: matching.ProvenanceEntry{
-			DocumentID:      msg.DocumentId,
+			SourceURN:      msg.SourceUrn,
 			ModelID:         msg.ModelId,
 			Confidence:      msg.Confidence,
 			Fields:          fields,
@@ -348,7 +348,7 @@ func toProtoRelation(r matching.StoredRelation) *entitystorev1.Relation {
 		Confidence:   r.Confidence,
 		Evidence:     r.Evidence,
 		Implied:      r.Implied,
-		DocumentId:   r.DocumentID,
+		SourceUrn:   r.SourceURN,
 		Data:         data,
 		CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}
