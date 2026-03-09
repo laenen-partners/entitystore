@@ -3,6 +3,7 @@ package entitystore
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"connectrpc.com/connect"
@@ -18,6 +19,8 @@ type Handler struct {
 	entitystorev1connect.UnimplementedEntityStoreServiceHandler
 	store *entitystore.Store
 }
+
+// --- Reads ---
 
 func (h *Handler) GetEntity(ctx context.Context, req *connect.Request[entitystorev1.GetEntityRequest]) (*connect.Response[entitystorev1.GetEntityResponse], error) {
 	ent, err := h.store.GetEntity(ctx, req.Msg.Id)
@@ -49,67 +52,11 @@ func (h *Handler) GetEntitiesByType(ctx context.Context, req *connect.Request[en
 	resp := &entitystorev1.GetEntitiesByTypeResponse{
 		Entities: toProtoEntities(entities),
 	}
-	// Set next_page_token if we got a full page (more results likely).
 	if int32(len(entities)) == pageSize {
 		last := entities[len(entities)-1]
 		resp.NextPageToken = last.UpdatedAt.Format(time.RFC3339Nano)
 	}
 	return connect.NewResponse(resp), nil
-}
-
-func (h *Handler) InsertEntity(ctx context.Context, req *connect.Request[entitystorev1.InsertEntityRequest]) (*connect.Response[entitystorev1.InsertEntityResponse], error) {
-	ent, err := h.store.InsertEntity(ctx, req.Msg.EntityType, json.RawMessage(req.Msg.Data), req.Msg.Confidence)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	// Apply tags if provided (InsertEntity creates with empty tags by default).
-	if len(req.Msg.Tags) > 0 {
-		if err := h.store.SetTags(ctx, ent.ID, req.Msg.Tags); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-		ent.Tags = req.Msg.Tags
-	}
-	return connect.NewResponse(&entitystorev1.InsertEntityResponse{
-		Entity: toProtoEntity(ent),
-	}), nil
-}
-
-func (h *Handler) UpdateEntity(ctx context.Context, req *connect.Request[entitystorev1.UpdateEntityRequest]) (*connect.Response[entitystorev1.UpdateEntityResponse], error) {
-	if err := h.store.UpdateEntity(ctx, req.Msg.Id, json.RawMessage(req.Msg.Data), req.Msg.Confidence); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.UpdateEntityResponse{}), nil
-}
-
-func (h *Handler) MergeEntity(ctx context.Context, req *connect.Request[entitystorev1.MergeEntityRequest]) (*connect.Response[entitystorev1.MergeEntityResponse], error) {
-	if err := h.store.MergeEntity(ctx, req.Msg.Id, json.RawMessage(req.Msg.Data), req.Msg.Confidence); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	ent, err := h.store.GetEntity(ctx, req.Msg.Id)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.MergeEntityResponse{
-		Entity: toProtoEntity(ent),
-	}), nil
-}
-
-func (h *Handler) DeleteEntity(ctx context.Context, req *connect.Request[entitystorev1.DeleteEntityRequest]) (*connect.Response[entitystorev1.DeleteEntityResponse], error) {
-	if err := h.store.DeleteEntity(ctx, req.Msg.Id); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.DeleteEntityResponse{}), nil
-}
-
-func (h *Handler) ResolveEntity(ctx context.Context, req *connect.Request[entitystorev1.ResolveEntityRequest]) (*connect.Response[entitystorev1.ResolveEntityResponse], error) {
-	input := toMatchDecisionInput(req.Msg)
-	ent, err := h.store.ResolveEntity(ctx, req.Msg.Action, req.Msg.MatchedEntityId, input)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.ResolveEntityResponse{
-		Entity: toProtoEntity(ent),
-	}), nil
 }
 
 func (h *Handler) FindByAnchors(ctx context.Context, req *connect.Request[entitystorev1.FindByAnchorsRequest]) (*connect.Response[entitystorev1.FindByAnchorsResponse], error) {
@@ -156,29 +103,6 @@ func (h *Handler) FindConnectedByType(ctx context.Context, req *connect.Request[
 	}), nil
 }
 
-func (h *Handler) UpsertRelation(ctx context.Context, req *connect.Request[entitystorev1.UpsertRelationRequest]) (*connect.Response[entitystorev1.UpsertRelationResponse], error) {
-	var data map[string]any
-	if len(req.Msg.Data) > 0 {
-		_ = json.Unmarshal(req.Msg.Data, &data)
-	}
-	rel, err := h.store.UpsertRelation(ctx, matching.StoredRelation{
-		SourceID:     req.Msg.SourceId,
-		TargetID:     req.Msg.TargetId,
-		RelationType: req.Msg.RelationType,
-		Confidence:   req.Msg.Confidence,
-		Evidence:     req.Msg.Evidence,
-		Implied:      req.Msg.Implied,
-		SourceURN:   req.Msg.SourceUrn,
-		Data:         data,
-	})
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.UpsertRelationResponse{
-		Relation: toProtoRelation(rel),
-	}), nil
-}
-
 func (h *Handler) GetRelationsFromEntity(ctx context.Context, req *connect.Request[entitystorev1.GetRelationsFromEntityRequest]) (*connect.Response[entitystorev1.GetRelationsFromEntityResponse], error) {
 	rels, err := h.store.GetRelationsFromEntity(ctx, req.Msg.EntityId)
 	if err != nil {
@@ -199,6 +123,62 @@ func (h *Handler) GetRelationsToEntity(ctx context.Context, req *connect.Request
 	}), nil
 }
 
+// --- Writes ---
+
+func (h *Handler) BatchWrite(ctx context.Context, req *connect.Request[entitystorev1.BatchWriteRequest]) (*connect.Response[entitystorev1.BatchWriteResponse], error) {
+	if len(req.Msg.Operations) == 0 {
+		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("at least one operation is required"))
+	}
+
+	ops := make([]entitystore.BatchWriteOp, len(req.Msg.Operations))
+	for i, pbOp := range req.Msg.Operations {
+		switch v := pbOp.Operation.(type) {
+		case *entitystorev1.BatchWriteOp_WriteEntity:
+			ops[i] = entitystore.BatchWriteOp{
+				WriteEntity: toWriteEntityOp(v.WriteEntity),
+			}
+		case *entitystorev1.BatchWriteOp_UpsertRelation:
+			ops[i] = entitystore.BatchWriteOp{
+				UpsertRelation: toUpsertRelationOp(v.UpsertRelation),
+			}
+		default:
+			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("operation %d: empty", i))
+		}
+	}
+
+	results, err := h.store.BatchWrite(ctx, ops)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+
+	pbResults := make([]*entitystorev1.BatchWriteResult, len(results))
+	for i, r := range results {
+		pbResults[i] = &entitystorev1.BatchWriteResult{}
+		if r.Entity != nil {
+			pbResults[i].Result = &entitystorev1.BatchWriteResult_Entity{
+				Entity: toProtoEntity(*r.Entity),
+			}
+		} else if r.Relation != nil {
+			pbResults[i].Result = &entitystorev1.BatchWriteResult_Relation{
+				Relation: toProtoRelation(*r.Relation),
+			}
+		}
+	}
+
+	return connect.NewResponse(&entitystorev1.BatchWriteResponse{
+		Results: pbResults,
+	}), nil
+}
+
+func (h *Handler) DeleteEntity(ctx context.Context, req *connect.Request[entitystorev1.DeleteEntityRequest]) (*connect.Response[entitystorev1.DeleteEntityResponse], error) {
+	if err := h.store.DeleteEntity(ctx, req.Msg.Id); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
+	}
+	return connect.NewResponse(&entitystorev1.DeleteEntityResponse{}), nil
+}
+
+// --- Tags ---
+
 func (h *Handler) SetTags(ctx context.Context, req *connect.Request[entitystorev1.SetTagsRequest]) (*connect.Response[entitystorev1.SetTagsResponse], error) {
 	if err := h.store.SetTags(ctx, req.Msg.EntityId, req.Msg.Tags); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -210,7 +190,6 @@ func (h *Handler) AddTags(ctx context.Context, req *connect.Request[entitystorev
 	if err := h.store.AddTags(ctx, req.Msg.EntityId, req.Msg.Tags); err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
-	// Fetch updated entity to return the resulting tag list.
 	ent, err := h.store.GetEntity(ctx, req.Msg.EntityId)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
@@ -227,48 +206,19 @@ func (h *Handler) RemoveTag(ctx context.Context, req *connect.Request[entitystor
 	return connect.NewResponse(&entitystorev1.RemoveTagResponse{}), nil
 }
 
-func (h *Handler) BatchInsertEntities(ctx context.Context, req *connect.Request[entitystorev1.BatchInsertEntitiesRequest]) (*connect.Response[entitystorev1.BatchInsertEntitiesResponse], error) {
-	items := make([]entitystore.BatchInsertItem, len(req.Msg.Entities))
-	for i, e := range req.Msg.Entities {
-		items[i] = entitystore.BatchInsertItem{
-			EntityType: e.EntityType,
-			Data:       json.RawMessage(e.Data),
-			Confidence: e.Confidence,
-			Tags:       e.Tags,
-		}
-	}
-	entities, err := h.store.BatchInsertEntities(ctx, items)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.BatchInsertEntitiesResponse{
-		Entities: toProtoEntities(entities),
-	}), nil
-}
-
-func (h *Handler) BatchResolveEntities(ctx context.Context, req *connect.Request[entitystorev1.BatchResolveEntitiesRequest]) (*connect.Response[entitystorev1.BatchResolveEntitiesResponse], error) {
-	items := make([]entitystore.BatchResolveItem, len(req.Msg.Entities))
-	for i, e := range req.Msg.Entities {
-		items[i] = entitystore.BatchResolveItem{
-			Action:          e.Action,
-			MatchedEntityID: e.MatchedEntityId,
-			Input:           toMatchDecisionInput(e),
-		}
-	}
-	entities, err := h.store.BatchResolveEntities(ctx, items)
-	if err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
-	}
-	return connect.NewResponse(&entitystorev1.BatchResolveEntitiesResponse{
-		Entities: toProtoEntities(entities),
-	}), nil
-}
-
 // ---------------------------------------------------------------------------
 // Conversion helpers
 // ---------------------------------------------------------------------------
 
-func toMatchDecisionInput(msg *entitystorev1.ResolveEntityRequest) entitystore.MatchDecisionInput {
+func toWriteEntityOp(msg *entitystorev1.WriteEntityOp) *entitystore.WriteEntityOp {
+	action := entitystore.WriteActionCreate
+	switch msg.Action {
+	case entitystorev1.WriteAction_WRITE_ACTION_UPDATE:
+		action = entitystore.WriteActionUpdate
+	case entitystorev1.WriteAction_WRITE_ACTION_MERGE:
+		action = entitystore.WriteActionMerge
+	}
+
 	anchors := make([]matching.AnchorQuery, len(msg.Anchors))
 	for i, a := range msg.Anchors {
 		anchors[i] = matching.AnchorQuery{Field: a.Field, Value: a.Value}
@@ -289,22 +239,42 @@ func toMatchDecisionInput(msg *entitystorev1.ResolveEntityRequest) entitystore.M
 		fields = []string{}
 	}
 
-	return entitystore.MatchDecisionInput{
-		EntityType: msg.EntityType,
-		Data:       json.RawMessage(msg.Data),
-		Confidence: msg.Confidence,
-		Tags:       msg.Tags,
-		Anchors:    anchors,
-		Tokens:     tokens,
-		Embedding:  embedding,
+	return &entitystore.WriteEntityOp{
+		Action:          action,
+		ID:              msg.Id,
+		EntityType:      msg.EntityType,
+		Data:            json.RawMessage(msg.Data),
+		Confidence:      msg.Confidence,
+		Tags:            msg.Tags,
+		MatchedEntityID: msg.MatchedEntityId,
+		Anchors:         anchors,
+		Tokens:          tokens,
+		Embedding:       embedding,
 		Provenance: matching.ProvenanceEntry{
-			SourceURN:      msg.SourceUrn,
+			SourceURN:       msg.SourceUrn,
 			ModelID:         msg.ModelId,
 			Confidence:      msg.Confidence,
 			Fields:          fields,
 			MatchMethod:     msg.MatchMethod,
 			MatchConfidence: msg.MatchConfidence,
 		},
+	}
+}
+
+func toUpsertRelationOp(msg *entitystorev1.UpsertRelationOp) *entitystore.UpsertRelationOp {
+	var data map[string]any
+	if len(msg.Data) > 0 {
+		_ = json.Unmarshal(msg.Data, &data)
+	}
+	return &entitystore.UpsertRelationOp{
+		SourceID:     msg.SourceId,
+		TargetID:     msg.TargetId,
+		RelationType: msg.RelationType,
+		Confidence:   msg.Confidence,
+		Evidence:     msg.Evidence,
+		Implied:      msg.Implied,
+		SourceURN:    msg.SourceUrn,
+		Data:         data,
 	}
 }
 
@@ -348,7 +318,7 @@ func toProtoRelation(r matching.StoredRelation) *entitystorev1.Relation {
 		Confidence:   r.Confidence,
 		Evidence:     r.Evidence,
 		Implied:      r.Implied,
-		SourceUrn:   r.SourceURN,
+		SourceUrn:    r.SourceURN,
 		Data:         data,
 		CreatedAt:    r.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 	}

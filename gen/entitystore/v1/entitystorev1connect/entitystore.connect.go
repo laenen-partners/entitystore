@@ -39,21 +39,6 @@ const (
 	// EntityStoreServiceGetEntitiesByTypeProcedure is the fully-qualified name of the
 	// EntityStoreService's GetEntitiesByType RPC.
 	EntityStoreServiceGetEntitiesByTypeProcedure = "/entitystore.v1.EntityStoreService/GetEntitiesByType"
-	// EntityStoreServiceInsertEntityProcedure is the fully-qualified name of the EntityStoreService's
-	// InsertEntity RPC.
-	EntityStoreServiceInsertEntityProcedure = "/entitystore.v1.EntityStoreService/InsertEntity"
-	// EntityStoreServiceUpdateEntityProcedure is the fully-qualified name of the EntityStoreService's
-	// UpdateEntity RPC.
-	EntityStoreServiceUpdateEntityProcedure = "/entitystore.v1.EntityStoreService/UpdateEntity"
-	// EntityStoreServiceMergeEntityProcedure is the fully-qualified name of the EntityStoreService's
-	// MergeEntity RPC.
-	EntityStoreServiceMergeEntityProcedure = "/entitystore.v1.EntityStoreService/MergeEntity"
-	// EntityStoreServiceDeleteEntityProcedure is the fully-qualified name of the EntityStoreService's
-	// DeleteEntity RPC.
-	EntityStoreServiceDeleteEntityProcedure = "/entitystore.v1.EntityStoreService/DeleteEntity"
-	// EntityStoreServiceResolveEntityProcedure is the fully-qualified name of the EntityStoreService's
-	// ResolveEntity RPC.
-	EntityStoreServiceResolveEntityProcedure = "/entitystore.v1.EntityStoreService/ResolveEntity"
 	// EntityStoreServiceFindByAnchorsProcedure is the fully-qualified name of the EntityStoreService's
 	// FindByAnchors RPC.
 	EntityStoreServiceFindByAnchorsProcedure = "/entitystore.v1.EntityStoreService/FindByAnchors"
@@ -66,15 +51,18 @@ const (
 	// EntityStoreServiceFindConnectedByTypeProcedure is the fully-qualified name of the
 	// EntityStoreService's FindConnectedByType RPC.
 	EntityStoreServiceFindConnectedByTypeProcedure = "/entitystore.v1.EntityStoreService/FindConnectedByType"
-	// EntityStoreServiceUpsertRelationProcedure is the fully-qualified name of the EntityStoreService's
-	// UpsertRelation RPC.
-	EntityStoreServiceUpsertRelationProcedure = "/entitystore.v1.EntityStoreService/UpsertRelation"
 	// EntityStoreServiceGetRelationsFromEntityProcedure is the fully-qualified name of the
 	// EntityStoreService's GetRelationsFromEntity RPC.
 	EntityStoreServiceGetRelationsFromEntityProcedure = "/entitystore.v1.EntityStoreService/GetRelationsFromEntity"
 	// EntityStoreServiceGetRelationsToEntityProcedure is the fully-qualified name of the
 	// EntityStoreService's GetRelationsToEntity RPC.
 	EntityStoreServiceGetRelationsToEntityProcedure = "/entitystore.v1.EntityStoreService/GetRelationsToEntity"
+	// EntityStoreServiceBatchWriteProcedure is the fully-qualified name of the EntityStoreService's
+	// BatchWrite RPC.
+	EntityStoreServiceBatchWriteProcedure = "/entitystore.v1.EntityStoreService/BatchWrite"
+	// EntityStoreServiceDeleteEntityProcedure is the fully-qualified name of the EntityStoreService's
+	// DeleteEntity RPC.
+	EntityStoreServiceDeleteEntityProcedure = "/entitystore.v1.EntityStoreService/DeleteEntity"
 	// EntityStoreServiceSetTagsProcedure is the fully-qualified name of the EntityStoreService's
 	// SetTags RPC.
 	EntityStoreServiceSetTagsProcedure = "/entitystore.v1.EntityStoreService/SetTags"
@@ -84,36 +72,26 @@ const (
 	// EntityStoreServiceRemoveTagProcedure is the fully-qualified name of the EntityStoreService's
 	// RemoveTag RPC.
 	EntityStoreServiceRemoveTagProcedure = "/entitystore.v1.EntityStoreService/RemoveTag"
-	// EntityStoreServiceBatchInsertEntitiesProcedure is the fully-qualified name of the
-	// EntityStoreService's BatchInsertEntities RPC.
-	EntityStoreServiceBatchInsertEntitiesProcedure = "/entitystore.v1.EntityStoreService/BatchInsertEntities"
-	// EntityStoreServiceBatchResolveEntitiesProcedure is the fully-qualified name of the
-	// EntityStoreService's BatchResolveEntities RPC.
-	EntityStoreServiceBatchResolveEntitiesProcedure = "/entitystore.v1.EntityStoreService/BatchResolveEntities"
 )
 
 // EntityStoreServiceClient is a client for the entitystore.v1.EntityStoreService service.
 type EntityStoreServiceClient interface {
+	// Reads.
 	GetEntity(context.Context, *connect.Request[v1.GetEntityRequest]) (*connect.Response[v1.GetEntityResponse], error)
 	GetEntitiesByType(context.Context, *connect.Request[v1.GetEntitiesByTypeRequest]) (*connect.Response[v1.GetEntitiesByTypeResponse], error)
-	InsertEntity(context.Context, *connect.Request[v1.InsertEntityRequest]) (*connect.Response[v1.InsertEntityResponse], error)
-	UpdateEntity(context.Context, *connect.Request[v1.UpdateEntityRequest]) (*connect.Response[v1.UpdateEntityResponse], error)
-	MergeEntity(context.Context, *connect.Request[v1.MergeEntityRequest]) (*connect.Response[v1.MergeEntityResponse], error)
-	DeleteEntity(context.Context, *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error)
-	ResolveEntity(context.Context, *connect.Request[v1.ResolveEntityRequest]) (*connect.Response[v1.ResolveEntityResponse], error)
 	FindByAnchors(context.Context, *connect.Request[v1.FindByAnchorsRequest]) (*connect.Response[v1.FindByAnchorsResponse], error)
 	FindByTokens(context.Context, *connect.Request[v1.FindByTokensRequest]) (*connect.Response[v1.FindByTokensResponse], error)
 	FindByEmbedding(context.Context, *connect.Request[v1.FindByEmbeddingRequest]) (*connect.Response[v1.FindByEmbeddingResponse], error)
 	FindConnectedByType(context.Context, *connect.Request[v1.FindConnectedByTypeRequest]) (*connect.Response[v1.FindConnectedByTypeResponse], error)
-	UpsertRelation(context.Context, *connect.Request[v1.UpsertRelationRequest]) (*connect.Response[v1.UpsertRelationResponse], error)
 	GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error)
 	GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error)
+	// Writes — single entry point for all mutations.
+	BatchWrite(context.Context, *connect.Request[v1.BatchWriteRequest]) (*connect.Response[v1.BatchWriteResponse], error)
+	DeleteEntity(context.Context, *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error)
+	// Tags.
 	SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error)
 	AddTags(context.Context, *connect.Request[v1.AddTagsRequest]) (*connect.Response[v1.AddTagsResponse], error)
 	RemoveTag(context.Context, *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error)
-	// Batch operations for bulk extraction workflows.
-	BatchInsertEntities(context.Context, *connect.Request[v1.BatchInsertEntitiesRequest]) (*connect.Response[v1.BatchInsertEntitiesResponse], error)
-	BatchResolveEntities(context.Context, *connect.Request[v1.BatchResolveEntitiesRequest]) (*connect.Response[v1.BatchResolveEntitiesResponse], error)
 }
 
 // NewEntityStoreServiceClient constructs a client for the entitystore.v1.EntityStoreService
@@ -137,36 +115,6 @@ func NewEntityStoreServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			httpClient,
 			baseURL+EntityStoreServiceGetEntitiesByTypeProcedure,
 			connect.WithSchema(entityStoreServiceMethods.ByName("GetEntitiesByType")),
-			connect.WithClientOptions(opts...),
-		),
-		insertEntity: connect.NewClient[v1.InsertEntityRequest, v1.InsertEntityResponse](
-			httpClient,
-			baseURL+EntityStoreServiceInsertEntityProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("InsertEntity")),
-			connect.WithClientOptions(opts...),
-		),
-		updateEntity: connect.NewClient[v1.UpdateEntityRequest, v1.UpdateEntityResponse](
-			httpClient,
-			baseURL+EntityStoreServiceUpdateEntityProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("UpdateEntity")),
-			connect.WithClientOptions(opts...),
-		),
-		mergeEntity: connect.NewClient[v1.MergeEntityRequest, v1.MergeEntityResponse](
-			httpClient,
-			baseURL+EntityStoreServiceMergeEntityProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("MergeEntity")),
-			connect.WithClientOptions(opts...),
-		),
-		deleteEntity: connect.NewClient[v1.DeleteEntityRequest, v1.DeleteEntityResponse](
-			httpClient,
-			baseURL+EntityStoreServiceDeleteEntityProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("DeleteEntity")),
-			connect.WithClientOptions(opts...),
-		),
-		resolveEntity: connect.NewClient[v1.ResolveEntityRequest, v1.ResolveEntityResponse](
-			httpClient,
-			baseURL+EntityStoreServiceResolveEntityProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("ResolveEntity")),
 			connect.WithClientOptions(opts...),
 		),
 		findByAnchors: connect.NewClient[v1.FindByAnchorsRequest, v1.FindByAnchorsResponse](
@@ -193,12 +141,6 @@ func NewEntityStoreServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(entityStoreServiceMethods.ByName("FindConnectedByType")),
 			connect.WithClientOptions(opts...),
 		),
-		upsertRelation: connect.NewClient[v1.UpsertRelationRequest, v1.UpsertRelationResponse](
-			httpClient,
-			baseURL+EntityStoreServiceUpsertRelationProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("UpsertRelation")),
-			connect.WithClientOptions(opts...),
-		),
 		getRelationsFromEntity: connect.NewClient[v1.GetRelationsFromEntityRequest, v1.GetRelationsFromEntityResponse](
 			httpClient,
 			baseURL+EntityStoreServiceGetRelationsFromEntityProcedure,
@@ -209,6 +151,18 @@ func NewEntityStoreServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			httpClient,
 			baseURL+EntityStoreServiceGetRelationsToEntityProcedure,
 			connect.WithSchema(entityStoreServiceMethods.ByName("GetRelationsToEntity")),
+			connect.WithClientOptions(opts...),
+		),
+		batchWrite: connect.NewClient[v1.BatchWriteRequest, v1.BatchWriteResponse](
+			httpClient,
+			baseURL+EntityStoreServiceBatchWriteProcedure,
+			connect.WithSchema(entityStoreServiceMethods.ByName("BatchWrite")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteEntity: connect.NewClient[v1.DeleteEntityRequest, v1.DeleteEntityResponse](
+			httpClient,
+			baseURL+EntityStoreServiceDeleteEntityProcedure,
+			connect.WithSchema(entityStoreServiceMethods.ByName("DeleteEntity")),
 			connect.WithClientOptions(opts...),
 		),
 		setTags: connect.NewClient[v1.SetTagsRequest, v1.SetTagsResponse](
@@ -229,18 +183,6 @@ func NewEntityStoreServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(entityStoreServiceMethods.ByName("RemoveTag")),
 			connect.WithClientOptions(opts...),
 		),
-		batchInsertEntities: connect.NewClient[v1.BatchInsertEntitiesRequest, v1.BatchInsertEntitiesResponse](
-			httpClient,
-			baseURL+EntityStoreServiceBatchInsertEntitiesProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("BatchInsertEntities")),
-			connect.WithClientOptions(opts...),
-		),
-		batchResolveEntities: connect.NewClient[v1.BatchResolveEntitiesRequest, v1.BatchResolveEntitiesResponse](
-			httpClient,
-			baseURL+EntityStoreServiceBatchResolveEntitiesProcedure,
-			connect.WithSchema(entityStoreServiceMethods.ByName("BatchResolveEntities")),
-			connect.WithClientOptions(opts...),
-		),
 	}
 }
 
@@ -248,23 +190,17 @@ func NewEntityStoreServiceClient(httpClient connect.HTTPClient, baseURL string, 
 type entityStoreServiceClient struct {
 	getEntity              *connect.Client[v1.GetEntityRequest, v1.GetEntityResponse]
 	getEntitiesByType      *connect.Client[v1.GetEntitiesByTypeRequest, v1.GetEntitiesByTypeResponse]
-	insertEntity           *connect.Client[v1.InsertEntityRequest, v1.InsertEntityResponse]
-	updateEntity           *connect.Client[v1.UpdateEntityRequest, v1.UpdateEntityResponse]
-	mergeEntity            *connect.Client[v1.MergeEntityRequest, v1.MergeEntityResponse]
-	deleteEntity           *connect.Client[v1.DeleteEntityRequest, v1.DeleteEntityResponse]
-	resolveEntity          *connect.Client[v1.ResolveEntityRequest, v1.ResolveEntityResponse]
 	findByAnchors          *connect.Client[v1.FindByAnchorsRequest, v1.FindByAnchorsResponse]
 	findByTokens           *connect.Client[v1.FindByTokensRequest, v1.FindByTokensResponse]
 	findByEmbedding        *connect.Client[v1.FindByEmbeddingRequest, v1.FindByEmbeddingResponse]
 	findConnectedByType    *connect.Client[v1.FindConnectedByTypeRequest, v1.FindConnectedByTypeResponse]
-	upsertRelation         *connect.Client[v1.UpsertRelationRequest, v1.UpsertRelationResponse]
 	getRelationsFromEntity *connect.Client[v1.GetRelationsFromEntityRequest, v1.GetRelationsFromEntityResponse]
 	getRelationsToEntity   *connect.Client[v1.GetRelationsToEntityRequest, v1.GetRelationsToEntityResponse]
+	batchWrite             *connect.Client[v1.BatchWriteRequest, v1.BatchWriteResponse]
+	deleteEntity           *connect.Client[v1.DeleteEntityRequest, v1.DeleteEntityResponse]
 	setTags                *connect.Client[v1.SetTagsRequest, v1.SetTagsResponse]
 	addTags                *connect.Client[v1.AddTagsRequest, v1.AddTagsResponse]
 	removeTag              *connect.Client[v1.RemoveTagRequest, v1.RemoveTagResponse]
-	batchInsertEntities    *connect.Client[v1.BatchInsertEntitiesRequest, v1.BatchInsertEntitiesResponse]
-	batchResolveEntities   *connect.Client[v1.BatchResolveEntitiesRequest, v1.BatchResolveEntitiesResponse]
 }
 
 // GetEntity calls entitystore.v1.EntityStoreService.GetEntity.
@@ -275,31 +211,6 @@ func (c *entityStoreServiceClient) GetEntity(ctx context.Context, req *connect.R
 // GetEntitiesByType calls entitystore.v1.EntityStoreService.GetEntitiesByType.
 func (c *entityStoreServiceClient) GetEntitiesByType(ctx context.Context, req *connect.Request[v1.GetEntitiesByTypeRequest]) (*connect.Response[v1.GetEntitiesByTypeResponse], error) {
 	return c.getEntitiesByType.CallUnary(ctx, req)
-}
-
-// InsertEntity calls entitystore.v1.EntityStoreService.InsertEntity.
-func (c *entityStoreServiceClient) InsertEntity(ctx context.Context, req *connect.Request[v1.InsertEntityRequest]) (*connect.Response[v1.InsertEntityResponse], error) {
-	return c.insertEntity.CallUnary(ctx, req)
-}
-
-// UpdateEntity calls entitystore.v1.EntityStoreService.UpdateEntity.
-func (c *entityStoreServiceClient) UpdateEntity(ctx context.Context, req *connect.Request[v1.UpdateEntityRequest]) (*connect.Response[v1.UpdateEntityResponse], error) {
-	return c.updateEntity.CallUnary(ctx, req)
-}
-
-// MergeEntity calls entitystore.v1.EntityStoreService.MergeEntity.
-func (c *entityStoreServiceClient) MergeEntity(ctx context.Context, req *connect.Request[v1.MergeEntityRequest]) (*connect.Response[v1.MergeEntityResponse], error) {
-	return c.mergeEntity.CallUnary(ctx, req)
-}
-
-// DeleteEntity calls entitystore.v1.EntityStoreService.DeleteEntity.
-func (c *entityStoreServiceClient) DeleteEntity(ctx context.Context, req *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error) {
-	return c.deleteEntity.CallUnary(ctx, req)
-}
-
-// ResolveEntity calls entitystore.v1.EntityStoreService.ResolveEntity.
-func (c *entityStoreServiceClient) ResolveEntity(ctx context.Context, req *connect.Request[v1.ResolveEntityRequest]) (*connect.Response[v1.ResolveEntityResponse], error) {
-	return c.resolveEntity.CallUnary(ctx, req)
 }
 
 // FindByAnchors calls entitystore.v1.EntityStoreService.FindByAnchors.
@@ -322,11 +233,6 @@ func (c *entityStoreServiceClient) FindConnectedByType(ctx context.Context, req 
 	return c.findConnectedByType.CallUnary(ctx, req)
 }
 
-// UpsertRelation calls entitystore.v1.EntityStoreService.UpsertRelation.
-func (c *entityStoreServiceClient) UpsertRelation(ctx context.Context, req *connect.Request[v1.UpsertRelationRequest]) (*connect.Response[v1.UpsertRelationResponse], error) {
-	return c.upsertRelation.CallUnary(ctx, req)
-}
-
 // GetRelationsFromEntity calls entitystore.v1.EntityStoreService.GetRelationsFromEntity.
 func (c *entityStoreServiceClient) GetRelationsFromEntity(ctx context.Context, req *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error) {
 	return c.getRelationsFromEntity.CallUnary(ctx, req)
@@ -335,6 +241,16 @@ func (c *entityStoreServiceClient) GetRelationsFromEntity(ctx context.Context, r
 // GetRelationsToEntity calls entitystore.v1.EntityStoreService.GetRelationsToEntity.
 func (c *entityStoreServiceClient) GetRelationsToEntity(ctx context.Context, req *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error) {
 	return c.getRelationsToEntity.CallUnary(ctx, req)
+}
+
+// BatchWrite calls entitystore.v1.EntityStoreService.BatchWrite.
+func (c *entityStoreServiceClient) BatchWrite(ctx context.Context, req *connect.Request[v1.BatchWriteRequest]) (*connect.Response[v1.BatchWriteResponse], error) {
+	return c.batchWrite.CallUnary(ctx, req)
+}
+
+// DeleteEntity calls entitystore.v1.EntityStoreService.DeleteEntity.
+func (c *entityStoreServiceClient) DeleteEntity(ctx context.Context, req *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error) {
+	return c.deleteEntity.CallUnary(ctx, req)
 }
 
 // SetTags calls entitystore.v1.EntityStoreService.SetTags.
@@ -352,38 +268,24 @@ func (c *entityStoreServiceClient) RemoveTag(ctx context.Context, req *connect.R
 	return c.removeTag.CallUnary(ctx, req)
 }
 
-// BatchInsertEntities calls entitystore.v1.EntityStoreService.BatchInsertEntities.
-func (c *entityStoreServiceClient) BatchInsertEntities(ctx context.Context, req *connect.Request[v1.BatchInsertEntitiesRequest]) (*connect.Response[v1.BatchInsertEntitiesResponse], error) {
-	return c.batchInsertEntities.CallUnary(ctx, req)
-}
-
-// BatchResolveEntities calls entitystore.v1.EntityStoreService.BatchResolveEntities.
-func (c *entityStoreServiceClient) BatchResolveEntities(ctx context.Context, req *connect.Request[v1.BatchResolveEntitiesRequest]) (*connect.Response[v1.BatchResolveEntitiesResponse], error) {
-	return c.batchResolveEntities.CallUnary(ctx, req)
-}
-
 // EntityStoreServiceHandler is an implementation of the entitystore.v1.EntityStoreService service.
 type EntityStoreServiceHandler interface {
+	// Reads.
 	GetEntity(context.Context, *connect.Request[v1.GetEntityRequest]) (*connect.Response[v1.GetEntityResponse], error)
 	GetEntitiesByType(context.Context, *connect.Request[v1.GetEntitiesByTypeRequest]) (*connect.Response[v1.GetEntitiesByTypeResponse], error)
-	InsertEntity(context.Context, *connect.Request[v1.InsertEntityRequest]) (*connect.Response[v1.InsertEntityResponse], error)
-	UpdateEntity(context.Context, *connect.Request[v1.UpdateEntityRequest]) (*connect.Response[v1.UpdateEntityResponse], error)
-	MergeEntity(context.Context, *connect.Request[v1.MergeEntityRequest]) (*connect.Response[v1.MergeEntityResponse], error)
-	DeleteEntity(context.Context, *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error)
-	ResolveEntity(context.Context, *connect.Request[v1.ResolveEntityRequest]) (*connect.Response[v1.ResolveEntityResponse], error)
 	FindByAnchors(context.Context, *connect.Request[v1.FindByAnchorsRequest]) (*connect.Response[v1.FindByAnchorsResponse], error)
 	FindByTokens(context.Context, *connect.Request[v1.FindByTokensRequest]) (*connect.Response[v1.FindByTokensResponse], error)
 	FindByEmbedding(context.Context, *connect.Request[v1.FindByEmbeddingRequest]) (*connect.Response[v1.FindByEmbeddingResponse], error)
 	FindConnectedByType(context.Context, *connect.Request[v1.FindConnectedByTypeRequest]) (*connect.Response[v1.FindConnectedByTypeResponse], error)
-	UpsertRelation(context.Context, *connect.Request[v1.UpsertRelationRequest]) (*connect.Response[v1.UpsertRelationResponse], error)
 	GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error)
 	GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error)
+	// Writes — single entry point for all mutations.
+	BatchWrite(context.Context, *connect.Request[v1.BatchWriteRequest]) (*connect.Response[v1.BatchWriteResponse], error)
+	DeleteEntity(context.Context, *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error)
+	// Tags.
 	SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error)
 	AddTags(context.Context, *connect.Request[v1.AddTagsRequest]) (*connect.Response[v1.AddTagsResponse], error)
 	RemoveTag(context.Context, *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error)
-	// Batch operations for bulk extraction workflows.
-	BatchInsertEntities(context.Context, *connect.Request[v1.BatchInsertEntitiesRequest]) (*connect.Response[v1.BatchInsertEntitiesResponse], error)
-	BatchResolveEntities(context.Context, *connect.Request[v1.BatchResolveEntitiesRequest]) (*connect.Response[v1.BatchResolveEntitiesResponse], error)
 }
 
 // NewEntityStoreServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -403,36 +305,6 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 		EntityStoreServiceGetEntitiesByTypeProcedure,
 		svc.GetEntitiesByType,
 		connect.WithSchema(entityStoreServiceMethods.ByName("GetEntitiesByType")),
-		connect.WithHandlerOptions(opts...),
-	)
-	entityStoreServiceInsertEntityHandler := connect.NewUnaryHandler(
-		EntityStoreServiceInsertEntityProcedure,
-		svc.InsertEntity,
-		connect.WithSchema(entityStoreServiceMethods.ByName("InsertEntity")),
-		connect.WithHandlerOptions(opts...),
-	)
-	entityStoreServiceUpdateEntityHandler := connect.NewUnaryHandler(
-		EntityStoreServiceUpdateEntityProcedure,
-		svc.UpdateEntity,
-		connect.WithSchema(entityStoreServiceMethods.ByName("UpdateEntity")),
-		connect.WithHandlerOptions(opts...),
-	)
-	entityStoreServiceMergeEntityHandler := connect.NewUnaryHandler(
-		EntityStoreServiceMergeEntityProcedure,
-		svc.MergeEntity,
-		connect.WithSchema(entityStoreServiceMethods.ByName("MergeEntity")),
-		connect.WithHandlerOptions(opts...),
-	)
-	entityStoreServiceDeleteEntityHandler := connect.NewUnaryHandler(
-		EntityStoreServiceDeleteEntityProcedure,
-		svc.DeleteEntity,
-		connect.WithSchema(entityStoreServiceMethods.ByName("DeleteEntity")),
-		connect.WithHandlerOptions(opts...),
-	)
-	entityStoreServiceResolveEntityHandler := connect.NewUnaryHandler(
-		EntityStoreServiceResolveEntityProcedure,
-		svc.ResolveEntity,
-		connect.WithSchema(entityStoreServiceMethods.ByName("ResolveEntity")),
 		connect.WithHandlerOptions(opts...),
 	)
 	entityStoreServiceFindByAnchorsHandler := connect.NewUnaryHandler(
@@ -459,12 +331,6 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 		connect.WithSchema(entityStoreServiceMethods.ByName("FindConnectedByType")),
 		connect.WithHandlerOptions(opts...),
 	)
-	entityStoreServiceUpsertRelationHandler := connect.NewUnaryHandler(
-		EntityStoreServiceUpsertRelationProcedure,
-		svc.UpsertRelation,
-		connect.WithSchema(entityStoreServiceMethods.ByName("UpsertRelation")),
-		connect.WithHandlerOptions(opts...),
-	)
 	entityStoreServiceGetRelationsFromEntityHandler := connect.NewUnaryHandler(
 		EntityStoreServiceGetRelationsFromEntityProcedure,
 		svc.GetRelationsFromEntity,
@@ -475,6 +341,18 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 		EntityStoreServiceGetRelationsToEntityProcedure,
 		svc.GetRelationsToEntity,
 		connect.WithSchema(entityStoreServiceMethods.ByName("GetRelationsToEntity")),
+		connect.WithHandlerOptions(opts...),
+	)
+	entityStoreServiceBatchWriteHandler := connect.NewUnaryHandler(
+		EntityStoreServiceBatchWriteProcedure,
+		svc.BatchWrite,
+		connect.WithSchema(entityStoreServiceMethods.ByName("BatchWrite")),
+		connect.WithHandlerOptions(opts...),
+	)
+	entityStoreServiceDeleteEntityHandler := connect.NewUnaryHandler(
+		EntityStoreServiceDeleteEntityProcedure,
+		svc.DeleteEntity,
+		connect.WithSchema(entityStoreServiceMethods.ByName("DeleteEntity")),
 		connect.WithHandlerOptions(opts...),
 	)
 	entityStoreServiceSetTagsHandler := connect.NewUnaryHandler(
@@ -495,34 +373,12 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 		connect.WithSchema(entityStoreServiceMethods.ByName("RemoveTag")),
 		connect.WithHandlerOptions(opts...),
 	)
-	entityStoreServiceBatchInsertEntitiesHandler := connect.NewUnaryHandler(
-		EntityStoreServiceBatchInsertEntitiesProcedure,
-		svc.BatchInsertEntities,
-		connect.WithSchema(entityStoreServiceMethods.ByName("BatchInsertEntities")),
-		connect.WithHandlerOptions(opts...),
-	)
-	entityStoreServiceBatchResolveEntitiesHandler := connect.NewUnaryHandler(
-		EntityStoreServiceBatchResolveEntitiesProcedure,
-		svc.BatchResolveEntities,
-		connect.WithSchema(entityStoreServiceMethods.ByName("BatchResolveEntities")),
-		connect.WithHandlerOptions(opts...),
-	)
 	return "/entitystore.v1.EntityStoreService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case EntityStoreServiceGetEntityProcedure:
 			entityStoreServiceGetEntityHandler.ServeHTTP(w, r)
 		case EntityStoreServiceGetEntitiesByTypeProcedure:
 			entityStoreServiceGetEntitiesByTypeHandler.ServeHTTP(w, r)
-		case EntityStoreServiceInsertEntityProcedure:
-			entityStoreServiceInsertEntityHandler.ServeHTTP(w, r)
-		case EntityStoreServiceUpdateEntityProcedure:
-			entityStoreServiceUpdateEntityHandler.ServeHTTP(w, r)
-		case EntityStoreServiceMergeEntityProcedure:
-			entityStoreServiceMergeEntityHandler.ServeHTTP(w, r)
-		case EntityStoreServiceDeleteEntityProcedure:
-			entityStoreServiceDeleteEntityHandler.ServeHTTP(w, r)
-		case EntityStoreServiceResolveEntityProcedure:
-			entityStoreServiceResolveEntityHandler.ServeHTTP(w, r)
 		case EntityStoreServiceFindByAnchorsProcedure:
 			entityStoreServiceFindByAnchorsHandler.ServeHTTP(w, r)
 		case EntityStoreServiceFindByTokensProcedure:
@@ -531,22 +387,20 @@ func NewEntityStoreServiceHandler(svc EntityStoreServiceHandler, opts ...connect
 			entityStoreServiceFindByEmbeddingHandler.ServeHTTP(w, r)
 		case EntityStoreServiceFindConnectedByTypeProcedure:
 			entityStoreServiceFindConnectedByTypeHandler.ServeHTTP(w, r)
-		case EntityStoreServiceUpsertRelationProcedure:
-			entityStoreServiceUpsertRelationHandler.ServeHTTP(w, r)
 		case EntityStoreServiceGetRelationsFromEntityProcedure:
 			entityStoreServiceGetRelationsFromEntityHandler.ServeHTTP(w, r)
 		case EntityStoreServiceGetRelationsToEntityProcedure:
 			entityStoreServiceGetRelationsToEntityHandler.ServeHTTP(w, r)
+		case EntityStoreServiceBatchWriteProcedure:
+			entityStoreServiceBatchWriteHandler.ServeHTTP(w, r)
+		case EntityStoreServiceDeleteEntityProcedure:
+			entityStoreServiceDeleteEntityHandler.ServeHTTP(w, r)
 		case EntityStoreServiceSetTagsProcedure:
 			entityStoreServiceSetTagsHandler.ServeHTTP(w, r)
 		case EntityStoreServiceAddTagsProcedure:
 			entityStoreServiceAddTagsHandler.ServeHTTP(w, r)
 		case EntityStoreServiceRemoveTagProcedure:
 			entityStoreServiceRemoveTagHandler.ServeHTTP(w, r)
-		case EntityStoreServiceBatchInsertEntitiesProcedure:
-			entityStoreServiceBatchInsertEntitiesHandler.ServeHTTP(w, r)
-		case EntityStoreServiceBatchResolveEntitiesProcedure:
-			entityStoreServiceBatchResolveEntitiesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -562,26 +416,6 @@ func (UnimplementedEntityStoreServiceHandler) GetEntity(context.Context, *connec
 
 func (UnimplementedEntityStoreServiceHandler) GetEntitiesByType(context.Context, *connect.Request[v1.GetEntitiesByTypeRequest]) (*connect.Response[v1.GetEntitiesByTypeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.GetEntitiesByType is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) InsertEntity(context.Context, *connect.Request[v1.InsertEntityRequest]) (*connect.Response[v1.InsertEntityResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.InsertEntity is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) UpdateEntity(context.Context, *connect.Request[v1.UpdateEntityRequest]) (*connect.Response[v1.UpdateEntityResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.UpdateEntity is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) MergeEntity(context.Context, *connect.Request[v1.MergeEntityRequest]) (*connect.Response[v1.MergeEntityResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.MergeEntity is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) DeleteEntity(context.Context, *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.DeleteEntity is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) ResolveEntity(context.Context, *connect.Request[v1.ResolveEntityRequest]) (*connect.Response[v1.ResolveEntityResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.ResolveEntity is not implemented"))
 }
 
 func (UnimplementedEntityStoreServiceHandler) FindByAnchors(context.Context, *connect.Request[v1.FindByAnchorsRequest]) (*connect.Response[v1.FindByAnchorsResponse], error) {
@@ -600,16 +434,20 @@ func (UnimplementedEntityStoreServiceHandler) FindConnectedByType(context.Contex
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.FindConnectedByType is not implemented"))
 }
 
-func (UnimplementedEntityStoreServiceHandler) UpsertRelation(context.Context, *connect.Request[v1.UpsertRelationRequest]) (*connect.Response[v1.UpsertRelationResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.UpsertRelation is not implemented"))
-}
-
 func (UnimplementedEntityStoreServiceHandler) GetRelationsFromEntity(context.Context, *connect.Request[v1.GetRelationsFromEntityRequest]) (*connect.Response[v1.GetRelationsFromEntityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.GetRelationsFromEntity is not implemented"))
 }
 
 func (UnimplementedEntityStoreServiceHandler) GetRelationsToEntity(context.Context, *connect.Request[v1.GetRelationsToEntityRequest]) (*connect.Response[v1.GetRelationsToEntityResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.GetRelationsToEntity is not implemented"))
+}
+
+func (UnimplementedEntityStoreServiceHandler) BatchWrite(context.Context, *connect.Request[v1.BatchWriteRequest]) (*connect.Response[v1.BatchWriteResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.BatchWrite is not implemented"))
+}
+
+func (UnimplementedEntityStoreServiceHandler) DeleteEntity(context.Context, *connect.Request[v1.DeleteEntityRequest]) (*connect.Response[v1.DeleteEntityResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.DeleteEntity is not implemented"))
 }
 
 func (UnimplementedEntityStoreServiceHandler) SetTags(context.Context, *connect.Request[v1.SetTagsRequest]) (*connect.Response[v1.SetTagsResponse], error) {
@@ -622,12 +460,4 @@ func (UnimplementedEntityStoreServiceHandler) AddTags(context.Context, *connect.
 
 func (UnimplementedEntityStoreServiceHandler) RemoveTag(context.Context, *connect.Request[v1.RemoveTagRequest]) (*connect.Response[v1.RemoveTagResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.RemoveTag is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) BatchInsertEntities(context.Context, *connect.Request[v1.BatchInsertEntitiesRequest]) (*connect.Response[v1.BatchInsertEntitiesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.BatchInsertEntities is not implemented"))
-}
-
-func (UnimplementedEntityStoreServiceHandler) BatchResolveEntities(context.Context, *connect.Request[v1.BatchResolveEntitiesRequest]) (*connect.Response[v1.BatchResolveEntitiesResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("entitystore.v1.EntityStoreService.BatchResolveEntities is not implemented"))
 }

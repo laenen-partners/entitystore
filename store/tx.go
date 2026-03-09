@@ -38,27 +38,13 @@ func (ts *TxStore) Rollback(ctx context.Context) error {
 	return ts.tx.Rollback(ctx)
 }
 
-// ApplyMatchDecision creates an entity with anchors, tokens, provenance, and
-// embedding in the current transaction.
-func (ts *TxStore) ApplyMatchDecision(ctx context.Context, input MatchDecisionInput) (matching.StoredEntity, error) {
-	return applyMatchDecision(ctx, ts.queries, input)
-}
-
-// ResolveEntity applies a match decision (create, update, or merge) in the
+// WriteEntity applies a single entity write (create, update, or merge) in the
 // current transaction.
-func (ts *TxStore) ResolveEntity(ctx context.Context, action string, entityID string, input MatchDecisionInput) (matching.StoredEntity, error) {
-	switch action {
-	case "create":
-		return applyMatchDecision(ctx, ts.queries, input)
-	case "update", "merge":
-		return applyUpdateOrMerge(ctx, ts.queries, action, entityID, input)
-	default:
-		return matching.StoredEntity{}, fmt.Errorf("resolve entity: unknown action %q", action)
-	}
+func (ts *TxStore) WriteEntity(ctx context.Context, op *WriteEntityOp) (matching.StoredEntity, error) {
+	return applyEntityWrite(ctx, ts.queries, op)
 }
 
 // UpsertRelation creates or updates a relation in the current transaction.
 func (ts *TxStore) UpsertRelation(ctx context.Context, rel matching.StoredRelation) (matching.StoredRelation, error) {
 	return upsertRelation(ctx, ts.queries, rel)
 }
-

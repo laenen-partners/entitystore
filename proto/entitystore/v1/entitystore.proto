@@ -5,26 +5,24 @@ package entitystore.v1;
 option go_package = "github.com/laenen-partners/entitystore/gen/entitystore/v1;entitystorev1";
 
 service EntityStoreService {
+  // Reads.
   rpc GetEntity(GetEntityRequest) returns (GetEntityResponse);
   rpc GetEntitiesByType(GetEntitiesByTypeRequest) returns (GetEntitiesByTypeResponse);
-  rpc InsertEntity(InsertEntityRequest) returns (InsertEntityResponse);
-  rpc UpdateEntity(UpdateEntityRequest) returns (UpdateEntityResponse);
-  rpc MergeEntity(MergeEntityRequest) returns (MergeEntityResponse);
-  rpc DeleteEntity(DeleteEntityRequest) returns (DeleteEntityResponse);
-  rpc ResolveEntity(ResolveEntityRequest) returns (ResolveEntityResponse);
   rpc FindByAnchors(FindByAnchorsRequest) returns (FindByAnchorsResponse);
   rpc FindByTokens(FindByTokensRequest) returns (FindByTokensResponse);
   rpc FindByEmbedding(FindByEmbeddingRequest) returns (FindByEmbeddingResponse);
   rpc FindConnectedByType(FindConnectedByTypeRequest) returns (FindConnectedByTypeResponse);
-  rpc UpsertRelation(UpsertRelationRequest) returns (UpsertRelationResponse);
   rpc GetRelationsFromEntity(GetRelationsFromEntityRequest) returns (GetRelationsFromEntityResponse);
   rpc GetRelationsToEntity(GetRelationsToEntityRequest) returns (GetRelationsToEntityResponse);
+
+  // Writes — single entry point for all mutations.
+  rpc BatchWrite(BatchWriteRequest) returns (BatchWriteResponse);
+  rpc DeleteEntity(DeleteEntityRequest) returns (DeleteEntityResponse);
+
+  // Tags.
   rpc SetTags(SetTagsRequest) returns (SetTagsResponse);
   rpc AddTags(AddTagsRequest) returns (AddTagsResponse);
   rpc RemoveTag(RemoveTagRequest) returns (RemoveTagResponse);
-  // Batch operations for bulk extraction workflows.
-  rpc BatchInsertEntities(BatchInsertEntitiesRequest) returns (BatchInsertEntitiesResponse);
-  rpc BatchResolveEntities(BatchResolveEntitiesRequest) returns (BatchResolveEntitiesResponse);
 }
 
 // --- Shared ---
@@ -61,6 +59,10 @@ message Relation {
   string created_at = 10;
 }
 
+message TokenList {
+  repeated string values = 1;
+}
+
 // --- GetEntity ---
 
 message GetEntityRequest {
@@ -75,37 +77,14 @@ message GetEntityResponse {
 
 message GetEntitiesByTypeRequest {
   string entity_type = 1;
-  int32 page_size = 2;    // max entities to return (default 100)
-  string page_token = 3;  // cursor from previous response (RFC 3339 timestamp)
+  int32 page_size = 2;
+  string page_token = 3;
 }
 
 message GetEntitiesByTypeResponse {
   repeated Entity entities = 1;
-  string next_page_token = 2; // empty when no more results
+  string next_page_token = 2;
 }
-
-// --- InsertEntity ---
-
-message InsertEntityRequest {
-  string entity_type = 1;
-  bytes data = 2;
-  double confidence = 3;
-  repeated string tags = 4;
-}
-
-message InsertEntityResponse {
-  Entity entity = 1;
-}
-
-// --- UpdateEntity ---
-
-message UpdateEntityRequest {
-  string id = 1;
-  bytes data = 2;
-  double confidence = 3;
-}
-
-message UpdateEntityResponse {}
 
 // --- DeleteEntity ---
 
@@ -166,23 +145,6 @@ message FindConnectedByTypeResponse {
   repeated Entity entities = 1;
 }
 
-// --- UpsertRelation ---
-
-message UpsertRelationRequest {
-  string source_id = 1;
-  string target_id = 2;
-  string relation_type = 3;
-  double confidence = 4;
-  string evidence = 5;
-  bool implied = 6;
-  string source_urn = 7;
-  bytes data = 8;
-}
-
-message UpsertRelationResponse {
-  Relation relation = 1;
-}
-
 // --- GetRelations ---
 
 message GetRelationsFromEntityRequest {
@@ -216,7 +178,7 @@ message AddTagsRequest {
 }
 
 message AddTagsResponse {
-  repeated string tags = 1; // resulting tag list after addition
+  repeated string tags = 1;
 }
 
 message RemoveTagRequest {
@@ -226,63 +188,67 @@ message RemoveTagRequest {
 
 message RemoveTagResponse {}
 
-// --- MergeEntity ---
+// --- BatchWrite ---
 
-message MergeEntityRequest {
-  string id = 1;
-  bytes data = 2;         // JSON fields to merge (overlays on existing data)
-  double confidence = 3;
+enum WriteAction {
+  WRITE_ACTION_UNSPECIFIED = 0;
+  WRITE_ACTION_CREATE = 1;
+  WRITE_ACTION_UPDATE = 2;
+  WRITE_ACTION_MERGE = 3;
 }
 
-message MergeEntityResponse {
-  Entity entity = 1;
-}
-
-// --- ResolveEntity ---
-
-message TokenList {
-  repeated string values = 1;
-}
-
-message ResolveEntityRequest {
-  // Action: "create", "update", or "merge".
-  string action = 1;
+message WriteEntityOp {
+  WriteAction action = 1;
   string entity_type = 2;
   bytes data = 3;
   double confidence = 4;
   repeated string tags = 5;
-  // Required for "update" and "merge" actions.
+  // Required for update and merge actions.
   string matched_entity_id = 6;
-  // Provenance fields.
+  // Optional: client-generated UUID for new entities (create action).
+  // Allows referencing the entity ID in subsequent ops within the same batch.
+  string id = 15;
+  // Provenance.
   string source_urn = 7;
   string model_id = 8;
   repeated string fields = 9;
   string match_method = 10;
   double match_confidence = 11;
-  // Optional: anchors, tokens, embedding for index maintenance.
+  // Index maintenance.
   repeated AnchorQuery anchors = 12;
   map<string, TokenList> tokens = 13;
   repeated float embedding = 14;
 }
 
-message ResolveEntityResponse {
-  Entity entity = 1;
+message UpsertRelationOp {
+  string source_id = 1;
+  string target_id = 2;
+  string relation_type = 3;
+  double confidence = 4;
+  string evidence = 5;
+  bool implied = 6;
+  string source_urn = 7;
+  bytes data = 8;
 }
 
-// --- Batch operations ---
-
-message BatchInsertEntitiesRequest {
-  repeated InsertEntityRequest entities = 1;
+message BatchWriteOp {
+  oneof operation {
+    WriteEntityOp write_entity = 1;
+    UpsertRelationOp upsert_relation = 2;
+  }
 }
 
-message BatchInsertEntitiesResponse {
-  repeated Entity entities = 1;
+message BatchWriteRequest {
+  repeated BatchWriteOp operations = 1;
 }
 
-message BatchResolveEntitiesRequest {
-  repeated ResolveEntityRequest entities = 1;
+message BatchWriteResult {
+  oneof result {
+    Entity entity = 1;
+    Relation relation = 2;
+  }
 }
 
-message BatchResolveEntitiesResponse {
-  repeated Entity entities = 1;
+message BatchWriteResponse {
+  repeated BatchWriteResult results = 1;
 }

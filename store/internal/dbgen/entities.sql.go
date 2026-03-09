@@ -150,6 +150,51 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (Ins
 	return i, err
 }
 
+const insertEntityWithID = `-- name: InsertEntityWithID :one
+INSERT INTO entities (id, entity_type, data, confidence, tags)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, entity_type, data, confidence, tags, created_at, updated_at
+`
+
+type InsertEntityWithIDParams struct {
+	ID         uuid.UUID       `json:"id"`
+	EntityType string          `json:"entity_type"`
+	Data       json.RawMessage `json:"data"`
+	Confidence float64         `json:"confidence"`
+	Tags       []string        `json:"tags"`
+}
+
+type InsertEntityWithIDRow struct {
+	ID         uuid.UUID       `json:"id"`
+	EntityType string          `json:"entity_type"`
+	Data       json.RawMessage `json:"data"`
+	Confidence float64         `json:"confidence"`
+	Tags       []string        `json:"tags"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
+func (q *Queries) InsertEntityWithID(ctx context.Context, arg InsertEntityWithIDParams) (InsertEntityWithIDRow, error) {
+	row := q.db.QueryRow(ctx, insertEntityWithID,
+		arg.ID,
+		arg.EntityType,
+		arg.Data,
+		arg.Confidence,
+		arg.Tags,
+	)
+	var i InsertEntityWithIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.EntityType,
+		&i.Data,
+		&i.Confidence,
+		&i.Tags,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const mergeEntityData = `-- name: MergeEntityData :exec
 UPDATE entities
 SET data = data || $2, confidence = $3, updated_at = now()

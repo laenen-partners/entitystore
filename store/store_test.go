@@ -26,22 +26,36 @@ func newTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-func TestInsertAndFindByAnchor(t *testing.T) {
+func TestBatchWrite_CreateAndFindByAnchor(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
 	data := json.RawMessage(`{"email":"alice@example.com","name":"Alice"}`)
-	ent, err := s.InsertEntity(ctx, "entities.v1.Person", data, 0.95)
-	if err != nil {
-		t.Fatalf("insert entity: %v", err)
-	}
-
-	err = s.UpsertAnchors(ctx, ent.ID, "entities.v1.Person", []matching.AnchorQuery{
-		{Field: "email", Value: "alice@example.com"},
+	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			EntityType: "entities.v1.Person",
+			Data:       data,
+			Confidence: 0.95,
+			Anchors: []matching.AnchorQuery{
+				{Field: "email", Value: "alice@example.com"},
+			},
+			Provenance: matching.ProvenanceEntry{
+				SourceURN:   "test:anchor",
+				ExtractedAt: time.Now(),
+				ModelID:     "test",
+				Fields:      []string{"email", "name"},
+				MatchMethod: "create",
+			},
+		}},
 	})
 	if err != nil {
-		t.Fatalf("upsert anchors: %v", err)
+		t.Fatalf("batch write: %v", err)
 	}
+	if len(results) != 1 || results[0].Entity == nil {
+		t.Fatal("expected 1 entity result")
+	}
+	ent := results[0].Entity
 
 	found, err := s.FindByAnchors(ctx, "entities.v1.Person", []matching.AnchorQuery{
 		{Field: "email", Value: "alice@example.com"},
@@ -61,20 +75,31 @@ func TestInsertAndFindByAnchor(t *testing.T) {
 	}
 }
 
-func TestInsertAndFindByTokens(t *testing.T) {
+func TestBatchWrite_CreateWithTokens(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
 	data := json.RawMessage(`{"name":"Acme Corp","industry":"technology"}`)
-	ent, err := s.InsertEntity(ctx, "entities.v1.Company", data, 0.9)
+	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			EntityType: "entities.v1.Company",
+			Data:       data,
+			Confidence: 0.9,
+			Tokens:     map[string][]string{"name": {"acme", "corp"}},
+			Provenance: matching.ProvenanceEntry{
+				SourceURN:   "test:tokens",
+				ExtractedAt: time.Now(),
+				ModelID:     "test",
+				Fields:      []string{"name"},
+				MatchMethod: "create",
+			},
+		}},
+	})
 	if err != nil {
-		t.Fatalf("insert entity: %v", err)
+		t.Fatalf("batch write: %v", err)
 	}
-
-	err = s.UpsertTokens(ctx, ent.ID, "entities.v1.Company", "name", []string{"acme", "corp"})
-	if err != nil {
-		t.Fatalf("upsert tokens: %v", err)
-	}
+	ent := results[0].Entity
 
 	found, err := s.FindByTokens(ctx, "entities.v1.Company", []string{"acme", "inc"}, 10, nil)
 	if err != nil {
@@ -89,31 +114,57 @@ func TestInsertAndFindByTokens(t *testing.T) {
 	}
 }
 
-func TestRelations(t *testing.T) {
+func TestBatchWrite_MixedEntitiesAndRelations(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	e1, err := s.InsertEntity(ctx, "entities.v1.Person", json.RawMessage(`{"name":"Alice"}`), 0.9)
-	if err != nil {
-		t.Fatalf("insert e1: %v", err)
-	}
-	e2, err := s.InsertEntity(ctx, "entities.v1.Company", json.RawMessage(`{"name":"Acme"}`), 0.9)
-	if err != nil {
-		t.Fatalf("insert e2: %v", err)
-	}
-
-	rel, err := s.UpsertRelation(ctx, matching.StoredRelation{
-		SourceID:     e1.ID,
-		TargetID:     e2.ID,
-		RelationType: "employed_by",
-		Confidence:   0.95,
-		Evidence:     "Alice works at Acme",
+	// Create two entities and a relation in a single batch.
+	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			EntityType: "entities.v1.Person",
+			Data:       json.RawMessage(`{"name":"Alice"}`),
+			Confidence: 0.9,
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:mixed", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			EntityType: "entities.v1.Company",
+			Data:       json.RawMessage(`{"name":"Acme"}`),
+			Confidence: 0.9,
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:mixed", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
 	})
 	if err != nil {
-		t.Fatalf("upsert relation: %v", err)
+		t.Fatalf("batch write entities: %v", err)
 	}
-	if rel.RelationType != "employed_by" {
-		t.Errorf("expected relation type employed_by, got %s", rel.RelationType)
+	e1 := results[0].Entity
+	e2 := results[1].Entity
+
+	// Now upsert a relation between them.
+	relResults, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{UpsertRelation: &store.UpsertRelationOp{
+			SourceID:     e1.ID,
+			TargetID:     e2.ID,
+			RelationType: "employed_by",
+			Confidence:   0.95,
+			Evidence:     "Alice works at Acme",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("batch write relation: %v", err)
+	}
+	if len(relResults) != 1 || relResults[0].Relation == nil {
+		t.Fatal("expected 1 relation result")
+	}
+	if relResults[0].Relation.RelationType != "employed_by" {
+		t.Errorf("expected relation type employed_by, got %s", relResults[0].Relation.RelationType)
 	}
 
 	fromRels, err := s.GetRelationsFromEntity(ctx, e1.ID)
@@ -140,34 +191,38 @@ func TestRelations(t *testing.T) {
 	}
 }
 
-func TestApplyMatchDecision(t *testing.T) {
+func TestBatchWrite_CreateWithProvenance(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	ent, err := s.ApplyMatchDecision(ctx, store.MatchDecisionInput{
-		EntityType: "entities.v1.Invoice",
-		Data:       json.RawMessage(`{"invoice_number":"INV-001","total":"1000.00"}`),
-		Confidence: 0.92,
-		Tags:       []string{"tenant:acme", "status:new"},
-		Anchors: []matching.AnchorQuery{
-			{Field: "invoice_number", Value: "inv-001"},
-		},
-		Tokens: map[string][]string{
-			"description": {"consulting", "services", "q1"},
-		},
-		Provenance: matching.ProvenanceEntry{
-			SourceURN:      "doc-002",
-			ExtractedAt:     time.Now(),
-			ModelID:         "gemini-2.5-flash",
-			Confidence:      0.92,
-			Fields:          []string{"invoice_number", "total"},
-			MatchMethod:     "create",
-			MatchConfidence: 0.0,
-		},
+	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			EntityType: "entities.v1.Invoice",
+			Data:       json.RawMessage(`{"invoice_number":"INV-001","total":"1000.00"}`),
+			Confidence: 0.92,
+			Tags:       []string{"tenant:acme", "status:new"},
+			Anchors: []matching.AnchorQuery{
+				{Field: "invoice_number", Value: "inv-001"},
+			},
+			Tokens: map[string][]string{
+				"description": {"consulting", "services", "q1"},
+			},
+			Provenance: matching.ProvenanceEntry{
+				SourceURN:       "doc-002",
+				ExtractedAt:     time.Now(),
+				ModelID:         "gemini-2.5-flash",
+				Confidence:      0.92,
+				Fields:          []string{"invoice_number", "total"},
+				MatchMethod:     "create",
+				MatchConfidence: 0.0,
+			},
+		}},
 	})
 	if err != nil {
-		t.Fatalf("apply match decision: %v", err)
+		t.Fatalf("batch write: %v", err)
 	}
+	ent := results[0].Entity
 	if ent.EntityType != "entities.v1.Invoice" {
 		t.Errorf("expected entities.v1.Invoice, got %s", ent.EntityType)
 	}
@@ -181,10 +236,22 @@ func TestTags(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
-	ent, err := s.InsertEntity(ctx, "entities.v1.Person", json.RawMessage(`{"name":"Tag Test"}`), 0.9)
+	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			EntityType: "entities.v1.Person",
+			Data:       json.RawMessage(`{"name":"Tag Test"}`),
+			Confidence: 0.9,
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:tags", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
+	})
 	if err != nil {
-		t.Fatalf("insert: %v", err)
+		t.Fatalf("batch write: %v", err)
 	}
+	ent := results[0].Entity
 
 	if err := s.SetTags(ctx, ent.ID, []string{"tenant:acme", "pii:true"}); err != nil {
 		t.Fatalf("set tags: %v", err)

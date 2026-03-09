@@ -16,6 +16,11 @@ INSERT INTO entities (entity_type, data, confidence, tags)
 VALUES ($1, $2, $3, $4)
 RETURNING id, entity_type, data, confidence, tags, created_at, updated_at;
 
+-- name: InsertEntityWithID :one
+INSERT INTO entities (id, entity_type, data, confidence, tags)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, entity_type, data, confidence, tags, created_at, updated_at;
+
 -- name: UpdateEntityData :exec
 UPDATE entities
 SET data = $2, confidence = $3, updated_at = now()

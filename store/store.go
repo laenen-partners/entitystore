@@ -409,7 +409,7 @@ func (s *Store) FindEntitiesByRelation(ctx context.Context, entityType string, r
 
 type entityRow interface {
 	dbgen.FindByAnchorsRow | dbgen.FindByTokenOverlapRow | dbgen.FindByEmbeddingRow |
-		dbgen.GetEntityRow | dbgen.GetEntitiesByTypeRow | dbgen.InsertEntityRow |
+		dbgen.GetEntityRow | dbgen.GetEntitiesByTypeRow | dbgen.InsertEntityRow | dbgen.InsertEntityWithIDRow |
 		dbgen.ConnectedEntitiesOutboundRow | dbgen.ConnectedEntitiesInboundRow |
 		dbgen.FindConnectedByTypeOutboundRow | dbgen.FindConnectedByTypeInboundRow |
 		dbgen.FindEntitiesByRelationSourceRow | dbgen.FindEntitiesByRelationTargetRow
@@ -428,6 +428,8 @@ func entityFromRow[R entityRow](row R) matching.StoredEntity {
 	case dbgen.GetEntitiesByTypeRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
 	case dbgen.InsertEntityRow:
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
+	case dbgen.InsertEntityWithIDRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
 	case dbgen.ConnectedEntitiesOutboundRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)

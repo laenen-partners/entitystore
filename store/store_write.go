@@ -14,43 +14,93 @@ import (
 	"github.com/laenen-partners/entitystore/store/internal/dbgen"
 )
 
-func (s *Store) InsertEntity(ctx context.Context, entityType string, data json.RawMessage, confidence float64) (matching.StoredEntity, error) {
-	row, err := s.queries.InsertEntity(ctx, dbgen.InsertEntityParams{
-		EntityType: entityType,
-		Data:       data,
-		Confidence: confidence,
-		Tags:       []string{},
-	})
-	if err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("insert entity: %w", err)
-	}
-	return entityFromRow(row), nil
+// WriteAction specifies the type of entity write operation.
+type WriteAction int
+
+const (
+	WriteActionCreate WriteAction = 1
+	WriteActionUpdate WriteAction = 2
+	WriteActionMerge  WriteAction = 3
+)
+
+// WriteEntityOp describes a single entity write within a batch.
+type WriteEntityOp struct {
+	Action          WriteAction
+	ID              string // Optional: client-generated UUID for create.
+	EntityType      string
+	Data            json.RawMessage
+	Confidence      float64
+	Tags            []string
+	MatchedEntityID string // Required for update and merge.
+	Anchors         []matching.AnchorQuery
+	Tokens          map[string][]string
+	Embedding       []float32
+	Provenance      matching.ProvenanceEntry
 }
 
-func (s *Store) UpdateEntity(ctx context.Context, id string, data json.RawMessage, confidence float64) error {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return fmt.Errorf("parse entity id: %w", err)
-	}
-	return s.queries.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
-		ID:         uid,
-		Data:       data,
-		Confidence: confidence,
-	})
+// UpsertRelationOp describes a single relation upsert within a batch.
+type UpsertRelationOp struct {
+	SourceID     string
+	TargetID     string
+	RelationType string
+	Confidence   float64
+	Evidence     string
+	Implied      bool
+	SourceURN    string
+	Data         map[string]any
 }
 
-func (s *Store) MergeEntity(ctx context.Context, id string, data json.RawMessage, confidence float64) error {
-	uid, err := uuid.Parse(id)
-	if err != nil {
-		return fmt.Errorf("parse entity id: %w", err)
-	}
-	return s.queries.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
-		ID:         uid,
-		Data:       data,
-		Confidence: confidence,
-	})
+// BatchWriteOp is a single operation in a batch — either an entity write or a relation upsert.
+type BatchWriteOp struct {
+	WriteEntity    *WriteEntityOp
+	UpsertRelation *UpsertRelationOp
 }
 
+// BatchWriteResult is the result of a single operation in a batch.
+type BatchWriteResult struct {
+	Entity   *matching.StoredEntity
+	Relation *matching.StoredRelation
+}
+
+// BatchWrite executes mixed entity writes and relation upserts in a single transaction.
+func (s *Store) BatchWrite(ctx context.Context, ops []BatchWriteOp) ([]BatchWriteResult, error) {
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	q := s.queries.WithTx(tx)
+	results := make([]BatchWriteResult, 0, len(ops))
+
+	for i, op := range ops {
+		switch {
+		case op.WriteEntity != nil:
+			ent, err := applyEntityWrite(ctx, q, op.WriteEntity)
+			if err != nil {
+				return nil, fmt.Errorf("op %d (write_entity): %w", i, err)
+			}
+			results = append(results, BatchWriteResult{Entity: &ent})
+
+		case op.UpsertRelation != nil:
+			rel, err := upsertRelation(ctx, q, toStoredRelation(op.UpsertRelation))
+			if err != nil {
+				return nil, fmt.Errorf("op %d (upsert_relation): %w", i, err)
+			}
+			results = append(results, BatchWriteResult{Relation: &rel})
+
+		default:
+			return nil, fmt.Errorf("op %d: empty operation", i)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("tx commit: %w", err)
+	}
+	return results, nil
+}
+
+// DeleteEntity removes an entity and its associated data.
 func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 	uid, err := uuid.Parse(id)
 	if err != nil {
@@ -59,17 +109,143 @@ func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 	return s.queries.DeleteEntity(ctx, uid)
 }
 
-func (s *Store) UpsertAnchors(ctx context.Context, entityID string, entityType string, anchors []matching.AnchorQuery) error {
-	uid, err := uuid.Parse(entityID)
-	if err != nil {
-		return fmt.Errorf("parse entity id: %w", err)
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+func toStoredRelation(op *UpsertRelationOp) matching.StoredRelation {
+	return matching.StoredRelation{
+		SourceID:     op.SourceID,
+		TargetID:     op.TargetID,
+		RelationType: op.RelationType,
+		Confidence:   op.Confidence,
+		Evidence:     op.Evidence,
+		Implied:      op.Implied,
+		SourceURN:    op.SourceURN,
+		Data:         op.Data,
 	}
+}
+
+// applyEntityWrite dispatches to create, update, or merge based on the action.
+func applyEntityWrite(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matching.StoredEntity, error) {
+	switch op.Action {
+	case WriteActionCreate:
+		return applyCreate(ctx, q, op)
+	case WriteActionUpdate, WriteActionMerge:
+		return applyUpdateOrMerge(ctx, q, op)
+	default:
+		return matching.StoredEntity{}, fmt.Errorf("unknown write action %d", op.Action)
+	}
+}
+
+func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matching.StoredEntity, error) {
+	tags := op.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+
+	var entityID uuid.UUID
+	var ent matching.StoredEntity
+
+	if op.ID != "" {
+		// Client-generated ID.
+		uid, err := uuid.Parse(op.ID)
+		if err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("parse client id: %w", err)
+		}
+		row, err := q.InsertEntityWithID(ctx, dbgen.InsertEntityWithIDParams{
+			ID: uid, EntityType: op.EntityType,
+			Data: op.Data, Confidence: op.Confidence, Tags: tags,
+		})
+		if err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("insert entity with id: %w", err)
+		}
+		entityID = row.ID
+		ent = entityFromRow(row)
+	} else {
+		row, err := q.InsertEntity(ctx, dbgen.InsertEntityParams{
+			EntityType: op.EntityType,
+			Data:       op.Data,
+			Confidence: op.Confidence,
+			Tags:       tags,
+		})
+		if err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("insert entity: %w", err)
+		}
+		entityID = row.ID
+		ent = entityFromRow(row)
+	}
+
+	if err := upsertAnchors(ctx, q, entityID, op.EntityType, op.Anchors); err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if err := upsertTokens(ctx, q, entityID, op.EntityType, op.Tokens); err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if err := insertProvenance(ctx, q, entityID, op.Provenance); err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if err := updateEmbedding(ctx, q, entityID, op.Embedding); err != nil {
+		return matching.StoredEntity{}, err
+	}
+
+	return ent, nil
+}
+
+func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matching.StoredEntity, error) {
+	uid, err := uuid.Parse(op.MatchedEntityID)
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("parse entity id: %w", err)
+	}
+
+	switch op.Action {
+	case WriteActionUpdate:
+		if err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
+			ID: uid, Data: op.Data, Confidence: op.Confidence,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("update entity: %w", err)
+		}
+	case WriteActionMerge:
+		if err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
+			ID: uid, Data: op.Data, Confidence: op.Confidence,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("merge entity: %w", err)
+		}
+	}
+
+	if len(op.Tags) > 0 {
+		if err := q.AddEntityTags(ctx, dbgen.AddEntityTagsParams{
+			EntityID: uid, Tags: op.Tags,
+		}); err != nil {
+			return matching.StoredEntity{}, fmt.Errorf("add tags: %w", err)
+		}
+	}
+
+	if err := upsertAnchors(ctx, q, uid, op.EntityType, op.Anchors); err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if err := upsertTokens(ctx, q, uid, op.EntityType, op.Tokens); err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if err := insertProvenance(ctx, q, uid, op.Provenance); err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if err := updateEmbedding(ctx, q, uid, op.Embedding); err != nil {
+		return matching.StoredEntity{}, err
+	}
+
+	row, err := q.GetEntity(ctx, uid)
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("get entity: %w", err)
+	}
+	return entityFromRow(row), nil
+}
+
+func upsertAnchors(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, entityType string, anchors []matching.AnchorQuery) error {
 	for _, aq := range anchors {
-		if err := s.queries.UpsertAnchor(ctx, dbgen.UpsertAnchorParams{
-			EntityID:        uid,
-			EntityType:      entityType,
-			AnchorField:     aq.Field,
-			NormalizedValue: aq.Value,
+		if err := q.UpsertAnchor(ctx, dbgen.UpsertAnchorParams{
+			EntityID: entityID, EntityType: entityType,
+			AnchorField: aq.Field, NormalizedValue: aq.Value,
 		}); err != nil {
 			return fmt.Errorf("upsert anchor %s=%s: %w", aq.Field, aq.Value, err)
 		}
@@ -77,42 +253,49 @@ func (s *Store) UpsertAnchors(ctx context.Context, entityID string, entityType s
 	return nil
 }
 
-func (s *Store) UpsertTokens(ctx context.Context, entityID string, entityType string, tokenField string, tokens []string) error {
-	uid, err := uuid.Parse(entityID)
-	if err != nil {
-		return fmt.Errorf("parse entity id: %w", err)
+func upsertTokens(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, entityType string, tokens map[string][]string) error {
+	for field, toks := range tokens {
+		if err := q.UpsertTokens(ctx, dbgen.UpsertTokensParams{
+			EntityID: entityID, EntityType: entityType,
+			TokenField: field, Tokens: toks,
+		}); err != nil {
+			return fmt.Errorf("upsert tokens %s: %w", field, err)
+		}
 	}
-	return s.queries.UpsertTokens(ctx, dbgen.UpsertTokensParams{
-		EntityID:   uid,
-		EntityType: entityType,
-		TokenField: tokenField,
-		Tokens:     tokens,
-	})
+	return nil
 }
 
-func (s *Store) InsertProvenance(ctx context.Context, p matching.ProvenanceEntry) (matching.ProvenanceEntry, error) {
-	uid, err := uuid.Parse(p.EntityID)
-	if err != nil {
-		return matching.ProvenanceEntry{}, fmt.Errorf("parse entity id: %w", err)
+func insertProvenance(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, prov matching.ProvenanceEntry) error {
+	if prov.SourceURN == "" {
+		return nil
 	}
-	row, err := s.queries.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
-		EntityID:        uid,
-		SourceUrn:      p.SourceURN,
-		ExtractedAt:     p.ExtractedAt,
-		ModelID:         p.ModelID,
-		Confidence:      p.Confidence,
-		Fields:          p.Fields,
-		MatchMethod:     p.MatchMethod,
-		MatchConfidence: p.MatchConfidence,
-	})
-	if err != nil {
-		return matching.ProvenanceEntry{}, fmt.Errorf("insert provenance: %w", err)
+	if prov.ExtractedAt.IsZero() {
+		prov.ExtractedAt = time.Now()
 	}
-	return provenanceFromRow(row), nil
+	if prov.Fields == nil {
+		prov.Fields = []string{}
+	}
+	if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
+		EntityID: entityID, SourceUrn: prov.SourceURN,
+		ExtractedAt: prov.ExtractedAt, ModelID: prov.ModelID,
+		Confidence: prov.Confidence, Fields: prov.Fields,
+		MatchMethod: prov.MatchMethod, MatchConfidence: prov.MatchConfidence,
+	}); err != nil {
+		return fmt.Errorf("insert provenance: %w", err)
+	}
+	return nil
 }
 
-func (s *Store) UpsertRelation(ctx context.Context, rel matching.StoredRelation) (matching.StoredRelation, error) {
-	return upsertRelation(ctx, s.queries, rel)
+func updateEmbedding(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, embedding []float32) error {
+	if embedding == nil {
+		return nil
+	}
+	if err := q.UpdateEntityEmbedding(ctx, dbgen.UpdateEntityEmbeddingParams{
+		EntityID: entityID, Embedding: pgVec(embedding),
+	}); err != nil {
+		return fmt.Errorf("update embedding: %w", err)
+	}
+	return nil
 }
 
 func upsertRelation(ctx context.Context, q *dbgen.Queries, rel matching.StoredRelation) (matching.StoredRelation, error) {
@@ -150,309 +333,11 @@ func upsertRelation(ctx context.Context, q *dbgen.Queries, rel matching.StoredRe
 		Confidence:   rel.Confidence,
 		Evidence:     evidence,
 		Implied:      rel.Implied,
-		SourceUrn:   srcURN,
+		SourceUrn:    srcURN,
 		Data:         dataJSON,
 	})
 	if err != nil {
 		return matching.StoredRelation{}, fmt.Errorf("upsert relation: %w", err)
 	}
 	return relationFromRow(row), nil
-}
-
-// ---------------------------------------------------------------------------
-// Transactional operations
-// ---------------------------------------------------------------------------
-
-// MatchDecisionInput bundles the data needed to apply a match decision atomically.
-type MatchDecisionInput struct {
-	EntityType string
-	Data       json.RawMessage
-	Confidence float64
-	Tags       []string
-	Anchors    []matching.AnchorQuery
-	Tokens     map[string][]string
-	Provenance matching.ProvenanceEntry
-	Embedding  []float32
-}
-
-func (s *Store) ApplyMatchDecision(ctx context.Context, input MatchDecisionInput) (matching.StoredEntity, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	stored, err := applyMatchDecision(ctx, s.queries.WithTx(tx), input)
-	if err != nil {
-		return matching.StoredEntity{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("tx commit: %w", err)
-	}
-
-	return stored, nil
-}
-
-// ResolveEntity applies a match decision atomically. It supports three actions:
-//   - "create": inserts a new entity with anchors, tokens, provenance, and embedding.
-//   - "update": replaces the matched entity's data, then updates indexes and provenance.
-//   - "merge":  merges new fields into the matched entity's data (JSON ||), then updates indexes and provenance.
-func (s *Store) ResolveEntity(ctx context.Context, action string, entityID string, input MatchDecisionInput) (matching.StoredEntity, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	q := s.queries.WithTx(tx)
-
-	var stored matching.StoredEntity
-	switch action {
-	case "create":
-		stored, err = applyMatchDecision(ctx, q, input)
-	case "update", "merge":
-		stored, err = applyUpdateOrMerge(ctx, q, action, entityID, input)
-	default:
-		return matching.StoredEntity{}, fmt.Errorf("resolve entity: unknown action %q", action)
-	}
-	if err != nil {
-		return matching.StoredEntity{}, err
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("tx commit: %w", err)
-	}
-	return stored, nil
-}
-
-func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, action, entityID string, input MatchDecisionInput) (matching.StoredEntity, error) {
-	uid, err := uuid.Parse(entityID)
-	if err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("parse entity id: %w", err)
-	}
-
-	switch action {
-	case "update":
-		if err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
-			ID: uid, Data: input.Data, Confidence: input.Confidence,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx update entity: %w", err)
-		}
-	case "merge":
-		if err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
-			ID: uid, Data: input.Data, Confidence: input.Confidence,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx merge entity: %w", err)
-		}
-	}
-
-	// Update tags if provided.
-	if len(input.Tags) > 0 {
-		if err := q.AddEntityTags(ctx, dbgen.AddEntityTagsParams{
-			EntityID: uid, Tags: input.Tags,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx add tags: %w", err)
-		}
-	}
-
-	// Update anchors.
-	for _, aq := range input.Anchors {
-		if err := q.UpsertAnchor(ctx, dbgen.UpsertAnchorParams{
-			EntityID: uid, EntityType: input.EntityType,
-			AnchorField: aq.Field, NormalizedValue: aq.Value,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx upsert anchor: %w", err)
-		}
-	}
-
-	// Update tokens.
-	for field, toks := range input.Tokens {
-		if err := q.UpsertTokens(ctx, dbgen.UpsertTokensParams{
-			EntityID: uid, EntityType: input.EntityType,
-			TokenField: field, Tokens: toks,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx upsert tokens: %w", err)
-		}
-	}
-
-	// Insert provenance.
-	prov := input.Provenance
-	if prov.SourceURN != "" {
-		if prov.ExtractedAt.IsZero() {
-			prov.ExtractedAt = time.Now()
-		}
-		if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
-			EntityID: uid, SourceUrn: prov.SourceURN,
-			ExtractedAt: prov.ExtractedAt, ModelID: prov.ModelID,
-			Confidence: prov.Confidence, Fields: prov.Fields,
-			MatchMethod: prov.MatchMethod, MatchConfidence: prov.MatchConfidence,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx insert provenance: %w", err)
-		}
-	}
-
-	// Update embedding.
-	if input.Embedding != nil {
-		if err := q.UpdateEntityEmbedding(ctx, dbgen.UpdateEntityEmbeddingParams{
-			EntityID: uid, Embedding: pgVec(input.Embedding),
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx update embedding: %w", err)
-		}
-	}
-
-	// Fetch and return the updated entity.
-	row, err := q.GetEntity(ctx, uid)
-	if err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("tx get entity: %w", err)
-	}
-	return entityFromRow(row), nil
-}
-
-// BatchInsertEntities inserts multiple entities in a single transaction.
-func (s *Store) BatchInsertEntities(ctx context.Context, items []BatchInsertItem) ([]matching.StoredEntity, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	q := s.queries.WithTx(tx)
-	result := make([]matching.StoredEntity, 0, len(items))
-	for _, item := range items {
-		tags := item.Tags
-		if tags == nil {
-			tags = []string{}
-		}
-		row, err := q.InsertEntity(ctx, dbgen.InsertEntityParams{
-			EntityType: item.EntityType,
-			Data:       item.Data,
-			Confidence: item.Confidence,
-			Tags:       tags,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("batch insert entity: %w", err)
-		}
-		result = append(result, entityFromRow(row))
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("tx commit: %w", err)
-	}
-	return result, nil
-}
-
-// BatchInsertItem holds the data for a single entity in a batch insert.
-type BatchInsertItem struct {
-	EntityType string
-	Data       json.RawMessage
-	Confidence float64
-	Tags       []string
-}
-
-// BatchResolveEntities resolves multiple entities in a single transaction.
-func (s *Store) BatchResolveEntities(ctx context.Context, items []BatchResolveItem) ([]matching.StoredEntity, error) {
-	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	q := s.queries.WithTx(tx)
-	result := make([]matching.StoredEntity, 0, len(items))
-	for i, item := range items {
-		var stored matching.StoredEntity
-		var err error
-		switch item.Action {
-		case "create":
-			stored, err = applyMatchDecision(ctx, q, item.Input)
-		case "update", "merge":
-			stored, err = applyUpdateOrMerge(ctx, q, item.Action, item.MatchedEntityID, item.Input)
-		default:
-			return nil, fmt.Errorf("batch resolve item %d: unknown action %q", i, item.Action)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("batch resolve item %d: %w", i, err)
-		}
-		result = append(result, stored)
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("tx commit: %w", err)
-	}
-	return result, nil
-}
-
-// BatchResolveItem holds the data for a single entity resolution in a batch.
-type BatchResolveItem struct {
-	Action          string
-	MatchedEntityID string
-	Input           MatchDecisionInput
-}
-
-func applyMatchDecision(ctx context.Context, q *dbgen.Queries, input MatchDecisionInput) (matching.StoredEntity, error) {
-	tags := input.Tags
-	if tags == nil {
-		tags = []string{}
-	}
-
-	row, err := q.InsertEntity(ctx, dbgen.InsertEntityParams{
-		EntityType: input.EntityType,
-		Data:       input.Data,
-		Confidence: input.Confidence,
-		Tags:       tags,
-	})
-	if err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("tx insert entity: %w", err)
-	}
-
-	for _, aq := range input.Anchors {
-		if err := q.UpsertAnchor(ctx, dbgen.UpsertAnchorParams{
-			EntityID:        row.ID,
-			EntityType:      input.EntityType,
-			AnchorField:     aq.Field,
-			NormalizedValue: aq.Value,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx upsert anchor: %w", err)
-		}
-	}
-
-	for field, toks := range input.Tokens {
-		if err := q.UpsertTokens(ctx, dbgen.UpsertTokensParams{
-			EntityID:   row.ID,
-			EntityType: input.EntityType,
-			TokenField: field,
-			Tokens:     toks,
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx upsert tokens: %w", err)
-		}
-	}
-
-	prov := input.Provenance
-	if prov.ExtractedAt.IsZero() {
-		prov.ExtractedAt = time.Now()
-	}
-	if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
-		EntityID:        row.ID,
-		SourceUrn:      prov.SourceURN,
-		ExtractedAt:     prov.ExtractedAt,
-		ModelID:         prov.ModelID,
-		Confidence:      prov.Confidence,
-		Fields:          prov.Fields,
-		MatchMethod:     prov.MatchMethod,
-		MatchConfidence: prov.MatchConfidence,
-	}); err != nil {
-		return matching.StoredEntity{}, fmt.Errorf("tx insert provenance: %w", err)
-	}
-
-	if input.Embedding != nil {
-		if err := q.UpdateEntityEmbedding(ctx, dbgen.UpdateEntityEmbeddingParams{
-			EntityID:  row.ID,
-			Embedding: pgVec(input.Embedding),
-		}); err != nil {
-			return matching.StoredEntity{}, fmt.Errorf("tx update embedding: %w", err)
-		}
-	}
-
-	return entityFromRow(row), nil
 }
