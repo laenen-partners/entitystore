@@ -26,31 +26,60 @@ type Store struct {
 	ownPool bool
 }
 
-// PoolConfig holds optional connection pool tuning parameters.
-type PoolConfig struct {
-	MaxConns        int32 // maximum open connections (default: 4)
-	MinConns        int32 // minimum idle connections (default: 0)
-	MaxConnIdleTime time.Duration
+// Option configures a Store during construction.
+type Option func(*storeOptions)
+
+type storeOptions struct {
+	maxConns        int32
+	minConns        int32
+	maxConnIdleTime time.Duration
+	autoMigrate     bool
+}
+
+// WithPoolConfig sets connection pool tuning parameters.
+func WithPoolConfig(maxConns, minConns int32, maxConnIdleTime time.Duration) Option {
+	return func(o *storeOptions) {
+		o.maxConns = maxConns
+		o.minConns = minConns
+		o.maxConnIdleTime = maxConnIdleTime
+	}
+}
+
+// WithAutoMigrate enables automatic migration on store creation.
+// Migrations are tracked in the "entitystore_migrations" table using dbmate.
+func WithAutoMigrate() Option {
+	return func(o *storeOptions) {
+		o.autoMigrate = true
+	}
 }
 
 // New creates a Store connected to the given PostgreSQL connection string.
-func New(ctx context.Context, connString string, opts ...PoolConfig) (*Store, error) {
+func New(ctx context.Context, connString string, opts ...Option) (*Store, error) {
+	var o storeOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+
 	cfg, err := pgxpool.ParseConfig(connString)
 	if err != nil {
 		return nil, fmt.Errorf("postgres store: parse config: %w", err)
 	}
-	if len(opts) > 0 {
-		pc := opts[0]
-		if pc.MaxConns > 0 {
-			cfg.MaxConns = pc.MaxConns
-		}
-		if pc.MinConns > 0 {
-			cfg.MinConns = pc.MinConns
-		}
-		if pc.MaxConnIdleTime > 0 {
-			cfg.MaxConnIdleTime = pc.MaxConnIdleTime
+	if o.maxConns > 0 {
+		cfg.MaxConns = o.maxConns
+	}
+	if o.minConns > 0 {
+		cfg.MinConns = o.minConns
+	}
+	if o.maxConnIdleTime > 0 {
+		cfg.MaxConnIdleTime = o.maxConnIdleTime
+	}
+
+	if o.autoMigrate {
+		if err := Migrate(connString); err != nil {
+			return nil, fmt.Errorf("postgres store: %w", err)
 		}
 	}
+
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres store: connect: %w", err)

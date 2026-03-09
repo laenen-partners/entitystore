@@ -53,11 +53,16 @@ The server starts on `http://localhost:3002`. Migrations are applied automatical
 # Without auth (API_KEYS not set in .env)
 buf curl --schema proto \
   --data '{
-    "entity_type": "entities.v1.Person",
-    "data": "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
-    "confidence": 0.95
+    "operations": [{
+      "write_entity": {
+        "action": "ACTION_CREATE",
+        "entity_type": "entities.v1.Person",
+        "data": "{\"name\":\"Alice\",\"email\":\"alice@example.com\"}",
+        "confidence": 0.95
+      }
+    }]
   }' \
-  http://localhost:3002/entitystore.v1.EntityStoreService/InsertEntity
+  http://localhost:3002/entitystore.v1.EntityStoreService/BatchWrite
 ```
 
 With API keys enabled (`API_KEYS=my-secret-key` in `.env`):
@@ -82,18 +87,19 @@ All RPCs are defined in [`proto/entitystore/v1/entitystore.proto`](proto/entitys
 
 | RPC | Description |
 |---|---|
+| `BatchWrite` | Create, update, or merge entities and upsert relations in a single atomic batch |
 | `GetEntity` | Get a single entity by ID |
 | `GetEntitiesByType` | List all entities of a given type |
-| `InsertEntity` | Create a new entity |
-| `UpdateEntity` | Update an existing entity's data and confidence |
 | `DeleteEntity` | Delete an entity by ID |
 | `FindByAnchors` | Find entities by exact anchor field matches |
 | `FindByTokens` | Find entities by token overlap (fuzzy) |
 | `FindByEmbedding` | Find entities by vector similarity |
 | `FindConnectedByType` | Find entities connected via relationships |
-| `UpsertRelation` | Create or update a relationship between entities |
 | `GetRelationsFromEntity` | Get all outgoing relationships |
 | `GetRelationsToEntity` | Get all incoming relationships |
+| `SetTags` | Replace all tags on an entity |
+| `AddTags` | Append tags to an entity |
+| `RemoveTag` | Remove a single tag from an entity |
 
 ## Configuration
 
@@ -325,7 +331,7 @@ message UpdateEntityRequest {
 | Skip a field | field not in mask | any | No change |
 | Full replace | `update_mask` omitted/empty | all fields | Replace everything (backwards compatible) |
 
-When `update_mask` is omitted or empty, the request behaves as a full replace -- identical to the current `UpdateEntity` behaviour. This keeps the API backwards compatible.
+When `update_mask` is omitted or empty, the request behaves as a full replace. This keeps the API backwards compatible.
 
 ### Data fields: JSON merge patch (RFC 7396)
 
@@ -359,14 +365,19 @@ Tags have their own RPCs for fine-grained control:
 
 ### Combining both in a single request
 
-A single `UpdateEntity` call can update envelope fields and merge data in one operation:
+A single `BatchWrite` call with an update action can update envelope fields and merge data in one operation:
 
 ```json
 {
-  "id": "abc-123",
-  "data": "{\"email\": \"new@example.com\", \"phone\": null}",
-  "confidence": 0.99,
-  "update_mask": {"paths": ["data", "confidence"]}
+  "operations": [{
+    "write_entity": {
+      "action": "ACTION_UPDATE",
+      "entity_id": "abc-123",
+      "data": "{\"email\": \"new@example.com\", \"phone\": null}",
+      "confidence": 0.99,
+      "update_mask": {"paths": ["data", "confidence"]}
+    }
+  }]
 }
 ```
 

@@ -486,18 +486,20 @@ The `allowed_relations` annotations define the full relationship graph:
 Relations are directed edges stored with confidence, evidence, and optional structured data:
 
 ```go
-store.UpsertRelation(ctx, matching.StoredRelation{
-    SourceID:     personID,
-    TargetID:     familyID,
-    RelationType: "member_of",
-    Confidence:   0.95,
-    Evidence:     "Extracted from family registration document",
-    SourceURN:   documentID,
-    Data: map[string]any{
-        "role":       "head_of_household",
-        "since":      "2020-01-15",
+store.BatchWrite(ctx, []store.BatchWriteOp{{
+    UpsertRelation: &store.UpsertRelationOp{
+        SourceID:     personID,
+        TargetID:     familyID,
+        RelationType: "member_of",
+        Confidence:   0.95,
+        Evidence:     "Extracted from family registration document",
+        SourceURN:    documentID,
+        Data: map[string]any{
+            "role":  "head_of_household",
+            "since": "2020-01-15",
+        },
     },
-})
+}})
 ```
 
 ---
@@ -572,9 +574,16 @@ if len(cfg.EmbedFields) > 0 {
 Tags enable multi-tenant and workflow filtering across all search operations:
 
 ```go
-// Insert with tags.
-store.InsertEntity(ctx, "butler.v1.Person", data, 0.95, nil)
-store.AddTags(ctx, entityID, []string{"family:smith", "source:email", "status:verified"})
+// Create with tags via BatchWrite.
+results, _ := store.BatchWrite(ctx, []store.BatchWriteOp{{
+    WriteEntity: &store.WriteEntityOp{
+        Action:     store.ActionCreate,
+        EntityType: "butler.v1.Person",
+        Data:       data,
+        Confidence: 0.95,
+        Tags:       []string{"family:smith", "source:email", "status:verified"},
+    },
+}})
 
 // Search within a family.
 filter := &matching.QueryFilter{Tags: []string{"family:smith"}}

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	entitystore "github.com/laenen-partners/entitystore"
-	"github.com/laenen-partners/entitystore/store"
 )
 
 func main() {
@@ -22,12 +21,6 @@ func main() {
 		os.Exit(1)
 	}
 	defer s.Close()
-
-	// Apply embedded migrations.
-	if err := store.Migrate(context.Background(), s.Pool()); err != nil {
-		slog.Error("failed to apply migrations", "error", err)
-		os.Exit(1)
-	}
 
 	srv := &http.Server{
 		Addr:    cfg.Addr,

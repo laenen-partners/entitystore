@@ -170,7 +170,7 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - Errors are wrapped with `fmt.Errorf("context: %w", err)`.
 - Use `slog` for structured logging.
 - SQL queries are defined in `store/db/queries/*.sql` and generated with SQLC.
-- Migrations are embedded and applied at startup via `store.Migrate()`.
+- Migrations are embedded and applied at startup via dbmate (tracked in `entitystore_migrations` table). Use `store.WithAutoMigrate()` option or call `store.Migrate(connString)` directly.
 - The `matching` package contains pure domain logic with no database dependency.
 - Security: API key auth (constant-time compare), rate limiting, CORS allowlist, security headers.
 - Graceful shutdown with 30s drain timeout.

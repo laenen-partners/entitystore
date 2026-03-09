@@ -18,7 +18,7 @@ func newTestStore(t *testing.T) *store.Store {
 		t.Skip("ENTITY_TEST_DB not set; skipping integration test")
 	}
 	ctx := context.Background()
-	s, err := store.New(ctx, connStr)
+	s, err := store.New(ctx, connStr, store.WithAutoMigrate())
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}

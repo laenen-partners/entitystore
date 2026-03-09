@@ -17,11 +17,10 @@ import (
 func New(cfg Config) (http.Handler, *entitystore.Store, error) {
 	ctx := context.Background()
 
-	s, err := entitystore.New(ctx, cfg.DatabaseURL, entitystore.PoolConfig{
-		MaxConns:        cfg.DBMaxConns,
-		MinConns:        cfg.DBMinConns,
-		MaxConnIdleTime: cfg.DBConnIdleTime,
-	})
+	s, err := entitystore.New(ctx, cfg.DatabaseURL,
+		entitystore.WithPoolConfig(cfg.DBMaxConns, cfg.DBMinConns, cfg.DBConnIdleTime),
+		entitystore.WithAutoMigrate(),
+	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("entitystore: open store: %w", err)
 	}

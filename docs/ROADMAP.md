@@ -39,10 +39,9 @@ Move protoc-gen-llm-extract into entitystore and rename.
 - [x] `.github/workflows/ci.yml` — mise-action, lint, build, vet, test:cover
 
 ### Phase 4 — API Completeness
-- [x] Add `ResolveEntity` RPC — Expose `ApplyMatchDecision` for the extraction pipeline (create/update/merge with anchors, tokens, provenance, embedding)
-- [x] Add `MergeEntity` RPC — Expose JSONB merge for partial updates, returns merged entity
-- [x] Add `BatchInsertEntities` RPC — Bulk insert in a single transaction
-- [x] Add `BatchResolveEntities` RPC — Bulk resolve (create/update/merge) in a single transaction
+- [x] Consolidate all write RPCs into single `BatchWrite` — Atomic batch of `WriteEntityOp` (create/update/merge with anchors, tokens, provenance, embedding) and `UpsertRelationOp` operations
+- [x] Support client-generated UUIDs (`id` field on `WriteEntityOp`) — Enables creating entities and relations in a single batch
+- [x] Embed migrations via dbmate library — Auto-migrate with `store.WithAutoMigrate()`, tracked in `entitystore_migrations` table
 
 ## Downstream Impact
 

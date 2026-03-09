@@ -11,7 +11,6 @@ import (
 
 	esv1 "github.com/laenen-partners/entitystore/gen/entitystore/v1"
 	"github.com/laenen-partners/entitystore/gen/entitystore/v1/entitystorev1connect"
-	"github.com/laenen-partners/entitystore/store"
 
 	entitystore "github.com/laenen-partners/entitystore"
 )
@@ -29,11 +28,6 @@ func startE2E(t *testing.T) entitystorev1connect.EntityStoreServiceClient {
 		t.Fatalf("entitystore.New: %v", err)
 	}
 	t.Cleanup(s.Close)
-
-	// Apply migrations.
-	if err := store.Migrate(context.Background(), s.Pool()); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 
 	ts := httptest.NewServer(handler)
 	t.Cleanup(ts.Close)
