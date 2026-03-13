@@ -3,31 +3,57 @@ package store_test
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
 )
 
-func newTestStore(t *testing.T) *store.Store {
+// sharedConnStr caches the connection string so all tests share one container.
+var _sharedConnStr string
+
+func sharedTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	connStr := os.Getenv("ENTITY_TEST_DB")
-	if connStr == "" {
-		t.Skip("ENTITY_TEST_DB not set; skipping integration test")
-	}
 	ctx := context.Background()
-	s, err := store.New(ctx, connStr, store.WithAutoMigrate())
-	if err != nil {
-		t.Fatalf("new store: %v", err)
+
+	if _sharedConnStr == "" {
+		pg, err := postgres.Run(ctx,
+			"pgvector/pgvector:pg17",
+			postgres.WithDatabase("entitystore_test"),
+			postgres.WithUsername("test"),
+			postgres.WithPassword("test"),
+			postgres.BasicWaitStrategies(),
+		)
+		if err != nil {
+			t.Fatalf("start postgres container: %v", err)
+		}
+		// Container lives for the duration of the test binary.
+		// Not cleaned up per-test to amortize startup cost.
+		connStr, err := pg.ConnectionString(ctx, "sslmode=disable")
+		if err != nil {
+			t.Fatalf("get connection string: %v", err)
+		}
+		if err := store.Migrate(connStr); err != nil {
+			t.Fatalf("migrate: %v", err)
+		}
+		_sharedConnStr = connStr
 	}
-	t.Cleanup(s.Close)
-	return s
+
+	pool, err := pgxpool.New(ctx, _sharedConnStr)
+	if err != nil {
+		t.Fatalf("create pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+
+	return store.NewFromPool(pool)
 }
 
 func TestBatchWrite_CreateAndFindByAnchor(t *testing.T) {
-	s := newTestStore(t)
+	s := sharedTestStore(t)
 	ctx := context.Background()
 
 	data := json.RawMessage(`{"email":"alice@example.com","name":"Alice"}`)
@@ -76,7 +102,7 @@ func TestBatchWrite_CreateAndFindByAnchor(t *testing.T) {
 }
 
 func TestBatchWrite_CreateWithTokens(t *testing.T) {
-	s := newTestStore(t)
+	s := sharedTestStore(t)
 	ctx := context.Background()
 
 	data := json.RawMessage(`{"name":"Acme Corp","industry":"technology"}`)
@@ -115,7 +141,7 @@ func TestBatchWrite_CreateWithTokens(t *testing.T) {
 }
 
 func TestBatchWrite_MixedEntitiesAndRelations(t *testing.T) {
-	s := newTestStore(t)
+	s := sharedTestStore(t)
 	ctx := context.Background()
 
 	// Create two entities and a relation in a single batch.
@@ -192,7 +218,7 @@ func TestBatchWrite_MixedEntitiesAndRelations(t *testing.T) {
 }
 
 func TestBatchWrite_CreateWithProvenance(t *testing.T) {
-	s := newTestStore(t)
+	s := sharedTestStore(t)
 	ctx := context.Background()
 
 	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
@@ -233,7 +259,7 @@ func TestBatchWrite_CreateWithProvenance(t *testing.T) {
 }
 
 func TestTags(t *testing.T) {
-	s := newTestStore(t)
+	s := sharedTestStore(t)
 	ctx := context.Background()
 
 	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{

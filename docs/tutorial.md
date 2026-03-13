@@ -41,9 +41,6 @@ plugins:
   - remote: buf.build/protocolbuffers/go
     out: gen
     opt: paths=source_relative
-  - remote: buf.build/connectrpc/go
-    out: gen
-    opt: paths=source_relative
   - local: ["go", "run", "github.com/laenen-partners/entitystore/cmd/protoc-gen-entitystore@latest"]
     out: gen
     opt: paths=source_relative

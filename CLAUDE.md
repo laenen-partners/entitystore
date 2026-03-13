@@ -1,11 +1,10 @@
 # EntityStore
 
-Go library and server for entity storage, deduplication, and relationship management with Connect-RPC API, PostgreSQL + pgvector backend. Includes `protoc-gen-entitystore`, a buf plugin that generates entity matching configs from proto annotations.
+Pure Go library for entity storage, deduplication, and relationship management with PostgreSQL + pgvector backend. Includes `protoc-gen-entitystore`, a buf plugin that generates entity matching configs from proto annotations.
 
 ## Quick reference
 
 - **Language:** Go 1.25+
-- **RPC framework:** Connect-RPC (protobuf)
 - **Database:** PostgreSQL 16 with pgvector
 - **ORM/queries:** SQLC (type-safe generated code)
 - **Task runner:** [Task](https://taskfile.dev) (`Taskfile.yml`)
@@ -14,23 +13,39 @@ Go library and server for entity storage, deduplication, and relationship manage
 ## Project structure
 
 ```
-cmd/estore/                  Server binary
+entitystore.go               Library entry point: New(), EntityStore, re-exported types
+options.go                   Options: WithPgStore()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs
-proto/entitystore/v1/        Protobuf definitions (service + options)
-gen/                         Generated protobuf/connect code (do not edit)
+proto/entitystore/v1/        Proto annotation definitions (options.proto)
+gen/                         Generated protobuf code (do not edit)
 matching/                    Domain logic: anchors, tokens, embeddings, normalizers
 store/                       PostgreSQL persistence layer (SQLC)
 store/db/migrations          SQL migrations (embedded at build time)
 store/db/queries             SQLC query definitions
 store/internal/dbgen         Generated SQLC code (do not edit)
-auth.go                      API key auth interceptor
-caller.go                    Caller identity context (X-User-ID, X-Service-ID)
-middleware.go                Rate limiting, CORS, security headers, request logging
-config.go                    Config + ConfigFromEnv()
-server.go                    New() wires store + handler + middleware + health
-handler.go                   Connect-RPC handler (all RPCs)
-docker-compose.yml           PostgreSQL with pgvector
-docs/ROADMAP.md              Project roadmap
+```
+
+## Usage
+
+```go
+import (
+    "github.com/jackc/pgx/v5/pgxpool"
+    "github.com/laenen-partners/entitystore"
+)
+
+pool, _ := pgxpool.New(ctx, connString)
+es, err := entitystore.New(entitystore.WithPgStore(pool))
+defer es.Close()
+
+// Read entities
+entity, _ := es.GetEntity(ctx, "entity-id")
+matches, _ := es.FindByAnchors(ctx, "entities.v1.Person", anchors, nil)
+
+// Write entities
+results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{...})
+
+// Migrations
+entitystore.Migrate(connString)
 ```
 
 ## Common commands
@@ -39,27 +54,11 @@ docs/ROADMAP.md              Project roadmap
 task generate         # buf generate + sqlc generate
 task generate:plugin  # install protoc-gen-entitystore
 task lint             # go vet ./...
-task build            # go build ./cmd/estore
-task run              # run the server
-task test             # go test -v -count=1 ./store/...
-task test:e2e         # e2e tests (requires infra)
+task test             # go test -v -count=1 ./store/... (uses testcontainers)
 task test:cover       # tests with coverage
 task tidy             # go mod tidy
-task infra:up         # start Postgres via docker compose
-task infra:down       # stop Postgres and remove volumes
 task migrate:up       # apply migrations via dbmate
 ```
-
-## Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `ADDR` | `:3002` | Server listen address |
-| `DATABASE_URL` | `postgres://postgres:postgres@localhost:5433/entitystore?sslmode=disable` | PostgreSQL connection string |
-| `API_KEYS` | | Comma-separated API keys for RPC auth |
-| `RATE_LIMIT` | `10` | Requests per second per IP (0 = disabled) |
-| `RATE_BURST` | `20` | Burst allowance per IP |
-| `CORS_ORIGINS` | | Comma-separated allowed CORS origins |
 
 ## protoc-gen-entitystore
 
@@ -116,9 +115,6 @@ plugins:
   - remote: buf.build/protocolbuffers/go
     out: gen
     opt: paths=source_relative
-  - remote: buf.build/connectrpc/go
-    out: gen
-    opt: paths=source_relative
   - local: ["go", "run", "github.com/laenen-partners/entitystore/cmd/protoc-gen-entitystore@latest"]
     out: gen
     opt: paths=source_relative
@@ -165,12 +161,10 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 
 ## Code conventions
 
-- No `init()` functions; wire dependencies explicitly in `main.go` or `New()`.
+- No `init()` functions; wire dependencies explicitly.
 - Generated code lives in `gen/` and `store/internal/dbgen/` — never edit manually, regenerate with `task generate`.
 - Errors are wrapped with `fmt.Errorf("context: %w", err)`.
 - Use `slog` for structured logging.
 - SQL queries are defined in `store/db/queries/*.sql` and generated with SQLC.
-- Migrations are embedded and applied at startup via dbmate (tracked in `entitystore_migrations` table). Use `store.WithAutoMigrate()` option or call `store.Migrate(connString)` directly.
+- Migrations are embedded and applied via dbmate (tracked in `entitystore_migrations` table). Use `store.WithAutoMigrate()` option or call `entitystore.Migrate(connString)` directly.
 - The `matching` package contains pure domain logic with no database dependency.
-- Security: API key auth (constant-time compare), rate limiting, CORS allowlist, security headers.
-- Graceful shutdown with 30s drain timeout.

@@ -36,37 +36,13 @@ tasks:
     cmds:
       - go vet ./...
 
-  build:
-    desc: Build server binary
-    cmds:
-      - go build -o bin/estore ./cmd/estore
-
-  run:
-    desc: Run the entity store server
-    env:
-      DATABASE_URL: '{{.DB_URL}}'
-    cmds:
-      - go run ./cmd/estore
-
   test:
-    desc: Run integration tests (requires Postgres on :5433)
-    env:
-      ENTITY_TEST_DB: '{{.DB_URL}}'
+    desc: Run integration tests (uses testcontainers, requires Docker)
     cmds:
       - go test -v -count=1 ./store/...
 
-  test:e2e:
-    desc: Run end-to-end tests (requires Postgres on :5433)
-    env:
-      DATABASE_URL: '{{.DB_URL}}'
-    cmds:
-      - go test -v -count=1 -run TestE2E ./...
-
   test:cover:
     desc: Run tests with coverage
-    env:
-      ENTITY_TEST_DB: '{{.DB_URL}}'
-      DATABASE_URL: '{{.DB_URL}}'
     cmds:
       - go test -coverprofile=coverage.out -count=1 ./...
       - go tool cover -func=coverage.out
@@ -95,13 +71,3 @@ tasks:
     desc: Show migration status
     cmds:
       - dbmate -u "{{.DB_URL}}" -d ./store/db/migrations --migrations-table entitystore_migrations status
-
-  infra:up:
-    desc: Start Postgres via docker compose
-    cmds:
-      - docker compose up -d
-
-  infra:down:
-    desc: Stop Postgres and remove volumes
-    cmds:
-      - docker compose down -v
