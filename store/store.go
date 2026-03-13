@@ -46,7 +46,7 @@ func WithPoolConfig(maxConns, minConns int32, maxConnIdleTime time.Duration) Opt
 }
 
 // WithAutoMigrate enables automatic migration on store creation.
-// Migrations are tracked in the "entitystore_migrations" table using dbmate.
+// Migrations are tracked in the "scoped_schema_migrations" table.
 func WithAutoMigrate() Option {
 	return func(o *storeOptions) {
 		o.autoMigrate = true
@@ -74,12 +74,6 @@ func New(ctx context.Context, connString string, opts ...Option) (*Store, error)
 		cfg.MaxConnIdleTime = o.maxConnIdleTime
 	}
 
-	if o.autoMigrate {
-		if err := Migrate(connString); err != nil {
-			return nil, fmt.Errorf("postgres store: %w", err)
-		}
-	}
-
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("postgres store: connect: %w", err)
@@ -87,6 +81,13 @@ func New(ctx context.Context, connString string, opts ...Option) (*Store, error)
 	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("postgres store: ping: %w", err)
+	}
+
+	if o.autoMigrate {
+		if err := Migrate(ctx, pool); err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("postgres store: %w", err)
+		}
 	}
 	return &Store{
 		pool:    pool,

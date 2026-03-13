@@ -1,8 +1,5 @@
 version: '3'
 
-vars:
-  DB_URL: '{{.DB_URL | default "postgres://postgres:postgres@localhost:5433/entitystore?sslmode=disable"}}'
-
 tasks:
   generate:
     desc: Generate proto and SQLC code
@@ -56,18 +53,3 @@ tasks:
     desc: Remove build artifacts and local data
     cmds:
       - rm -rf bin/ coverage.out
-
-  migrate:up:
-    desc: Apply all pending migrations
-    cmds:
-      - dbmate -u "{{.DB_URL}}" -d ./store/db/migrations --migrations-table entitystore_migrations up
-
-  migrate:down:
-    desc: Roll back the latest migration
-    cmds:
-      - dbmate -u "{{.DB_URL}}" -d ./store/db/migrations --migrations-table entitystore_migrations down
-
-  migrate:status:
-    desc: Show migration status
-    cmds:
-      - dbmate -u "{{.DB_URL}}" -d ./store/db/migrations --migrations-table entitystore_migrations status

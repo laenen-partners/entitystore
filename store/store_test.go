@@ -37,9 +37,15 @@ func sharedTestStore(t *testing.T) *store.Store {
 		if err != nil {
 			t.Fatalf("get connection string: %v", err)
 		}
-		if err := store.Migrate(connStr); err != nil {
+		migrationPool, err := pgxpool.New(ctx, connStr)
+		if err != nil {
+			t.Fatalf("create pool for migration: %v", err)
+		}
+		if err := store.Migrate(ctx, migrationPool); err != nil {
+			migrationPool.Close()
 			t.Fatalf("migrate: %v", err)
 		}
+		migrationPool.Close()
 		_sharedConnStr = connStr
 	}
 

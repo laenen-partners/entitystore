@@ -15,6 +15,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
 )
@@ -203,9 +205,9 @@ type AnchorQuery = matching.AnchorQuery
 // QueryFilter narrows entity searches by tags.
 type QueryFilter = matching.QueryFilter
 
-// Migrate applies all pending database migrations.
-func Migrate(connString string) error {
-	return store.Migrate(connString)
+// Migrate applies all pending database migrations using the given pool.
+func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return store.Migrate(ctx, pool)
 }
 
 // MarshalEntityData is a convenience for marshaling entity data to JSON.

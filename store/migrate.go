@@ -1,34 +1,27 @@
 package store
 
 import (
+	"context"
 	"embed"
 	"fmt"
-	"io"
-	"net/url"
+	"io/fs"
 
-	"github.com/amacneil/dbmate/v2/pkg/dbmate"
-	_ "github.com/amacneil/dbmate/v2/pkg/driver/postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/laenen-partners/migrate"
 )
 
 //go:embed db/migrations/*.sql
 var migrationsFS embed.FS
 
-const migrationsTableName = "entitystore_migrations"
+const migrationsScope = "entitystore"
 
-// Migrate applies all pending migrations using dbmate. It tracks applied
-// migrations in the "entitystore_migrations" table.
-func Migrate(connString string) error {
-	u, err := url.Parse(connString)
+// Migrate applies all pending migrations for the entitystore scope.
+func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	fsys, err := fs.Sub(migrationsFS, "db/migrations")
 	if err != nil {
-		return fmt.Errorf("migrate: parse url: %w", err)
+		return fmt.Errorf("migrate: sub fs: %w", err)
 	}
-	db := dbmate.New(u)
-	db.FS = migrationsFS
-	db.MigrationsDir = []string{"db/migrations"}
-	db.MigrationsTableName = migrationsTableName
-	db.AutoDumpSchema = false
-	db.Log = io.Discard
-	if err := db.Migrate(); err != nil {
+	if err := migrate.Up(ctx, pool, fsys, migrationsScope); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	return nil

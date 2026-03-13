@@ -57,7 +57,6 @@ task lint             # go vet ./...
 task test             # go test -v -count=1 ./store/... (uses testcontainers)
 task test:cover       # tests with coverage
 task tidy             # go mod tidy
-task migrate:up       # apply migrations via dbmate
 ```
 
 ## protoc-gen-entitystore
@@ -166,5 +165,5 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - Errors are wrapped with `fmt.Errorf("context: %w", err)`.
 - Use `slog` for structured logging.
 - SQL queries are defined in `store/db/queries/*.sql` and generated with SQLC.
-- Migrations are embedded and applied via dbmate (tracked in `entitystore_migrations` table). Use `store.WithAutoMigrate()` option or call `entitystore.Migrate(connString)` directly.
+- Migrations are embedded and applied via `github.com/laenen-partners/migrate` (scoped to `entitystore` in `scoped_schema_migrations` table). Use `store.WithAutoMigrate()` option or call `entitystore.Migrate(ctx, pool)` directly.
 - The `matching` package contains pure domain logic with no database dependency.
