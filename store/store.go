@@ -124,6 +124,18 @@ func tagsParam(filter *matching.QueryFilter) []string {
 	return filter.Tags
 }
 
+// entityTypesParam builds the entity_types slice for FindByEmbedding.
+// If entityType is non-empty it takes precedence; otherwise filter.EntityTypes is used.
+func entityTypesParam(entityType string, filter *matching.QueryFilter) []string {
+	if entityType != "" {
+		return []string{entityType}
+	}
+	if filter != nil && len(filter.EntityTypes) > 0 {
+		return filter.EntityTypes
+	}
+	return []string{}
+}
+
 // ---------------------------------------------------------------------------
 // matching.EntityStore implementation
 // ---------------------------------------------------------------------------
@@ -177,10 +189,10 @@ func (s *Store) FindByTokens(ctx context.Context, entityType string, tokens []st
 
 func (s *Store) FindByEmbedding(ctx context.Context, entityType string, vec []float32, topK int, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	rows, err := s.queries.FindByEmbedding(ctx, dbgen.FindByEmbeddingParams{
-		EntityType: entityType,
-		Embedding:  pgVec(vec),
-		Tags:       tagsParam(filter),
-		TopK:       int32(topK),
+		EntityTypes: entityTypesParam(entityType, filter),
+		Embedding:   pgVec(vec),
+		Tags:        tagsParam(filter),
+		TopK:        int32(topK),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("find by embedding: %w", err)

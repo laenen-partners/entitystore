@@ -264,6 +264,124 @@ func TestBatchWrite_CreateWithProvenance(t *testing.T) {
 	}
 }
 
+func TestFindByEmbedding(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	// Helper to create an entity and set its embedding.
+	createWithEmbedding := func(entityType string, name string, vec []float32) string {
+		t.Helper()
+		results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+			{WriteEntity: &store.WriteEntityOp{
+				Action:     store.WriteActionCreate,
+				EntityType: entityType,
+				Data:       json.RawMessage(`{"name":"` + name + `"}`),
+				Confidence: 0.9,
+				Provenance: matching.ProvenanceEntry{
+					SourceURN: "test:embedding", ExtractedAt: time.Now(),
+					ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+				},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("batch write %s: %v", name, err)
+		}
+		id := results[0].Entity.ID
+		if err := s.UpdateEmbedding(ctx, id, vec); err != nil {
+			t.Fatalf("update embedding %s: %v", name, err)
+		}
+		return id
+	}
+
+	// 768-dim vectors with a 1.0 at distinct positions to tell entities apart.
+	vec := func(oneAt int) []float32 {
+		v := make([]float32, 768)
+		v[oneAt] = 1
+		return v
+	}
+	personA := createWithEmbedding("entities.v1.Person", "Alice", vec(0))
+	personB := createWithEmbedding("entities.v1.Person", "Bob", vec(1))
+	companyC := createWithEmbedding("entities.v1.Company", "Acme", vec(2))
+	t.Cleanup(func() {
+		for _, id := range []string{personA, personB, companyC} {
+			_ = s.DeleteEntity(ctx, id)
+		}
+	})
+
+	// Single entity type — should only return persons.
+	t.Run("single_entity_type", func(t *testing.T) {
+		got, err := s.FindByEmbedding(ctx, "entities.v1.Person", vec(0), 10, nil)
+		if err != nil {
+			t.Fatalf("find by embedding: %v", err)
+		}
+		for _, e := range got {
+			if e.EntityType != "entities.v1.Person" {
+				t.Errorf("unexpected entity type %s", e.EntityType)
+			}
+		}
+		ids := make(map[string]bool)
+		for _, e := range got {
+			ids[e.ID] = true
+		}
+		if !ids[personA] || !ids[personB] {
+			t.Errorf("expected both persons in results, got %v", got)
+		}
+		if ids[companyC] {
+			t.Error("company should not appear in single-type person search")
+		}
+	})
+
+	// Cross-type (empty entity_type) — all three should be reachable.
+	t.Run("cross_type_empty_entity_type", func(t *testing.T) {
+		got, err := s.FindByEmbedding(ctx, "", vec(2), 10, nil)
+		if err != nil {
+			t.Fatalf("find by embedding: %v", err)
+		}
+		ids := make(map[string]bool)
+		for _, e := range got {
+			ids[e.ID] = true
+		}
+		if !ids[companyC] {
+			t.Error("company should appear in cross-type search")
+		}
+		if !ids[personA] || !ids[personB] {
+			t.Error("persons should also appear in cross-type search")
+		}
+	})
+
+	// EntityTypes filter — persons and companies but via QueryFilter.EntityTypes.
+	t.Run("entity_types_filter_multi", func(t *testing.T) {
+		filter := &matching.QueryFilter{
+			EntityTypes: []string{"entities.v1.Person", "entities.v1.Company"},
+		}
+		got, err := s.FindByEmbedding(ctx, "", vec(0), 10, filter)
+		if err != nil {
+			t.Fatalf("find by embedding: %v", err)
+		}
+		ids := make(map[string]bool)
+		for _, e := range got {
+			ids[e.ID] = true
+		}
+		if !ids[personA] || !ids[personB] || !ids[companyC] {
+			t.Errorf("expected all three entities, got %v", got)
+		}
+	})
+
+	// EntityTypes filter restricted to a single type via filter (entity_type="" + filter).
+	t.Run("entity_types_filter_single", func(t *testing.T) {
+		filter := &matching.QueryFilter{
+			EntityTypes: []string{"entities.v1.Company"},
+		}
+		got, err := s.FindByEmbedding(ctx, "", vec(0), 10, filter)
+		if err != nil {
+			t.Fatalf("find by embedding: %v", err)
+		}
+		if len(got) != 1 || got[0].ID != companyC {
+			t.Errorf("expected only company, got %v", got)
+		}
+	})
+}
+
 func TestTags(t *testing.T) {
 	s := sharedTestStore(t)
 	ctx := context.Background()

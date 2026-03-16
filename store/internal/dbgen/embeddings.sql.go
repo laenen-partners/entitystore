@@ -17,7 +17,7 @@ import (
 const findByEmbedding = `-- name: FindByEmbedding :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
 FROM entities e
-WHERE ($1::text = '' OR e.entity_type = $1)
+WHERE (cardinality($1::text[]) = 0 OR e.entity_type = ANY($1))
   AND e.embedding IS NOT NULL
   AND (cardinality($2::text[]) = 0 OR e.tags @> $2::text[])
 ORDER BY e.embedding <=> $3::vector
@@ -25,10 +25,10 @@ LIMIT $4
 `
 
 type FindByEmbeddingParams struct {
-	EntityType string          `json:"entity_type"`
-	Tags       []string        `json:"tags"`
-	Embedding  pgvector.Vector `json:"embedding"`
-	TopK       int32           `json:"top_k"`
+	EntityTypes []string        `json:"entity_types"`
+	Tags        []string        `json:"tags"`
+	Embedding   pgvector.Vector `json:"embedding"`
+	TopK        int32           `json:"top_k"`
 }
 
 type FindByEmbeddingRow struct {
@@ -43,7 +43,7 @@ type FindByEmbeddingRow struct {
 
 func (q *Queries) FindByEmbedding(ctx context.Context, arg FindByEmbeddingParams) ([]FindByEmbeddingRow, error) {
 	rows, err := q.db.Query(ctx, findByEmbedding,
-		arg.EntityType,
+		arg.EntityTypes,
 		arg.Tags,
 		arg.Embedding,
 		arg.TopK,
