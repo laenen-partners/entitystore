@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
+	pluginpb "google.golang.org/protobuf/types/pluginpb"
 )
 
 const matchingPkg = "github.com/laenen-partners/entitystore/matching"
@@ -24,6 +25,7 @@ func ident(name string) protogen.GoIdent {
 
 func main() {
 	protogen.Options{}.Run(func(gen *protogen.Plugin) error {
+		gen.SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 		for _, f := range gen.Files {
 			if !f.Generate {
 				continue
@@ -57,6 +59,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) error {
 
 	for _, msg := range annotated {
 		generateMatchConfig(g, msg)
+		generateExtractionSchema(g, msg)
 	}
 
 	return nil
@@ -296,4 +299,148 @@ func formatStrings(ss []string) string {
 		quoted[i] = fmt.Sprintf("%q", s)
 	}
 	return strings.Join(quoted, ", ")
+}
+
+// ---------------------------------------------------------------------------
+// Extraction schema generation
+// ---------------------------------------------------------------------------
+
+func generateExtractionSchema(g *protogen.GeneratedFile, msg *protogen.Message) {
+	msgName := msg.GoIdent.GoName
+	entityType := string(msg.Desc.FullName())
+	msgOpts := getMessageOptions(msg)
+
+	// Collect extractable fields: annotated fields where extract != false,
+	// plus all unannotated fields (which are extractable by default).
+	type extractField struct {
+		name        string
+		description string
+		hint        string
+		required    bool
+		repeated    bool
+		fieldType   string // ExtractionFieldType constant name
+		examples    []string
+	}
+
+	var fields []extractField
+	for _, f := range msg.Fields {
+		fo := getFieldOptions(f)
+
+		// If annotated and explicitly opted out of extraction, skip.
+		if fo != nil && fo.Extract != nil && !*fo.Extract {
+			continue
+		}
+
+		ef := extractField{
+			name:      string(f.Desc.Name()),
+			repeated:  f.Desc.IsList(),
+			fieldType: protoKindToExtractionType(f),
+		}
+
+		// Description resolution: annotation > leading comment > humanized name.
+		if fo != nil && fo.Description != "" {
+			ef.description = fo.Description
+		} else if comment := cleanComment(string(f.Comments.Leading)); comment != "" {
+			ef.description = comment
+		} else {
+			ef.description = humanizeFieldName(ef.name)
+		}
+
+		if fo != nil {
+			ef.hint = fo.ExtractionHint
+			ef.required = fo.Anchor
+			ef.examples = fo.Examples
+		}
+
+		fields = append(fields, ef)
+	}
+
+	// Resolve display name: annotation > message name.
+	displayName := msgName
+	if msgOpts != nil && msgOpts.ExtractionDisplayName != "" {
+		displayName = msgOpts.ExtractionDisplayName
+	}
+
+	g.P("// ", msgName, "ExtractionSchema returns the proto-annotation-derived extraction")
+	g.P("// schema for ", entityType, ".")
+	g.P("func ", msgName, "ExtractionSchema() ", ident("ExtractionSchema"), " {")
+	g.P("return ", ident("ExtractionSchema"), "{")
+	g.P("EntityType: ", fmt.Sprintf("%q", entityType), ",")
+	g.P("DisplayName: ", fmt.Sprintf("%q", displayName), ",")
+
+	if msgOpts != nil && msgOpts.ExtractionPrompt != "" {
+		g.P("Prompt: ", fmt.Sprintf("%q", msgOpts.ExtractionPrompt), ",")
+	}
+	if msgOpts != nil && msgOpts.ExtractionInstructions != "" {
+		g.P("Instructions: ", fmt.Sprintf("%q", msgOpts.ExtractionInstructions), ",")
+	}
+
+	g.P("Fields: []", ident("ExtractionField"), "{")
+	for _, ef := range fields {
+		g.P("{")
+		g.P("Name: ", fmt.Sprintf("%q", ef.name), ",")
+		g.P("Description: ", fmt.Sprintf("%q", ef.description), ",")
+		if ef.hint != "" {
+			g.P("Hint: ", fmt.Sprintf("%q", ef.hint), ",")
+		}
+		g.P("Type: ", ident(ef.fieldType), ",")
+		if ef.required {
+			g.P("Required: true,")
+		}
+		if ef.repeated {
+			g.P("Repeated: true,")
+		}
+		if len(ef.examples) > 0 {
+			g.P("Examples: []string{", formatStrings(ef.examples), "},")
+		}
+		g.P("},")
+	}
+	g.P("},")
+
+	g.P("}") // end return
+	g.P("}") // end func
+	g.P()
+}
+
+// protoKindToExtractionType maps a proto field's kind to an ExtractionFieldType constant name.
+func protoKindToExtractionType(f *protogen.Field) string {
+	switch f.Desc.Kind().String() {
+	case "float", "double", "int32", "int64", "uint32", "uint64", "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64":
+		return "ExtractionFieldTypeNumber"
+	case "bool":
+		return "ExtractionFieldTypeBoolean"
+	default:
+		return "ExtractionFieldTypeString"
+	}
+}
+
+// cleanComment trims whitespace and the leading "// " prefix sequences that
+// protogen includes in comment strings.
+func cleanComment(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	// protogen leading comments include "// " prefixes and trailing newlines.
+	// Strip them and join into a single line.
+	var parts []string
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		line = strings.TrimPrefix(line, "//")
+		line = strings.TrimPrefix(line, " ")
+		line = strings.TrimSpace(line)
+		if line != "" {
+			parts = append(parts, line)
+		}
+	}
+	result := strings.Join(parts, " ")
+	// Remove trailing period for consistency — the description is used as a label.
+	result = strings.TrimSuffix(result, ".")
+	return result
+}
+
+// humanizeFieldName converts a snake_case field name to a human-readable label.
+// e.g., "full_name" → "full name", "date_of_birth" → "date of birth".
+func humanizeFieldName(name string) string {
+	return strings.ReplaceAll(name, "_", " ")
 }

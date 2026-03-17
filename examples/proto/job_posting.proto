@@ -1,0 +1,66 @@
+// Example proto definition for a JobPosting entity.
+// Demonstrates token-based and embedding-heavy matching for unstructured
+// text fields, and extraction schema generation with few-shot examples.
+syntax = "proto3";
+package examples.v1;
+
+option go_package = "github.com/laenen-partners/entitystore/examples/gen/examples/v1;examplesv1";
+
+import "entitystore/v1/options.proto";
+
+message JobPosting {
+  option (entitystore.v1.message) = {
+    match_thresholds: {auto_match: 0.80, review_zone: 0.55}
+    composite_anchors: [{fields: ["company_name", "title"]}]
+    extraction_prompt: "Extract structured job posting fields from the provided text or webpage."
+    extraction_instructions: "If salary is mentioned as a range, extract the midpoint. If remote/hybrid/onsite is mentioned, include it in the location field."
+    extraction_display_name: "Job Posting"
+  };
+
+  // Unique job reference or requisition ID.
+  string reference = 1 [(entitystore.v1.field) = {
+    anchor: true
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.40
+    normalizer: NORMALIZER_LOWERCASE_TRIM
+    examples: ["JOB-2024-001", "REQ-ABC-123"]
+  }];
+
+  // Job title or position name.
+  string title = 2 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_TOKEN_JACCARD
+    weight: 0.30
+    embed: true
+    token_field: true
+    extraction_hint: "Extract the exact title as stated, do not normalize or abbreviate"
+    examples: ["Senior Software Engineer", "Head of Product"]
+  }];
+
+  // Name of the hiring company.
+  string company_name = 3 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_JARO_WINKLER
+    weight: 0.15
+    embed: true
+    token_field: true
+    extraction_hint: "Use the full company name, not stock ticker or abbreviation"
+  }];
+
+  // Work location or remote status.
+  string location = 4 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_LEVENSHTEIN
+    weight: 0.15
+    embed: true
+    examples: ["London, UK (Hybrid)", "Remote - US", "San Francisco, CA"]
+  }];
+
+  // Annual salary or compensation amount.
+  float salary = 5 [(entitystore.v1.field) = {
+    extraction_hint: "Convert to annual amount if stated as monthly or hourly"
+  }];
+
+  // Full job description text.
+  string description = 6;
+
+  // Required qualifications and skills.
+  repeated string requirements = 7;
+}

@@ -280,7 +280,22 @@ type FieldOptions struct {
 	// values are stored in a GIN-indexed text[] column for fast candidate
 	// retrieval before expensive similarity scoring. Use for names and
 	// multi-word text fields where token overlap is a good blocking signal.
-	TokenField    bool `protobuf:"varint,7,opt,name=token_field,json=tokenField,proto3" json:"token_field,omitempty"`
+	TokenField bool `protobuf:"varint,7,opt,name=token_field,json=tokenField,proto3" json:"token_field,omitempty"`
+	// Optional explicit description for LLM extraction prompts.
+	// If omitted, the generator uses the proto leading comment on the field.
+	// If neither is present, the field name is humanized (e.g., "full_name" → "full name").
+	Description string `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`
+	// Additional extraction hint for the LLM (e.g., "Format as ISO 8601 date",
+	// "Extract the full legal name, not abbreviations"). Unlike description,
+	// hints are directive instructions that guide the LLM's extraction behaviour.
+	ExtractionHint string `protobuf:"bytes,11,opt,name=extraction_hint,json=extractionHint,proto3" json:"extraction_hint,omitempty"`
+	// Whether this field should be included in extraction output.
+	// Defaults to true for all annotated fields. Set to false to exclude
+	// fields that are only relevant for matching but not extraction.
+	Extract *bool `protobuf:"varint,12,opt,name=extract,proto3,oneof" json:"extract,omitempty"`
+	// Examples of valid values for this field, included in the schema
+	// to improve LLM extraction accuracy via few-shot grounding.
+	Examples      []string `protobuf:"bytes,13,rep,name=examples,proto3" json:"examples,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -362,6 +377,34 @@ func (x *FieldOptions) GetTokenField() bool {
 		return x.TokenField
 	}
 	return false
+}
+
+func (x *FieldOptions) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *FieldOptions) GetExtractionHint() string {
+	if x != nil {
+		return x.ExtractionHint
+	}
+	return ""
+}
+
+func (x *FieldOptions) GetExtract() bool {
+	if x != nil && x.Extract != nil {
+		return *x.Extract
+	}
+	return false
+}
+
+func (x *FieldOptions) GetExamples() []string {
+	if x != nil {
+		return x.Examples
+	}
+	return nil
 }
 
 // CompositeAnchor defines a multi-field composite identity anchor.
@@ -510,8 +553,19 @@ type MessageOptions struct {
 	//
 	// Example for Invoice: ["issuer_of", "buyer_on", "refers_to"]
 	AllowedRelations []string `protobuf:"bytes,3,rep,name=allowed_relations,json=allowedRelations,proto3" json:"allowed_relations,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// System-level prompt instructions prepended to extraction requests.
+	// Use this for entity-specific extraction guidance, e.g.,
+	// "This is a job posting. Extract structured fields from the raw text."
+	ExtractionPrompt string `protobuf:"bytes,10,opt,name=extraction_prompt,json=extractionPrompt,proto3" json:"extraction_prompt,omitempty"`
+	// Additional context or instructions appended after the schema description.
+	// Use for edge-case handling, e.g.,
+	// "If multiple people are mentioned, extract only the primary contact."
+	ExtractionInstructions string `protobuf:"bytes,11,opt,name=extraction_instructions,json=extractionInstructions,proto3" json:"extraction_instructions,omitempty"`
+	// Display name for the entity type in prompts (e.g., "Job Posting" instead of "JobPosting").
+	// If omitted, the message name is used as-is.
+	ExtractionDisplayName string `protobuf:"bytes,12,opt,name=extraction_display_name,json=extractionDisplayName,proto3" json:"extraction_display_name,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *MessageOptions) Reset() {
@@ -565,6 +619,27 @@ func (x *MessageOptions) GetAllowedRelations() []string {
 	return nil
 }
 
+func (x *MessageOptions) GetExtractionPrompt() string {
+	if x != nil {
+		return x.ExtractionPrompt
+	}
+	return ""
+}
+
+func (x *MessageOptions) GetExtractionInstructions() string {
+	if x != nil {
+		return x.ExtractionInstructions
+	}
+	return ""
+}
+
+func (x *MessageOptions) GetExtractionDisplayName() string {
+	if x != nil {
+		return x.ExtractionDisplayName
+	}
+	return ""
+}
+
 var file_entitystore_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
@@ -600,7 +675,7 @@ var File_entitystore_v1_options_proto protoreflect.FileDescriptor
 
 const file_entitystore_v1_options_proto_rawDesc = "" +
 	"\n" +
-	"\x1centitystore/v1/options.proto\x12\x0eentitystore.v1\x1a google/protobuf/descriptor.proto\"\xc4\x02\n" +
+	"\x1centitystore/v1/options.proto\x12\x0eentitystore.v1\x1a google/protobuf/descriptor.proto\"\xd6\x03\n" +
 	"\fFieldOptions\x12\x16\n" +
 	"\x06anchor\x18\x01 \x01(\bR\x06anchor\x12B\n" +
 	"\n" +
@@ -613,18 +688,29 @@ const file_entitystore_v1_options_proto_rawDesc = "" +
 	"normalizer\x12\x14\n" +
 	"\x05embed\x18\x06 \x01(\bR\x05embed\x12\x1f\n" +
 	"\vtoken_field\x18\a \x01(\bR\n" +
-	"tokenField\")\n" +
+	"tokenField\x12 \n" +
+	"\vdescription\x18\n" +
+	" \x01(\tR\vdescription\x12'\n" +
+	"\x0fextraction_hint\x18\v \x01(\tR\x0eextractionHint\x12\x1d\n" +
+	"\aextract\x18\f \x01(\bH\x00R\aextract\x88\x01\x01\x12\x1a\n" +
+	"\bexamples\x18\r \x03(\tR\bexamplesB\n" +
+	"\n" +
+	"\b_extract\")\n" +
 	"\x0fCompositeAnchor\x12\x16\n" +
 	"\x06fields\x18\x01 \x03(\tR\x06fields\"V\n" +
 	"\x14MatchThresholdsProto\x12\x1d\n" +
 	"\n" +
 	"auto_match\x18\x01 \x01(\x02R\tautoMatch\x12\x1f\n" +
 	"\vreview_zone\x18\x02 \x01(\x02R\n" +
-	"reviewZone\"\xdc\x01\n" +
+	"reviewZone\"\xfa\x02\n" +
 	"\x0eMessageOptions\x12O\n" +
 	"\x10match_thresholds\x18\x01 \x01(\v2$.entitystore.v1.MatchThresholdsProtoR\x0fmatchThresholds\x12L\n" +
 	"\x11composite_anchors\x18\x02 \x03(\v2\x1f.entitystore.v1.CompositeAnchorR\x10compositeAnchors\x12+\n" +
-	"\x11allowed_relations\x18\x03 \x03(\tR\x10allowedRelations*\xca\x01\n" +
+	"\x11allowed_relations\x18\x03 \x03(\tR\x10allowedRelations\x12+\n" +
+	"\x11extraction_prompt\x18\n" +
+	" \x01(\tR\x10extractionPrompt\x127\n" +
+	"\x17extraction_instructions\x18\v \x01(\tR\x16extractionInstructions\x126\n" +
+	"\x17extraction_display_name\x18\f \x01(\tR\x15extractionDisplayName*\xca\x01\n" +
 	"\x12SimilarityFunction\x12#\n" +
 	"\x1fSIMILARITY_FUNCTION_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19SIMILARITY_FUNCTION_EXACT\x10\x01\x12$\n" +
@@ -691,6 +777,7 @@ func file_entitystore_v1_options_proto_init() {
 	if File_entitystore_v1_options_proto != nil {
 		return
 	}
+	file_entitystore_v1_options_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

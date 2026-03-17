@@ -1,0 +1,86 @@
+// Example proto definition for a Person entity with full entitystore annotations.
+// This shows all available annotation features: anchors, similarity functions,
+// conflict strategies, normalizers, embedding, tokenization, composite anchors,
+// match thresholds, and LLM extraction configuration.
+syntax = "proto3";
+package examples.v1;
+
+option go_package = "github.com/laenen-partners/entitystore/examples/gen/examples/v1;examplesv1";
+
+import "entitystore/v1/options.proto";
+
+message Person {
+  option (entitystore.v1.message) = {
+    match_thresholds: {auto_match: 0.85, review_zone: 0.60}
+    composite_anchors: [{fields: ["full_name", "date_of_birth"]}]
+    allowed_relations: ["works_at", "knows", "same_as"]
+    extraction_prompt: "Extract person details from the provided text."
+    extraction_instructions: "If multiple people are mentioned, extract only the primary subject. Ignore quoted or referenced individuals."
+    extraction_display_name: "Person"
+  };
+
+  // Primary email address.
+  string email = 1 [(entitystore.v1.field) = {
+    anchor: true
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.30
+    conflict_strategy: CONFLICT_STRATEGY_FLAG_FOR_REVIEW
+    normalizer: NORMALIZER_LOWERCASE_TRIM
+    embed: true
+    extraction_hint: "Extract the primary email, not CC or forwarded addresses"
+    examples: ["john.doe@example.com", "jane@company.org"]
+  }];
+
+  // Full legal name of the person.
+  string full_name = 2 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_JARO_WINKLER
+    weight: 0.35
+    conflict_strategy: CONFLICT_STRATEGY_LATEST_WINS
+    normalizer: NORMALIZER_LOWERCASE_TRIM
+    embed: true
+    token_field: true
+    extraction_hint: "Use the full name as written, including middle names if present"
+    examples: ["John Michael Doe", "Jane Smith-Williams"]
+  }];
+
+  // Phone number in E.164 format.
+  string phone = 3 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.15
+    conflict_strategy: CONFLICT_STRATEGY_LATEST_WINS
+    normalizer: NORMALIZER_PHONE_NORMALIZE
+    extraction_hint: "Include country code if available, e.g. +1 for US numbers"
+    examples: ["+1-555-867-5309", "+44 20 7946 0958"]
+  }];
+
+  // Date of birth in ISO 8601 format (YYYY-MM-DD).
+  string date_of_birth = 4 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.20
+    conflict_strategy: CONFLICT_STRATEGY_HIGHEST_CONFIDENCE
+    extraction_hint: "Format as YYYY-MM-DD"
+    examples: ["1990-05-15", "1985-12-01"]
+  }];
+
+  // Current job title or role.
+  string job_title = 5 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_TOKEN_JACCARD
+    weight: 0.00
+    embed: true
+    token_field: true
+    // No weight — used only for embedding and tokenization, not scoring.
+    // extract defaults to true; description comes from the leading comment.
+  }];
+
+  // Internal CRM identifier — used for matching only, not extracted.
+  string crm_id = 6 [(entitystore.v1.field) = {
+    anchor: true
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.00
+    extract: false
+  }];
+
+  // Free-form notes about the person.
+  // Not annotated — included in extraction output but not in matching.
+  string notes = 7;
+}

@@ -1,6 +1,6 @@
 # EntityStore
 
-Pure Go library for entity storage, deduplication, and relationship management with PostgreSQL + pgvector backend. Includes `protoc-gen-entitystore`, a buf plugin that generates entity matching configs from proto annotations.
+Pure Go library for entity storage, deduplication, and relationship management with PostgreSQL + pgvector backend. Includes `protoc-gen-entitystore`, a buf plugin that generates entity matching configs and LLM extraction schemas from proto annotations.
 
 ## Quick reference
 
@@ -18,11 +18,14 @@ options.go                   Options: WithPgStore()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 gen/                         Generated protobuf code (do not edit)
-matching/                    Domain logic: anchors, tokens, embeddings, normalizers
+matching/                    Domain logic: anchors, tokens, embeddings, normalizers, extraction schemas
 store/                       PostgreSQL persistence layer (SQLC)
 store/db/migrations          SQL migrations (embedded at build time)
 store/db/queries             SQLC query definitions
 store/internal/dbgen         Generated SQLC code (do not edit)
+examples/                    Comprehensive Go examples for all features
+examples/proto/              Example proto definitions with full annotations
+docs/adr/                    Architecture Decision Records
 ```
 
 ## Usage
@@ -61,7 +64,9 @@ task tidy             # go mod tidy
 
 ## protoc-gen-entitystore
 
-Buf plugin that reads `(entitystore.v1.field)` and `(entitystore.v1.message)` proto annotations and generates Go functions returning `matching.EntityMatchConfig` for each annotated message.
+Buf plugin that reads `(entitystore.v1.field)` and `(entitystore.v1.message)` proto annotations and generates two Go functions per annotated message:
+- `{Message}MatchConfig()` → `matching.EntityMatchConfig` for deduplication and matching
+- `{Message}ExtractionSchema()` → `matching.ExtractionSchema` for LLM-based entity extraction
 
 ### Using in a downstream project
 
@@ -97,11 +102,14 @@ message JobPosting {
     normalizer: NORMALIZER_LOWERCASE_TRIM
   }];
 
+  // Job title or position name.
   string title = 2 [(entitystore.v1.field) = {
     similarity: SIMILARITY_FUNCTION_TOKEN_JACCARD
     weight: 0.30
     embed: true
     token_field: true
+    extraction_hint: "Extract the exact title as stated"
+    examples: ["Senior Software Engineer", "Head of Product"]
   }];
 }
 ```
@@ -137,7 +145,7 @@ With `go install github.com/laenen-partners/entitystore/cmd/protoc-gen-entitysto
 buf generate
 ```
 
-This produces `job_posting_entitystore.go` with a `JobPostingMatchConfig()` function.
+This produces `job_posting_entitystore.go` with `JobPostingMatchConfig()` and `JobPostingExtractionSchema()` functions.
 
 **5. Register in Go code:**
 
@@ -147,9 +155,34 @@ import (
     jobsv1 "example.com/jobs/gen/jobs/v1"
 )
 
+// Match configs for deduplication.
 mcr := matching.NewMatchConfigRegistry()
 mcr.Register(jobsv1.JobPostingMatchConfig())
+
+// Extraction schemas for LLM entity extraction.
+esr := matching.NewExtractionSchemaRegistry()
+esr.Register(jobsv1.JobPostingExtractionSchema())
 ```
+
+### Extraction schema annotations
+
+Field descriptions are resolved in this order:
+1. Explicit `description` annotation (when the LLM needs different wording than developer docs)
+2. Proto leading comment on the field (default for most fields)
+3. Humanized field name (e.g., `full_name` → `"full name"`)
+
+Available extraction annotations on `(entitystore.v1.field)`:
+- `description` — explicit description override
+- `extraction_hint` — directive instruction for the LLM
+- `extract` — set to `false` to exclude from extraction output
+- `examples` — sample values for few-shot grounding
+
+Available extraction annotations on `(entitystore.v1.message)`:
+- `extraction_prompt` — system-level extraction instruction
+- `extraction_instructions` — additional context/edge-case handling
+- `extraction_display_name` — human-friendly entity name
+
+See `examples/proto/` for fully annotated proto definitions and `examples/` for Go usage patterns.
 
 ### Publishing proto changes
 

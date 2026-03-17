@@ -1,0 +1,515 @@
+// This file demonstrates entity store CRUD operations, relationship management,
+// tagging, embedding search, and transaction usage.
+//
+// NOTE: These examples require a running PostgreSQL 16+ database with pgvector.
+// In production, use testcontainers or a real database. The function signatures
+// show the API usage patterns — they are not meant to be run standalone.
+package examples
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/laenen-partners/entitystore"
+	"github.com/laenen-partners/entitystore/matching"
+)
+
+// ---------------------------------------------------------------------------
+// 1. Setup — creating the entity store
+// ---------------------------------------------------------------------------
+
+// SetupEntityStore shows how to create an EntityStore with PostgreSQL backend.
+func SetupEntityStore(ctx context.Context, connString string) (*entitystore.EntityStore, error) {
+	// Create connection pool.
+	pool, err := pgxpool.New(ctx, connString)
+	if err != nil {
+		return nil, fmt.Errorf("create pool: %w", err)
+	}
+
+	// Apply migrations (creates tables, indexes, pgvector extension).
+	if err := entitystore.Migrate(ctx, pool); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
+	// Create entity store.
+	es, err := entitystore.New(entitystore.WithPgStore(pool))
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("create store: %w", err)
+	}
+
+	return es, nil
+}
+
+// ---------------------------------------------------------------------------
+// 2. Creating entities with BatchWrite
+// ---------------------------------------------------------------------------
+
+// CreateEntityExample shows how to create a new entity with anchors,
+// tokens, tags, and provenance tracking.
+func CreateEntityExample(ctx context.Context, es *entitystore.EntityStore) {
+	data, _ := json.Marshal(map[string]any{
+		"email":         "alice@example.com",
+		"full_name":     "Alice Johnson",
+		"phone":         "+1-555-123-4567",
+		"date_of_birth": "1992-03-20",
+		"job_title":     "Product Manager",
+	})
+
+	results, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			EntityType: "examples.v1.Person",
+			Data:       data,
+			Confidence: 0.95,
+			Tags:       []string{"source:crm", "team:engineering"},
+			Anchors: []entitystore.AnchorQuery{
+				{Field: "email", Value: "alice@example.com"},
+			},
+			Tokens: map[string][]string{
+				"full_name": {"alice", "johnson"},
+				"job_title": {"product", "manager"},
+			},
+			Provenance: entitystore.ProvenanceEntry{
+				SourceURN:   "crm:contacts/alice-001",
+				ExtractedAt: time.Now(),
+				ModelID:     "gpt-4o",
+				Confidence:  0.95,
+				Fields:      []string{"email", "full_name", "phone", "date_of_birth", "job_title"},
+				MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	entity := results[0].Entity
+	fmt.Printf("Created entity: %s (type: %s)\n", entity.ID, entity.EntityType)
+}
+
+// CreateWithClientIDExample shows how to create an entity with a
+// client-generated UUID (useful for idempotent writes).
+func CreateWithClientIDExample(ctx context.Context, es *entitystore.EntityStore) {
+	data, _ := json.Marshal(map[string]any{
+		"invoice_number": "INV-2024-001",
+		"issuer_name":    "Acme Corp",
+		"total_amount":   1250.00,
+		"invoice_date":   "2024-03-15",
+		"currency":       "EUR",
+	})
+
+	results, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			ID:         "550e8400-e29b-41d4-a716-446655440000", // client-generated UUID
+			EntityType: "examples.v1.Invoice",
+			Data:       data,
+			Confidence: 0.90,
+			Anchors: []entitystore.AnchorQuery{
+				{Field: "invoice_number", Value: "inv-2024-001"}, // normalized
+			},
+			Provenance: entitystore.ProvenanceEntry{
+				SourceURN:   "email:inbox/msg-42",
+				ExtractedAt: time.Now(),
+				ModelID:     "claude-sonnet-4-20250514",
+				Confidence:  0.90,
+				Fields:      []string{"invoice_number", "issuer_name", "total_amount"},
+				MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Created invoice: %s\n", results[0].Entity.ID)
+}
+
+// ---------------------------------------------------------------------------
+// 3. Updating and merging entities
+// ---------------------------------------------------------------------------
+
+// UpdateEntityExample shows how to fully replace an entity's data.
+func UpdateEntityExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
+	updatedData, _ := json.Marshal(map[string]any{
+		"email":         "alice.johnson@newcompany.com",
+		"full_name":     "Alice M. Johnson",
+		"phone":         "+1-555-987-6543",
+		"date_of_birth": "1992-03-20",
+		"job_title":     "VP of Product",
+	})
+
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:          entitystore.WriteActionUpdate,
+			EntityType:      "examples.v1.Person",
+			MatchedEntityID: entityID,
+			Data:            updatedData,
+			Confidence:      0.98,
+			Anchors: []entitystore.AnchorQuery{
+				{Field: "email", Value: "alice.johnson@newcompany.com"},
+			},
+			Provenance: entitystore.ProvenanceEntry{
+				SourceURN:       "linkedin:profile/alice-johnson",
+				ExtractedAt:     time.Now(),
+				ModelID:         "gpt-4o",
+				Confidence:      0.98,
+				Fields:          []string{"email", "full_name", "phone", "job_title"},
+				MatchMethod:     "anchor",
+				MatchConfidence: 1.0,
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// MergeEntityExample shows how to merge new data into an existing entity
+// using JSON merge semantics (existing fields not in the new data are kept).
+func MergeEntityExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
+	// Only the fields present in this JSON will be updated; others are preserved.
+	partialData, _ := json.Marshal(map[string]any{
+		"job_title": "Chief Product Officer",
+		"phone":     "+1-555-000-1111",
+	})
+
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:          entitystore.WriteActionMerge,
+			EntityType:      "examples.v1.Person",
+			MatchedEntityID: entityID,
+			Data:            partialData,
+			Confidence:      0.92,
+			Provenance: entitystore.ProvenanceEntry{
+				SourceURN:       "email:inbox/msg-99",
+				ExtractedAt:     time.Now(),
+				ModelID:         "claude-sonnet-4-20250514",
+				Confidence:      0.92,
+				Fields:          []string{"job_title", "phone"},
+				MatchMethod:     "composite",
+				MatchConfidence: 0.87,
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 4. Finding entities — anchors, tokens, embeddings
+// ---------------------------------------------------------------------------
+
+// FindByAnchorsExample shows O(1) dedup lookup using anchor values.
+func FindByAnchorsExample(ctx context.Context, es *entitystore.EntityStore) {
+	// Find by single anchor.
+	matches, err := es.FindByAnchors(ctx, "examples.v1.Person",
+		[]entitystore.AnchorQuery{
+			{Field: "email", Value: "alice@example.com"},
+		},
+		nil, // no filter
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d entities by email anchor\n", len(matches))
+
+	// Find with tag filter.
+	matches, err = es.FindByAnchors(ctx, "examples.v1.Person",
+		[]entitystore.AnchorQuery{
+			{Field: "email", Value: "alice@example.com"},
+		},
+		&entitystore.QueryFilter{Tags: []string{"source:crm"}},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d entities by anchor + tag filter\n", len(matches))
+}
+
+// FindByTokensExample shows fuzzy candidate retrieval using token overlap.
+func FindByTokensExample(ctx context.Context, es *entitystore.EntityStore) {
+	// Tokenize the search query.
+	tokens := matching.Tokenize("Alice Johnson Engineering")
+
+	matches, err := es.FindByTokens(ctx, "examples.v1.Person",
+		tokens,
+		10,  // limit
+		nil, // no filter
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d candidates by token overlap\n", len(matches))
+}
+
+// FindByEmbeddingExample shows semantic vector similarity search.
+func FindByEmbeddingExample(ctx context.Context, es *entitystore.EntityStore) {
+	// In practice, you'd compute the embedding vector using an embedder:
+	//   vec, _ := embedder(ctx, "Alice Johnson product manager")
+	vec := make([]float32, 1536) // placeholder
+
+	// Search within a single entity type.
+	matches, err := es.FindByEmbedding(ctx, "examples.v1.Person",
+		vec,
+		5,   // top-K
+		nil, // no filter
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d entities by embedding similarity\n", len(matches))
+
+	// Cross-type embedding search (pass empty entity type).
+	matches, err = es.FindByEmbedding(ctx, "",
+		vec,
+		10,
+		&entitystore.QueryFilter{
+			EntityTypes: []string{"examples.v1.Person", "examples.v1.JobPosting"},
+		},
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d entities across types by embedding\n", len(matches))
+}
+
+// ---------------------------------------------------------------------------
+// 5. Relationships
+// ---------------------------------------------------------------------------
+
+// RelationsExample shows how to create and query entity relationships.
+func RelationsExample(ctx context.Context, es *entitystore.EntityStore, personID, companyID string) {
+	// Create a relation in a batch alongside entity writes.
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{UpsertRelation: &entitystore.UpsertRelationOp{
+			SourceID:     personID,
+			TargetID:     companyID,
+			RelationType: "works_at",
+			Confidence:   0.95,
+			Evidence:     "Extracted from LinkedIn profile",
+			SourceURN:    "linkedin:profile/alice-johnson",
+			Data: map[string]any{
+				"role":       "VP of Product",
+				"start_date": "2023-01-15",
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Query outbound relations.
+	outbound, err := es.GetRelationsFromEntity(ctx, personID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for _, rel := range outbound {
+		fmt.Printf("  %s -[%s]-> %s (confidence: %.2f)\n",
+			rel.SourceID, rel.RelationType, rel.TargetID, rel.Confidence)
+	}
+
+	// Find all entities connected to a person.
+	connected, err := es.ConnectedEntities(ctx, personID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Connected entities: %d\n", len(connected))
+
+	// Find connected entities filtered by type and relation.
+	companies, err := es.FindConnectedByType(ctx, personID,
+		"examples.v1.Company",
+		[]string{"works_at"},
+		nil,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Companies person works at: %d\n", len(companies))
+}
+
+// ---------------------------------------------------------------------------
+// 6. Tags
+// ---------------------------------------------------------------------------
+
+// TagsExample shows tag management on entities.
+func TagsExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
+	// Set tags (replaces all existing tags).
+	_ = es.SetTags(ctx, entityID, []string{"source:crm", "status:active"})
+
+	// Add additional tags.
+	_ = es.AddTags(ctx, entityID, []string{"team:engineering", "priority:high"})
+
+	// Remove a single tag.
+	_ = es.RemoveTag(ctx, entityID, "priority:high")
+}
+
+// ---------------------------------------------------------------------------
+// 7. Transactions
+// ---------------------------------------------------------------------------
+
+// TransactionExample shows atomic multi-step operations using transactions.
+func TransactionExample(ctx context.Context, es *entitystore.EntityStore) {
+	tx, err := es.Tx(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Always rollback on error — commit overrides if reached.
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Write entity within transaction.
+	personData, _ := json.Marshal(map[string]any{
+		"email":     "bob@example.com",
+		"full_name": "Bob Smith",
+	})
+	person, err := tx.WriteEntity(ctx, &entitystore.WriteEntityOp{
+		Action:     entitystore.WriteActionCreate,
+		EntityType: "examples.v1.Person",
+		Data:       personData,
+		Confidence: 0.90,
+		Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "bob@example.com"}},
+		Provenance: entitystore.ProvenanceEntry{
+			SourceURN: "test:tx-example", ExtractedAt: time.Now(),
+			ModelID: "manual", MatchMethod: "create",
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Upsert relation using the entity ID from the same transaction.
+	_, err = tx.UpsertRelation(ctx, matching.StoredRelation{
+		SourceID:     person.ID,
+		TargetID:     "some-company-id",
+		RelationType: "works_at",
+		Confidence:   0.85,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Commit atomically.
+	if err := tx.Commit(ctx); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 8. Pagination
+// ---------------------------------------------------------------------------
+
+// PaginationExample shows cursor-based pagination over entities.
+func PaginationExample(ctx context.Context, es *entitystore.EntityStore) {
+	var cursor *time.Time
+	pageSize := int32(50)
+
+	for {
+		entities, err := es.GetEntitiesByType(ctx, "examples.v1.Person", pageSize, cursor)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(entities) == 0 {
+			break
+		}
+
+		for _, ent := range entities {
+			fmt.Printf("  %s: %s\n", ent.ID, ent.EntityType)
+		}
+
+		// Use the last entity's UpdatedAt as cursor for the next page.
+		last := entities[len(entities)-1].UpdatedAt
+		cursor = &last
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 9. Provenance
+// ---------------------------------------------------------------------------
+
+// ProvenanceExample shows how to query the extraction audit trail.
+func ProvenanceExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
+	entries, err := es.GetProvenanceForEntity(ctx, entityID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, p := range entries {
+		fmt.Printf("  Source: %s, Model: %s, Confidence: %.2f, Method: %s\n",
+			p.SourceURN, p.ModelID, p.Confidence, p.MatchMethod)
+		fmt.Printf("  Fields: %v, Extracted at: %s\n",
+			p.Fields, p.ExtractedAt.Format(time.RFC3339))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 10. Mixed batch — entities and relations in one transaction
+// ---------------------------------------------------------------------------
+
+// MixedBatchExample shows how to create multiple entities and their
+// relationships in a single atomic batch operation.
+func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
+	personData, _ := json.Marshal(map[string]any{
+		"email": "carol@startup.io", "full_name": "Carol Chen",
+	})
+	companyData, _ := json.Marshal(map[string]any{
+		"name": "Startup Inc", "domain": "startup.io",
+	})
+
+	results, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		// Op 0: create person
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			EntityType: "examples.v1.Person",
+			Data:       personData,
+			Confidence: 0.93,
+			Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "carol@startup.io"}},
+			Provenance: entitystore.ProvenanceEntry{
+				SourceURN: "email:inbox/msg-100", ExtractedAt: time.Now(),
+				ModelID: "gpt-4o", MatchMethod: "create",
+			},
+		}},
+		// Op 1: create company
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			EntityType: "examples.v1.Company",
+			Data:       companyData,
+			Confidence: 0.88,
+			Anchors:    []entitystore.AnchorQuery{{Field: "domain", Value: "startup.io"}},
+			Provenance: entitystore.ProvenanceEntry{
+				SourceURN: "email:inbox/msg-100", ExtractedAt: time.Now(),
+				ModelID: "gpt-4o", MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	personID := results[0].Entity.ID
+	companyID := results[1].Entity.ID
+
+	// Now create the relation in a second batch (needs entity IDs from above).
+	_, err = es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{UpsertRelation: &entitystore.UpsertRelationOp{
+			SourceID:     personID,
+			TargetID:     companyID,
+			RelationType: "works_at",
+			Confidence:   0.93,
+			Evidence:     "Email domain matches company domain",
+			SourceURN:    "email:inbox/msg-100",
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Created person %s, company %s, and works_at relation\n", personID, companyID)
+}

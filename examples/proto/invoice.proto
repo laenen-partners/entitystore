@@ -1,0 +1,68 @@
+// Example proto definition for an Invoice entity.
+// Demonstrates conservative match thresholds, anchor-heavy matching,
+// and extraction configuration for financial documents.
+syntax = "proto3";
+package examples.v1;
+
+option go_package = "github.com/laenen-partners/entitystore/examples/gen/examples/v1;examplesv1";
+
+import "entitystore/v1/options.proto";
+
+message Invoice {
+  option (entitystore.v1.message) = {
+    match_thresholds: {auto_match: 0.95, review_zone: 0.75}
+    allowed_relations: ["issued_by", "billed_to", "refers_to"]
+    extraction_prompt: "Extract invoice details from the provided document."
+    extraction_instructions: "All monetary amounts should be in the document's stated currency. If line items are present, extract them as a summary in the description field."
+    extraction_display_name: "Invoice"
+  };
+
+  // Unique invoice number as printed on the document.
+  string invoice_number = 1 [(entitystore.v1.field) = {
+    anchor: true
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.50
+    conflict_strategy: CONFLICT_STRATEGY_FLAG_FOR_REVIEW
+    normalizer: NORMALIZER_LOWERCASE_TRIM
+    examples: ["INV-2024-001", "FACTURE-00123"]
+  }];
+
+  // Name of the company or person that issued the invoice.
+  string issuer_name = 2 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_TOKEN_JACCARD
+    weight: 0.20
+    embed: true
+    token_field: true
+    extraction_hint: "Use the full legal entity name, not abbreviations"
+  }];
+
+  // Total amount due including taxes.
+  float total_amount = 3 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.15
+    conflict_strategy: CONFLICT_STRATEGY_HIGHEST_CONFIDENCE
+    extraction_hint: "Extract the grand total, not subtotals"
+  }];
+
+  // Invoice date in ISO 8601 format.
+  string invoice_date = 4 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.15
+    extraction_hint: "Format as YYYY-MM-DD"
+    examples: ["2024-03-15"]
+  }];
+
+  // Three-letter ISO 4217 currency code.
+  string currency = 5 [(entitystore.v1.field) = {
+    similarity: SIMILARITY_FUNCTION_EXACT
+    weight: 0.00
+    normalizer: NORMALIZER_LOWERCASE_TRIM
+    examples: ["EUR", "USD", "GBP"]
+  }];
+
+  // Description or summary of the invoice.
+  string description = 6;
+
+  // Due date in ISO 8601 format.
+  string due_date = 7;
+}

@@ -143,6 +143,25 @@ message FieldOptions {
   // retrieval before expensive similarity scoring. Use for names and
   // multi-word text fields where token overlap is a good blocking signal.
   bool token_field = 7;
+
+  // Optional explicit description for LLM extraction prompts.
+  // If omitted, the generator uses the proto leading comment on the field.
+  // If neither is present, the field name is humanized (e.g., "full_name" → "full name").
+  string description = 10;
+
+  // Additional extraction hint for the LLM (e.g., "Format as ISO 8601 date",
+  // "Extract the full legal name, not abbreviations"). Unlike description,
+  // hints are directive instructions that guide the LLM's extraction behaviour.
+  string extraction_hint = 11;
+
+  // Whether this field should be included in extraction output.
+  // Defaults to true for all annotated fields. Set to false to exclude
+  // fields that are only relevant for matching but not extraction.
+  optional bool extract = 12;
+
+  // Examples of valid values for this field, included in the schema
+  // to improve LLM extraction accuracy via few-shot grounding.
+  repeated string examples = 13;
 }
 
 // CompositeAnchor defines a multi-field composite identity anchor.
@@ -203,6 +222,20 @@ message MessageOptions {
   //
   // Example for Invoice: ["issuer_of", "buyer_on", "refers_to"]
   repeated string allowed_relations = 3;
+
+  // System-level prompt instructions prepended to extraction requests.
+  // Use this for entity-specific extraction guidance, e.g.,
+  // "This is a job posting. Extract structured fields from the raw text."
+  string extraction_prompt = 10;
+
+  // Additional context or instructions appended after the schema description.
+  // Use for edge-case handling, e.g.,
+  // "If multiple people are mentioned, extract only the primary contact."
+  string extraction_instructions = 11;
+
+  // Display name for the entity type in prompts (e.g., "Job Posting" instead of "JobPosting").
+  // If omitted, the message name is used as-is.
+  string extraction_display_name = 12;
 }
 
 // Per-field matching configuration.
