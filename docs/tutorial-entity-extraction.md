@@ -348,19 +348,21 @@ func main() {
 	//   "notes": null
 	// }
 
-	// --- 6. Build anchors and tokens using the match config ---
-	cfg, _ := configs.Get("entities.v1.Person")
+	// --- 6. Match against existing entities using the Matcher ---
+	cfg := entitiesv1.PersonMatchConfig()
 	entityData, _ := json.Marshal(result)
 
-	anchors := matching.BuildAnchors(entityData, cfg)
-	tokens := matching.BuildTokens(entityData, cfg)
-	embedText := matching.ExtractEmbedText(entityData, cfg.EmbedFields)
+	// The Matcher handles the full pipeline: anchor lookup → fuzzy candidates → scoring → decision.
+	matcher := matching.NewMatcher(cfg, es)
+	decision, err := matcher.Match(ctx, entityData)
+	if err != nil {
+		log.Fatalf("match failed: %v", err)
+	}
 
-	fmt.Printf("\nAnchors: %v\n", anchors)
-	fmt.Printf("Tokens: %v\n", tokens)
-	fmt.Printf("Embed text: %q\n", embedText)
+	fmt.Printf("Match decision: %s (confidence: %.2f, method: %s)\n",
+		decision.Action, decision.MatchConfidence, decision.MatchMethod)
 
-	// --- 7. Store in EntityStore ---
+	// --- 7. Act on the match decision ---
 	pool, err := pgxpool.New(ctx, "postgres://user:pass@localhost:5432/mydb")
 	if err != nil {
 		log.Fatalf("connect: %v", err)
@@ -371,40 +373,20 @@ func main() {
 	es, _ := entitystore.New(entitystore.WithPgStore(pool))
 	defer es.Close()
 
-	// Check for existing entity by anchor.
-	existing, _ := es.FindByAnchors(ctx, "entities.v1.Person", anchors, nil)
+	// Build anchors and tokens for storage.
+	anchors := matching.BuildAnchors(entityData, cfg)
+	tokens := matching.BuildTokens(entityData, cfg)
 
-	if len(existing) > 0 {
-		// Update existing entity.
-		fmt.Printf("Found existing entity %s, merging...\n", existing[0].ID)
-		_, err = es.BatchWrite(ctx, []entitystore.BatchWriteOp{
-			{WriteEntity: &entitystore.WriteEntityOp{
-				Action:          entitystore.WriteActionMerge,
-				EntityType:      "entities.v1.Person",
-				MatchedEntityID: existing[0].ID,
-				Data:            entityData,
-				Confidence:      0.92,
-				Anchors:         anchors,
-				Tokens:          tokens,
-				Provenance: entitystore.ProvenanceEntry{
-					SourceURN:       "email:inbox/intro-email",
-					ExtractedAt:     time.Now(),
-					ModelID:         "gemini-2.5-flash",
-					Confidence:      0.92,
-					Fields:          extractedFieldNames(result),
-					MatchMethod:     "anchor",
-					MatchConfidence: 1.0,
-				},
-			}},
-		})
-	} else {
-		// Create new entity.
-		fmt.Println("No existing entity found, creating...")
+	// Convert extracted data to a proto message for storage.
+	protoData, _ := structpb.NewStruct(result)
+
+	switch decision.Action {
+	case matching.ActionCreate:
+		fmt.Println("Creating new entity...")
 		_, err = es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 			{WriteEntity: &entitystore.WriteEntityOp{
 				Action:     entitystore.WriteActionCreate,
-				EntityType: "entities.v1.Person",
-				Data:       entityData,
+				Data:       protoData,
 				Confidence: 0.92,
 				Anchors:    anchors,
 				Tokens:     tokens,
@@ -413,28 +395,54 @@ func main() {
 					ExtractedAt: time.Now(),
 					ModelID:     "gemini-2.5-flash",
 					Confidence:  0.92,
-					Fields:      extractedFieldNames(result),
 					MatchMethod: "create",
 				},
 			}},
 		})
+
+	case matching.ActionUpdate:
+		fmt.Printf("Updating existing entity %s...\n", decision.MatchedRecordID)
+		_, err = es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+			{WriteEntity: &entitystore.WriteEntityOp{
+				Action:          entitystore.WriteActionMerge,
+				MatchedEntityID: decision.MatchedRecordID,
+				Data:            protoData,
+				Confidence:      0.92,
+				Anchors:         anchors,
+				Tokens:          tokens,
+				Provenance: entitystore.ProvenanceEntry{
+					SourceURN:       "email:inbox/intro-email",
+					ExtractedAt:     time.Now(),
+					ModelID:         "gemini-2.5-flash",
+					Confidence:      0.92,
+					MatchMethod:     decision.MatchMethod,
+					MatchConfidence: decision.MatchConfidence,
+				},
+			}},
+		})
+
+	case matching.ActionReview:
+		fmt.Printf("Flagged for review — best candidate: %s (%.2f)\n",
+			decision.MatchedRecordID, decision.MatchConfidence)
+		// Send to review queue...
+
+	case matching.ActionConflict:
+		fmt.Printf("Conflict detected — %d candidates\n", len(decision.Candidates))
+		if decision.MergePlan != nil {
+			for _, op := range decision.MergePlan {
+				if op.Op == matching.MergeConflict {
+					fmt.Printf("  Field %s: existing=%v, extracted=%v — %s\n",
+						op.Field, op.ExistingValue, op.ExtractedValue, op.Reason)
+				}
+			}
+		}
 	}
+
 	if err != nil {
 		log.Fatalf("store: %v", err)
 	}
 
 	fmt.Println("Done!")
-}
-
-// extractedFieldNames returns the non-nil field names from an extraction result.
-func extractedFieldNames(result extract.ExtractionResult) []string {
-	var names []string
-	for k, v := range result {
-		if v != nil {
-			names = append(names, k)
-		}
-	}
-	return names
 }
 ```
 
@@ -516,18 +524,22 @@ The trade-off is maintaining a Go struct alongside the proto definition. For ent
            │                           │
            ▼                           ▼
 ┌────────────────────┐    ┌───────────────────────────────┐
-│  Matching Pipeline  │    │   Extraction Pipeline          │
-│  BuildAnchors()     │    │   BuildExtractionPrompt()      │
-│  BuildTokens()      │    │   genkit.Generate() / GenData  │
-│  ComputeEmbedding() │    │                                │
+│  Matcher            │    │   Extraction Pipeline          │
+│  Anchor lookup      │    │   BuildExtractionPrompt()      │
+│  Fuzzy candidates   │    │   genkit.Generate() / GenData  │
+│  Field scoring      │    │                                │
+│  Threshold decision │    │                                │
+│  Merge plan         │    │                                │
 └────────┬───────────┘    └──────────────┬────────────────┘
          │                               │
+         │  MatchDecision                │  extracted data
+         │  (create/update/              │
+         │   review/conflict)            │
          ▼                               │
 ┌────────────────────┐                   │
 │  EntityStore        │◄─────────────────┘
-│  BatchWrite()       │   extracted JSON
-│  FindByAnchors()    │
-│  FindByTokens()     │
+│  BatchWrite()       │
+│  GetData()          │
 └─────────────────────┘
 ```
 

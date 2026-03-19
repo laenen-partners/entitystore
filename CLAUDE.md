@@ -201,6 +201,12 @@ task proto:login  # one-time BSR login (opens browser)
 task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 ```
 
+## Release process
+
+- After creating a git tag (`git tag vX.Y.Z`), always create GitHub release notes with `gh release create`.
+- Release notes should summarize key changes, breaking changes, new types, and usage examples.
+- Push the updated proto to BSR with `task proto:push` if `options.proto` changed.
+
 ## Code conventions
 
 - No `init()` functions; wire dependencies explicitly.
