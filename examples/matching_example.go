@@ -61,12 +61,12 @@ func EmbeddingExtractionExample() {
 	}`)
 
 	// Only fields listed as embed fields are included.
-	text := matching.ExtractEmbedText(data, []string{"full_name", "job_title"})
+	text := matching.TextToEmbed(data, []string{"full_name", "job_title"})
 	fmt.Println(text)
 	// Output: "Alice Johnson Product Manager"
 
 	// All embed fields.
-	text = matching.ExtractEmbedText(data, []string{"email", "full_name", "job_title"})
+	text = matching.TextToEmbed(data, []string{"email", "full_name", "job_title"})
 	fmt.Println(text)
 	// Output: "alice@example.com Alice Johnson Product Manager"
 }
@@ -74,6 +74,18 @@ func EmbeddingExtractionExample() {
 // ---------------------------------------------------------------------------
 // 4. Computing embeddings
 // ---------------------------------------------------------------------------
+
+// simpleEmbedder is a mock Embedder for examples.
+type simpleEmbedder struct{}
+
+func (e *simpleEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
+	vecs := make([][]float32, len(texts))
+	for i, text := range texts {
+		fmt.Printf("Embedding text: %q\n", text)
+		vecs[i] = make([]float32, 1536)
+	}
+	return vecs, nil
+}
 
 // ComputeEmbeddingExample shows the full embed pipeline: extract text,
 // call embedder, get vector.
@@ -88,12 +100,9 @@ func ComputeEmbeddingExample(ctx context.Context) {
 		"job_title": "Product Manager"
 	}`)
 
-	// Define an embedder function (in practice, calls an embedding API).
-	embedder := func(_ context.Context, text string) ([]float32, error) {
-		fmt.Printf("Embedding text: %q\n", text)
-		// Return a dummy vector.
-		return make([]float32, 1536), nil
-	}
+	// In practice, use github.com/laenen-partners/embedder which
+	// satisfies the matching.Embedder interface.
+	embedder := &simpleEmbedder{}
 
 	vec, err := matching.ComputeEmbedding(ctx, data, cfg, embedder)
 	if err != nil {

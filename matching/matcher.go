@@ -15,14 +15,14 @@ import (
 type MatcherOption func(*matcherOptions)
 
 type matcherOptions struct {
-	embedder      EmbedderFunc
+	embedder      Embedder
 	tokenLimit    int
 	embeddingTopK int
 }
 
-// WithEmbedder sets the embedding function for vector similarity retrieval.
-func WithEmbedder(fn EmbedderFunc) MatcherOption {
-	return func(o *matcherOptions) { o.embedder = fn }
+// WithEmbedder sets the embedder for vector similarity retrieval.
+func WithEmbedder(e Embedder) MatcherOption {
+	return func(o *matcherOptions) { o.embedder = e }
 }
 
 // WithTokenLimit sets the maximum number of candidates from token search (default 20).
@@ -45,7 +45,7 @@ func WithEmbeddingTopK(n int) MatcherOption {
 type Matcher struct {
 	config        EntityMatchConfig
 	store         EntityStore
-	embedder      EmbedderFunc
+	embedder      Embedder
 	tokenLimit    int
 	embeddingTopK int
 }

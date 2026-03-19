@@ -3,28 +3,44 @@ package matching
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
-// EmbedderFunc computes a vector from text.
-type EmbedderFunc func(ctx context.Context, text string) ([]float32, error)
+// Embedder computes vector embeddings from text. Implementations should
+// return one []float32 per input text in the same order.
+//
+// This interface is compatible with github.com/laenen-partners/embedder.
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+}
 
 // ComputeEmbedding extracts text from the fields listed in config.EmbedFields,
 // concatenates them, and calls the embedder. Returns nil without error if there
 // are no embed fields or the concatenated text is empty.
-func ComputeEmbedding(ctx context.Context, data json.RawMessage, config EntityMatchConfig, embedder EmbedderFunc) ([]float32, error) {
+func ComputeEmbedding(ctx context.Context, data json.RawMessage, config EntityMatchConfig, embedder Embedder) ([]float32, error) {
 	if len(config.EmbedFields) == 0 || embedder == nil {
 		return nil, nil
 	}
-	text := ExtractEmbedText(data, config.EmbedFields)
+	text := TextToEmbed(data, config.EmbedFields)
 	if text == "" {
 		return nil, nil
 	}
-	return embedder(ctx, text)
+	vecs, err := embedder.Embed(ctx, []string{text})
+	if err != nil {
+		return nil, fmt.Errorf("embed: %w", err)
+	}
+	if len(vecs) == 0 {
+		return nil, nil
+	}
+	return vecs[0], nil
 }
 
-// ExtractEmbedText concatenates field values from a JSON object for embedding.
-func ExtractEmbedText(data json.RawMessage, fields []string) string {
+// TextToEmbed extracts and concatenates field values from entity data for
+// embedding. Fields are determined by the EmbedFields in the EntityMatchConfig
+// (driven by the `embed: true` proto annotation). Returns a single string
+// suitable for passing to an Embedder.
+func TextToEmbed(data json.RawMessage, fields []string) string {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return ""
@@ -50,4 +66,11 @@ func ExtractEmbedText(data json.RawMessage, fields []string) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// ExtractEmbedText is an alias for TextToEmbed for backward compatibility.
+//
+// Deprecated: Use TextToEmbed instead.
+func ExtractEmbedText(data json.RawMessage, fields []string) string {
+	return TextToEmbed(data, fields)
 }

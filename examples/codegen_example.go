@@ -116,7 +116,7 @@ func BuildAnchorsAndTokensExample() {
 	//   job_title: [senior software engineer]
 
 	// ExtractEmbedText concatenates embed fields for embedding input.
-	embedText := matching.ExtractEmbedText(data, cfg.EmbedFields)
+	embedText := matching.TextToEmbed(data, cfg.EmbedFields)
 	fmt.Printf("Embed input text: %q\n", embedText)
 	// Output: "john.doe@example.com John Michael Doe Senior Software Engineer"
 

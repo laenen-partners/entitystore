@@ -8,11 +8,20 @@ import (
 	"testing"
 )
 
+// mockEmbedder implements the Embedder interface for testing.
+type mockEmbedder struct {
+	fn func(ctx context.Context, texts []string) ([][]float32, error)
+}
+
+func (m *mockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+	return m.fn(ctx, texts)
+}
+
 // ---------------------------------------------------------------------------
-// ExtractEmbedText
+// TextToEmbed
 // ---------------------------------------------------------------------------
 
-func TestExtractEmbedText(t *testing.T) {
+func TestTextToEmbed(t *testing.T) {
 	data := json.RawMessage(`{
 		"email": "alice@example.com",
 		"full_name": "Alice Johnson",
@@ -34,34 +43,43 @@ func TestExtractEmbedText(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := ExtractEmbedText(data, tc.fields)
+			got := TextToEmbed(data, tc.fields)
 			if got != tc.want {
-				t.Errorf("ExtractEmbedText() = %q, want %q", got, tc.want)
+				t.Errorf("TextToEmbed() = %q, want %q", got, tc.want)
 			}
 		})
 	}
 }
 
-func TestExtractEmbedText_InvalidJSON(t *testing.T) {
-	got := ExtractEmbedText(json.RawMessage(`not json`), []string{"name"})
+func TestTextToEmbed_InvalidJSON(t *testing.T) {
+	got := TextToEmbed(json.RawMessage(`not json`), []string{"name"})
 	if got != "" {
 		t.Errorf("expected empty for invalid JSON, got %q", got)
 	}
 }
 
-func TestExtractEmbedText_EmptyValues(t *testing.T) {
+func TestTextToEmbed_EmptyValues(t *testing.T) {
 	data := json.RawMessage(`{"name":"","title":"  "}`)
-	got := ExtractEmbedText(data, []string{"name", "title"})
+	got := TextToEmbed(data, []string{"name", "title"})
 	if got != "" {
 		t.Errorf("expected empty for blank values, got %q", got)
 	}
 }
 
-func TestExtractEmbedText_CamelCaseFallback(t *testing.T) {
+func TestTextToEmbed_CamelCaseFallback(t *testing.T) {
 	data := json.RawMessage(`{"fullName":"Alice","jobTitle":"PM"}`)
-	got := ExtractEmbedText(data, []string{"full_name", "job_title"})
+	got := TextToEmbed(data, []string{"full_name", "job_title"})
 	if got != "Alice PM" {
 		t.Errorf("camelCase fallback = %q, want %q", got, "Alice PM")
+	}
+}
+
+// ExtractEmbedText backward compat alias.
+func TestExtractEmbedText_BackwardCompat(t *testing.T) {
+	data := json.RawMessage(`{"name":"Alice"}`)
+	got := ExtractEmbedText(data, []string{"name"})
+	if got != "Alice" {
+		t.Errorf("ExtractEmbedText = %q", got)
 	}
 }
 
@@ -77,22 +95,22 @@ func TestComputeEmbedding(t *testing.T) {
 	data := json.RawMessage(`{"name":"Alice","title":"Engineer"}`)
 
 	expectedVec := []float32{0.1, 0.2, 0.3}
-	var capturedText string
+	var capturedTexts []string
 
-	embedder := func(_ context.Context, text string) ([]float32, error) {
-		capturedText = text
-		return expectedVec, nil
-	}
+	emb := &mockEmbedder{fn: func(_ context.Context, texts []string) ([][]float32, error) {
+		capturedTexts = texts
+		return [][]float32{expectedVec}, nil
+	}}
 
-	vec, err := ComputeEmbedding(ctx, data, cfg, embedder)
+	vec, err := ComputeEmbedding(ctx, data, cfg, emb)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !reflect.DeepEqual(vec, expectedVec) {
 		t.Errorf("vec = %v, want %v", vec, expectedVec)
 	}
-	if capturedText != "Alice Engineer" {
-		t.Errorf("embedder received %q, want %q", capturedText, "Alice Engineer")
+	if len(capturedTexts) != 1 || capturedTexts[0] != "Alice Engineer" {
+		t.Errorf("embedder received %v, want [\"Alice Engineer\"]", capturedTexts)
 	}
 }
 
@@ -101,10 +119,12 @@ func TestComputeEmbedding_NoEmbedFields(t *testing.T) {
 	cfg := EntityMatchConfig{}
 	data := json.RawMessage(`{"name":"Alice"}`)
 
-	vec, err := ComputeEmbedding(ctx, data, cfg, func(_ context.Context, _ string) ([]float32, error) {
+	emb := &mockEmbedder{fn: func(_ context.Context, _ []string) ([][]float32, error) {
 		t.Error("embedder should not be called")
 		return nil, nil
-	})
+	}}
+
+	vec, err := ComputeEmbedding(ctx, data, cfg, emb)
 	if err != nil || vec != nil {
 		t.Errorf("expected nil, nil; got %v, %v", vec, err)
 	}
@@ -126,10 +146,12 @@ func TestComputeEmbedding_EmptyText(t *testing.T) {
 	cfg := EntityMatchConfig{EmbedFields: []string{"name"}}
 	data := json.RawMessage(`{"name":""}`)
 
-	vec, err := ComputeEmbedding(ctx, data, cfg, func(_ context.Context, _ string) ([]float32, error) {
+	emb := &mockEmbedder{fn: func(_ context.Context, _ []string) ([][]float32, error) {
 		t.Error("embedder should not be called for empty text")
 		return nil, nil
-	})
+	}}
+
+	vec, err := ComputeEmbedding(ctx, data, cfg, emb)
 	if err != nil || vec != nil {
 		t.Errorf("expected nil, nil; got %v, %v", vec, err)
 	}
@@ -141,9 +163,11 @@ func TestComputeEmbedding_EmbedderError(t *testing.T) {
 	data := json.RawMessage(`{"name":"Alice"}`)
 
 	wantErr := errors.New("embedding API down")
-	_, err := ComputeEmbedding(ctx, data, cfg, func(_ context.Context, _ string) ([]float32, error) {
+	emb := &mockEmbedder{fn: func(_ context.Context, _ []string) ([][]float32, error) {
 		return nil, wantErr
-	})
+	}}
+
+	_, err := ComputeEmbedding(ctx, data, cfg, emb)
 	if !errors.Is(err, wantErr) {
 		t.Errorf("err = %v, want %v", err, wantErr)
 	}
