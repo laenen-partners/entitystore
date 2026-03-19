@@ -26,25 +26,25 @@ const findByTokenOverlap = `-- name: FindByTokenOverlap :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
 FROM entity_tokens t
 JOIN entities e ON e.id = t.entity_id
-WHERE t.entity_type = $1 AND t.tokens && $2::text[]
-  AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
-  AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
-  AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])
+WHERE ($1::text = '' OR t.entity_type = $1::text) AND t.tokens && $2::text[]
+  AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
+  AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
+  AND ($5::text = '' OR NOT ($5::text = ANY(e.tags)) OR e.tags && $6::text[])
 ORDER BY array_length(
     ARRAY(SELECT unnest(t.tokens) INTERSECT SELECT unnest($2::text[])),
     1
 ) DESC NULLS LAST
-LIMIT $3
+LIMIT $7
 `
 
 type FindByTokenOverlapParams struct {
-	EntityType string      `json:"entity_type"`
-	Column2    []string    `json:"column_2"`
-	Limit      int32       `json:"limit"`
-	Tags       []string    `json:"tags"`
-	AnyTags    []string    `json:"any_tags"`
-	ExcludeTag interface{} `json:"exclude_tag"`
-	UnlessTags []string    `json:"unless_tags"`
+	EntityType string   `json:"entity_type"`
+	Tokens     []string `json:"tokens"`
+	Tags       []string `json:"tags"`
+	AnyTags    []string `json:"any_tags"`
+	ExcludeTag string   `json:"exclude_tag"`
+	UnlessTags []string `json:"unless_tags"`
+	MaxResults int32    `json:"max_results"`
 }
 
 type FindByTokenOverlapRow struct {
@@ -60,12 +60,12 @@ type FindByTokenOverlapRow struct {
 func (q *Queries) FindByTokenOverlap(ctx context.Context, arg FindByTokenOverlapParams) ([]FindByTokenOverlapRow, error) {
 	rows, err := q.db.Query(ctx, findByTokenOverlap,
 		arg.EntityType,
-		arg.Column2,
-		arg.Limit,
+		arg.Tokens,
 		arg.Tags,
 		arg.AnyTags,
 		arg.ExcludeTag,
 		arg.UnlessTags,
+		arg.MaxResults,
 	)
 	if err != nil {
 		return nil, err

@@ -16,6 +16,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
@@ -73,6 +74,12 @@ func (es *EntityStore) GetEntitiesByType(ctx context.Context, entityType string,
 	return es.store.GetEntitiesByType(ctx, entityType, pageSize, cursor)
 }
 
+// GetEntitiesByTypeFiltered returns entities of the given type with cursor-based
+// pagination and tag/visibility filtering.
+func (es *EntityStore) GetEntitiesByTypeFiltered(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	return es.store.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, filter)
+}
+
 // FindByAnchors searches for entities matching the given anchor values.
 func (es *EntityStore) FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	return es.store.FindByAnchors(ctx, entityType, anchors, filter)
@@ -89,8 +96,9 @@ func (es *EntityStore) FindByEmbedding(ctx context.Context, entityType string, v
 }
 
 // FindConnectedByType finds entities connected to the given entity by relation type.
-func (es *EntityStore) FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
-	return es.store.FindConnectedByType(ctx, entityID, entityType, relationTypes, filter)
+// Pass pageSize=0 for default (1000). Pass cursor=nil for first page.
+func (es *EntityStore) FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
+	return es.store.FindConnectedByType(ctx, entityID, entityType, relationTypes, filter, pageSize, cursor)
 }
 
 // FindEntitiesByRelation finds entities that participate in a given relation type.
@@ -138,6 +146,16 @@ func (es *EntityStore) BatchWrite(ctx context.Context, ops []store.BatchWriteOp)
 // DeleteEntity removes an entity and its associated data.
 func (es *EntityStore) DeleteEntity(ctx context.Context, id string) error {
 	return es.store.DeleteEntity(ctx, id)
+}
+
+// DeleteRelationByKey removes a specific relation by source, target, and type.
+func (es *EntityStore) DeleteRelationByKey(ctx context.Context, sourceID, targetID, relationType string) error {
+	return es.store.DeleteRelationByKey(ctx, sourceID, targetID, relationType)
+}
+
+// UpdateRelationData updates the typed data on an existing relation.
+func (es *EntityStore) UpdateRelationData(ctx context.Context, sourceID, targetID, relationType string, data proto.Message) (matching.StoredRelation, error) {
+	return es.store.UpdateRelationData(ctx, sourceID, targetID, relationType, data)
 }
 
 // ---------------------------------------------------------------------------

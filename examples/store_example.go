@@ -326,7 +326,7 @@ func RelationsExample(ctx context.Context, es *entitystore.EntityStore, personID
 	companies, err := es.FindConnectedByType(ctx, personID,
 		"examples.v1.Company",
 		[]string{"works_at"},
-		nil,
+		nil, 0, nil,
 	)
 	if err != nil {
 		log.Fatal(err)

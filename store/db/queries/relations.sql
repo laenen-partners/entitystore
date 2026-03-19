@@ -32,6 +32,20 @@ ORDER BY created_at DESC;
 -- name: DeleteRelation :exec
 DELETE FROM entity_relations WHERE id = $1;
 
+-- name: DeleteRelationByKey :exec
+DELETE FROM entity_relations
+WHERE source_id = @source_id
+  AND target_id = @target_id
+  AND relation_type = @relation_type;
+
+-- name: UpdateRelationData :one
+UPDATE entity_relations
+SET data_type = @data_type, data = @data
+WHERE source_id = @source_id
+  AND target_id = @target_id
+  AND relation_type = @relation_type
+RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at;
+
 -- name: DeleteRelationsForEntity :exec
 DELETE FROM entity_relations WHERE source_id = $1 OR target_id = $1;
 
@@ -52,22 +66,28 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE r.source_id = @entity_id
-  AND e.entity_type = @entity_type
+  AND (@entity_type::text = '' OR e.entity_type = @entity_type::text)
   AND (cardinality(@relation_types::text[]) = 0 OR r.relation_type = ANY(@relation_types::text[]))
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
-  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[])
+  AND (sqlc.narg('cursor')::timestamptz IS NULL OR r.created_at < sqlc.narg('cursor')::timestamptz)
+ORDER BY r.created_at DESC
+LIMIT @page_size;
 
 -- name: FindConnectedByTypeInbound :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE r.target_id = @entity_id
-  AND e.entity_type = @entity_type
+  AND (@entity_type::text = '' OR e.entity_type = @entity_type::text)
   AND (cardinality(@relation_types::text[]) = 0 OR r.relation_type = ANY(@relation_types::text[]))
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
-  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[])
+  AND (sqlc.narg('cursor')::timestamptz IS NULL OR r.created_at < sqlc.narg('cursor')::timestamptz)
+ORDER BY r.created_at DESC
+LIMIT @page_size;
 
 -- name: FindEntitiesByRelationSource :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
@@ -77,7 +97,7 @@ WHERE e.entity_type = @entity_type
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
-  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
+  AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
 
 -- name: FindEntitiesByRelationTarget :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
@@ -87,4 +107,4 @@ WHERE e.entity_type = @entity_type
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
-  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
+  AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[]);

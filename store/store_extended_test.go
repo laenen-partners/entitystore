@@ -384,7 +384,7 @@ func TestFindConnectedByType(t *testing.T) {
 		t.Fatalf("create relations: %v", err)
 	}
 
-	found, err := s.FindConnectedByType(ctx, person, entityType, nil, nil)
+	found, err := s.FindConnectedByType(ctx, person, entityType, nil, nil, 0, nil)
 	if err != nil {
 		t.Fatalf("find connected: %v", err)
 	}
@@ -393,7 +393,7 @@ func TestFindConnectedByType(t *testing.T) {
 	}
 
 	found, err = s.FindConnectedByType(ctx, person, entityType,
-		[]string{"works_at"}, nil)
+		[]string{"works_at"}, nil, 0, nil)
 	if err != nil {
 		t.Fatalf("find connected filtered: %v", err)
 	}
@@ -1009,6 +1009,198 @@ func TestExcludeTagUnlessFilter(t *testing.T) {
 	}
 
 	_ = id3 // used in test 4
+}
+
+// ---------------------------------------------------------------------------
+// FindConnectedByType with empty entity_type
+// ---------------------------------------------------------------------------
+
+func TestFindConnectedByType_EmptyEntityType(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	person := createTestEntity(t, s, testData(t, map[string]any{"name": "EmptyTypeTest"}))
+	company := createTestEntity(t, s, testData(t, map[string]any{"name": "EmptyTypeCo"}))
+
+	_, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{UpsertRelation: &store.UpsertRelationOp{
+			SourceID: person, TargetID: company,
+			RelationType: "holds_account", Confidence: 0.9,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create relation: %v", err)
+	}
+
+	// Empty entity type — should return connected entity regardless of type.
+	found, err := s.FindConnectedByType(ctx, person, "", []string{"holds_account"}, nil, 0, nil)
+	if err != nil {
+		t.Fatalf("find with empty type: %v", err)
+	}
+	if len(found) != 1 || found[0].ID != company {
+		t.Errorf("expected company, got %d results", len(found))
+	}
+
+	// Specific entity type — should also return.
+	found, err = s.FindConnectedByType(ctx, person, entityType, []string{"holds_account"}, nil, 0, nil)
+	if err != nil {
+		t.Fatalf("find with specific type: %v", err)
+	}
+	if len(found) != 1 {
+		t.Errorf("expected 1 with specific type, got %d", len(found))
+	}
+
+	// Wrong entity type — should return nothing.
+	found, err = s.FindConnectedByType(ctx, person, "nonexistent.Type", []string{"holds_account"}, nil, 0, nil)
+	if err != nil {
+		t.Fatalf("find with wrong type: %v", err)
+	}
+	if len(found) != 0 {
+		t.Errorf("expected 0 with wrong type, got %d", len(found))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// DeleteRelationByKey
+// ---------------------------------------------------------------------------
+
+func TestDeleteRelationByKey(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	e1 := createTestEntity(t, s, testData(t, map[string]any{"name": "DelRelA"}))
+	e2 := createTestEntity(t, s, testData(t, map[string]any{"name": "DelRelB"}))
+
+	// Create two relations.
+	_, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{UpsertRelation: &store.UpsertRelationOp{
+			SourceID: e1, TargetID: e2,
+			RelationType: "employed_by", Confidence: 0.9,
+		}},
+		{UpsertRelation: &store.UpsertRelationOp{
+			SourceID: e1, TargetID: e2,
+			RelationType: "knows", Confidence: 0.8,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create relations: %v", err)
+	}
+
+	// Delete one relation.
+	if err := s.DeleteRelationByKey(ctx, e1, e2, "employed_by"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	// Only "knows" should remain.
+	rels, err := s.GetRelationsFromEntity(ctx, e1)
+	if err != nil {
+		t.Fatalf("get relations: %v", err)
+	}
+	if len(rels) != 1 {
+		t.Fatalf("expected 1 relation, got %d", len(rels))
+	}
+	if rels[0].RelationType != "knows" {
+		t.Errorf("expected 'knows', got %q", rels[0].RelationType)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// UpdateRelationData
+// ---------------------------------------------------------------------------
+
+func TestUpdateRelationData(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	e1 := createTestEntity(t, s, testData(t, map[string]any{"name": "UpdRelA"}))
+	e2 := createTestEntity(t, s, testData(t, map[string]any{"name": "UpdRelB"}))
+
+	// Create relation with initial data.
+	initialData := testData(t, map[string]any{"position": "Junior"})
+	_, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+		{UpsertRelation: &store.UpsertRelationOp{
+			SourceID: e1, TargetID: e2,
+			RelationType: "employed_by", Confidence: 0.9,
+			Data: initialData,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create relation: %v", err)
+	}
+
+	// Update relation data.
+	updatedData := testData(t, map[string]any{"position": "Senior"})
+	rel, err := s.UpdateRelationData(ctx, e1, e2, "employed_by", updatedData)
+	if err != nil {
+		t.Fatalf("update data: %v", err)
+	}
+	if rel.DataType != "google.protobuf.Struct" {
+		t.Errorf("DataType = %q", rel.DataType)
+	}
+
+	// Verify updated data.
+	var result structpb.Struct
+	if err := rel.GetData(&result); err != nil {
+		t.Fatalf("GetData: %v", err)
+	}
+	if result.Fields["position"].GetStringValue() != "Senior" {
+		t.Errorf("position = %q, want Senior", result.Fields["position"].GetStringValue())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GetEntitiesByTypeFiltered
+// ---------------------------------------------------------------------------
+
+func TestGetEntitiesByTypeFiltered(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	// Create entities with different tags.
+	create := func(name, tag string) string {
+		t.Helper()
+		results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+			{WriteEntity: &store.WriteEntityOp{
+				Action:     store.WriteActionCreate,
+				Data:       testData(t, map[string]any{"name": name}),
+				Confidence: 0.9,
+				Tags:       []string{tag},
+				Provenance: matching.ProvenanceEntry{
+					SourceURN: "test:filtered", ExtractedAt: time.Now(),
+					ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+				},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		id := results[0].Entity.ID
+		t.Cleanup(func() { _ = s.DeleteEntity(ctx, id) })
+		return id
+	}
+
+	create("FilteredA", "ws:alpha")
+	create("FilteredB", "ws:beta")
+	create("FilteredC", "ws:alpha")
+
+	// Filter by AnyTags.
+	found, err := s.GetEntitiesByTypeFiltered(ctx, entityType, 100, nil,
+		&matching.QueryFilter{AnyTags: []string{"ws:alpha"}})
+	if err != nil {
+		t.Fatalf("filtered: %v", err)
+	}
+	// Should return at least 2 (the alpha-tagged ones).
+	alphaCount := 0
+	for _, e := range found {
+		for _, tag := range e.Tags {
+			if tag == "ws:alpha" {
+				alphaCount++
+			}
+		}
+	}
+	if alphaCount < 2 {
+		t.Errorf("expected at least 2 alpha entities, got %d", alphaCount)
+	}
 }
 
 // ---------------------------------------------------------------------------

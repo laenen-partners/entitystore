@@ -113,6 +113,24 @@ func (q *Queries) DeleteRelation(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteRelationByKey = `-- name: DeleteRelationByKey :exec
+DELETE FROM entity_relations
+WHERE source_id = $1
+  AND target_id = $2
+  AND relation_type = $3
+`
+
+type DeleteRelationByKeyParams struct {
+	SourceID     uuid.UUID `json:"source_id"`
+	TargetID     uuid.UUID `json:"target_id"`
+	RelationType string    `json:"relation_type"`
+}
+
+func (q *Queries) DeleteRelationByKey(ctx context.Context, arg DeleteRelationByKeyParams) error {
+	_, err := q.db.Exec(ctx, deleteRelationByKey, arg.SourceID, arg.TargetID, arg.RelationType)
+	return err
+}
+
 const deleteRelationsForEntity = `-- name: DeleteRelationsForEntity :exec
 DELETE FROM entity_relations WHERE source_id = $1 OR target_id = $1
 `
@@ -127,21 +145,26 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE r.target_id = $1
-  AND e.entity_type = $2
+  AND ($2::text = '' OR e.entity_type = $2::text)
   AND (cardinality($3::text[]) = 0 OR r.relation_type = ANY($3::text[]))
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
   AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
   AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])
+  AND ($8::timestamptz IS NULL OR r.created_at < $8::timestamptz)
+ORDER BY r.created_at DESC
+LIMIT $9
 `
 
 type FindConnectedByTypeInboundParams struct {
-	EntityID      uuid.UUID   `json:"entity_id"`
-	EntityType    string      `json:"entity_type"`
-	RelationTypes []string    `json:"relation_types"`
-	Tags          []string    `json:"tags"`
-	AnyTags       []string    `json:"any_tags"`
-	ExcludeTag    interface{} `json:"exclude_tag"`
-	UnlessTags    []string    `json:"unless_tags"`
+	EntityID      uuid.UUID          `json:"entity_id"`
+	EntityType    string             `json:"entity_type"`
+	RelationTypes []string           `json:"relation_types"`
+	Tags          []string           `json:"tags"`
+	AnyTags       []string           `json:"any_tags"`
+	ExcludeTag    interface{}        `json:"exclude_tag"`
+	UnlessTags    []string           `json:"unless_tags"`
+	Cursor        pgtype.Timestamptz `json:"cursor"`
+	PageSize      int32              `json:"page_size"`
 }
 
 type FindConnectedByTypeInboundRow struct {
@@ -163,6 +186,8 @@ func (q *Queries) FindConnectedByTypeInbound(ctx context.Context, arg FindConnec
 		arg.AnyTags,
 		arg.ExcludeTag,
 		arg.UnlessTags,
+		arg.Cursor,
+		arg.PageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -195,21 +220,26 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE r.source_id = $1
-  AND e.entity_type = $2
+  AND ($2::text = '' OR e.entity_type = $2::text)
   AND (cardinality($3::text[]) = 0 OR r.relation_type = ANY($3::text[]))
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
   AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
   AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])
+  AND ($8::timestamptz IS NULL OR r.created_at < $8::timestamptz)
+ORDER BY r.created_at DESC
+LIMIT $9
 `
 
 type FindConnectedByTypeOutboundParams struct {
-	EntityID      uuid.UUID   `json:"entity_id"`
-	EntityType    string      `json:"entity_type"`
-	RelationTypes []string    `json:"relation_types"`
-	Tags          []string    `json:"tags"`
-	AnyTags       []string    `json:"any_tags"`
-	ExcludeTag    interface{} `json:"exclude_tag"`
-	UnlessTags    []string    `json:"unless_tags"`
+	EntityID      uuid.UUID          `json:"entity_id"`
+	EntityType    string             `json:"entity_type"`
+	RelationTypes []string           `json:"relation_types"`
+	Tags          []string           `json:"tags"`
+	AnyTags       []string           `json:"any_tags"`
+	ExcludeTag    interface{}        `json:"exclude_tag"`
+	UnlessTags    []string           `json:"unless_tags"`
+	Cursor        pgtype.Timestamptz `json:"cursor"`
+	PageSize      int32              `json:"page_size"`
 }
 
 type FindConnectedByTypeOutboundRow struct {
@@ -231,6 +261,8 @@ func (q *Queries) FindConnectedByTypeOutbound(ctx context.Context, arg FindConne
 		arg.AnyTags,
 		arg.ExcludeTag,
 		arg.UnlessTags,
+		arg.Cursor,
+		arg.PageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -266,16 +298,16 @@ WHERE e.entity_type = $1
   AND r.relation_type = $2
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
-  AND ($5 = '' OR NOT ($5 = ANY(e.tags)) OR e.tags && $6::text[])
+  AND ($5::text = '' OR NOT ($5::text = ANY(e.tags)) OR e.tags && $6::text[])
 `
 
 type FindEntitiesByRelationSourceParams struct {
-	EntityType   string      `json:"entity_type"`
-	RelationType string      `json:"relation_type"`
-	Tags         []string    `json:"tags"`
-	AnyTags      []string    `json:"any_tags"`
-	ExcludeTag   interface{} `json:"exclude_tag"`
-	UnlessTags   []string    `json:"unless_tags"`
+	EntityType   string   `json:"entity_type"`
+	RelationType string   `json:"relation_type"`
+	Tags         []string `json:"tags"`
+	AnyTags      []string `json:"any_tags"`
+	ExcludeTag   string   `json:"exclude_tag"`
+	UnlessTags   []string `json:"unless_tags"`
 }
 
 type FindEntitiesByRelationSourceRow struct {
@@ -331,16 +363,16 @@ WHERE e.entity_type = $1
   AND r.relation_type = $2
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
-  AND ($5 = '' OR NOT ($5 = ANY(e.tags)) OR e.tags && $6::text[])
+  AND ($5::text = '' OR NOT ($5::text = ANY(e.tags)) OR e.tags && $6::text[])
 `
 
 type FindEntitiesByRelationTargetParams struct {
-	EntityType   string      `json:"entity_type"`
-	RelationType string      `json:"relation_type"`
-	Tags         []string    `json:"tags"`
-	AnyTags      []string    `json:"any_tags"`
-	ExcludeTag   interface{} `json:"exclude_tag"`
-	UnlessTags   []string    `json:"unless_tags"`
+	EntityType   string   `json:"entity_type"`
+	RelationType string   `json:"relation_type"`
+	Tags         []string `json:"tags"`
+	AnyTags      []string `json:"any_tags"`
+	ExcludeTag   string   `json:"exclude_tag"`
+	UnlessTags   []string `json:"unless_tags"`
 }
 
 type FindEntitiesByRelationTargetRow struct {
@@ -598,6 +630,62 @@ func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateRelationData = `-- name: UpdateRelationData :one
+UPDATE entity_relations
+SET data_type = $1, data = $2
+WHERE source_id = $3
+  AND target_id = $4
+  AND relation_type = $5
+RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
+`
+
+type UpdateRelationDataParams struct {
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+}
+
+type UpdateRelationDataRow struct {
+	ID           uuid.UUID       `json:"id"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     pgtype.Text     `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+func (q *Queries) UpdateRelationData(ctx context.Context, arg UpdateRelationDataParams) (UpdateRelationDataRow, error) {
+	row := q.db.QueryRow(ctx, updateRelationData,
+		arg.DataType,
+		arg.Data,
+		arg.SourceID,
+		arg.TargetID,
+		arg.RelationType,
+	)
+	var i UpdateRelationDataRow
+	err := row.Scan(
+		&i.ID,
+		&i.SourceID,
+		&i.TargetID,
+		&i.RelationType,
+		&i.Confidence,
+		&i.Evidence,
+		&i.Implied,
+		&i.SourceUrn,
+		&i.DataType,
+		&i.Data,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const upsertRelation = `-- name: UpsertRelation :one

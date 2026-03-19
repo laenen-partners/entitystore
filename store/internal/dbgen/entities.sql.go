@@ -76,6 +76,74 @@ func (q *Queries) GetEntitiesByType(ctx context.Context, arg GetEntitiesByTypePa
 	return items, nil
 }
 
+const getEntitiesByTypeFiltered = `-- name: GetEntitiesByTypeFiltered :many
+SELECT id, entity_type, data, confidence, tags, created_at, updated_at
+FROM entities
+WHERE entity_type = $1
+  AND ($2::timestamptz IS NULL OR updated_at < $2::timestamptz)
+  AND (cardinality($3::text[]) = 0 OR tags @> $3::text[])
+  AND (cardinality($4::text[]) = 0 OR tags && $4::text[])
+  AND ($5 = '' OR NOT ($5 = ANY(tags)) OR tags && $6::text[])
+ORDER BY updated_at DESC
+LIMIT $7
+`
+
+type GetEntitiesByTypeFilteredParams struct {
+	EntityType string             `json:"entity_type"`
+	Cursor     pgtype.Timestamptz `json:"cursor"`
+	Tags       []string           `json:"tags"`
+	AnyTags    []string           `json:"any_tags"`
+	ExcludeTag interface{}        `json:"exclude_tag"`
+	UnlessTags []string           `json:"unless_tags"`
+	PageSize   int32              `json:"page_size"`
+}
+
+type GetEntitiesByTypeFilteredRow struct {
+	ID         uuid.UUID       `json:"id"`
+	EntityType string          `json:"entity_type"`
+	Data       json.RawMessage `json:"data"`
+	Confidence float64         `json:"confidence"`
+	Tags       []string        `json:"tags"`
+	CreatedAt  time.Time       `json:"created_at"`
+	UpdatedAt  time.Time       `json:"updated_at"`
+}
+
+func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntitiesByTypeFilteredParams) ([]GetEntitiesByTypeFilteredRow, error) {
+	rows, err := q.db.Query(ctx, getEntitiesByTypeFiltered,
+		arg.EntityType,
+		arg.Cursor,
+		arg.Tags,
+		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetEntitiesByTypeFilteredRow
+	for rows.Next() {
+		var i GetEntitiesByTypeFilteredRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EntityType,
+			&i.Data,
+			&i.Confidence,
+			&i.Tags,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEntity = `-- name: GetEntity :one
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities

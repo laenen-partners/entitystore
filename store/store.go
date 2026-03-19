@@ -208,12 +208,12 @@ func (s *Store) FindByAnchors(ctx context.Context, entityType string, anchors []
 func (s *Store) FindByTokens(ctx context.Context, entityType string, tokens []string, limit int, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	rows, err := s.queries.FindByTokenOverlap(ctx, dbgen.FindByTokenOverlapParams{
 		EntityType: entityType,
-		Column2:    tokens,
+		Tokens:     tokens,
 		Tags:       tagsParam(filter),
 		AnyTags:    anyTagsParam(filter),
 		ExcludeTag: excludeTagParam(filter),
 		UnlessTags: unlessTagsParam(filter),
-		Limit:      int32(limit),
+		MaxResults: int32(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("find by tokens: %w", err)
@@ -336,6 +336,33 @@ func (s *Store) GetEntitiesByType(ctx context.Context, entityType string, pageSi
 	return result, nil
 }
 
+func (s *Store) GetEntitiesByTypeFiltered(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	var pgCursor pgtype.Timestamptz
+	if cursor != nil {
+		pgCursor = pgtype.Timestamptz{Time: *cursor, Valid: true}
+	}
+	if pageSize <= 0 {
+		pageSize = 100
+	}
+	rows, err := s.queries.GetEntitiesByTypeFiltered(ctx, dbgen.GetEntitiesByTypeFilteredParams{
+		EntityType: entityType,
+		Cursor:     pgCursor,
+		PageSize:   pageSize,
+		Tags:       tagsParam(filter),
+		AnyTags:    anyTagsParam(filter),
+		ExcludeTag: excludeTagParam(filter),
+		UnlessTags: unlessTagsParam(filter),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get entities by type filtered: %w", err)
+	}
+	result := make([]matching.StoredEntity, len(rows))
+	for i, row := range rows {
+		result[i] = entityFromRow(row)
+	}
+	return result, nil
+}
+
 func (s *Store) GetProvenanceForEntity(ctx context.Context, entityID string) ([]matching.ProvenanceEntry, error) {
 	uid, err := uuid.Parse(entityID)
 	if err != nil {
@@ -416,13 +443,20 @@ func (s *Store) ConnectedEntities(ctx context.Context, entityID string) ([]match
 	return result, nil
 }
 
-func (s *Store) FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+func (s *Store) FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
 	uid, err := uuid.Parse(entityID)
 	if err != nil {
 		return nil, fmt.Errorf("parse entity id: %w", err)
 	}
 	if relationTypes == nil {
 		relationTypes = []string{}
+	}
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
+	var pgCursor pgtype.Timestamptz
+	if cursor != nil {
+		pgCursor = pgtype.Timestamptz{Time: *cursor, Valid: true}
 	}
 	params := dbgen.FindConnectedByTypeOutboundParams{
 		EntityID:      uid,
@@ -432,6 +466,8 @@ func (s *Store) FindConnectedByType(ctx context.Context, entityID string, entity
 		AnyTags:       anyTagsParam(filter),
 		ExcludeTag:    excludeTagParam(filter),
 		UnlessTags:    unlessTagsParam(filter),
+		Cursor:        pgCursor,
+		PageSize:      pageSize,
 	}
 	outRows, err := s.queries.FindConnectedByTypeOutbound(ctx, params)
 	if err != nil {
@@ -502,7 +538,8 @@ func (s *Store) FindEntitiesByRelation(ctx context.Context, entityType string, r
 
 type entityRow interface {
 	dbgen.FindByAnchorsRow | dbgen.FindByTokenOverlapRow | dbgen.FindByEmbeddingRow |
-		dbgen.GetEntityRow | dbgen.GetEntitiesByTypeRow | dbgen.InsertEntityRow | dbgen.InsertEntityWithIDRow |
+		dbgen.GetEntityRow | dbgen.GetEntitiesByTypeRow | dbgen.GetEntitiesByTypeFilteredRow |
+		dbgen.InsertEntityRow | dbgen.InsertEntityWithIDRow |
 		dbgen.ConnectedEntitiesOutboundRow | dbgen.ConnectedEntitiesInboundRow |
 		dbgen.FindConnectedByTypeOutboundRow | dbgen.FindConnectedByTypeInboundRow |
 		dbgen.FindEntitiesByRelationSourceRow | dbgen.FindEntitiesByRelationTargetRow
@@ -519,6 +556,8 @@ func entityFromRow[R entityRow](row R) matching.StoredEntity {
 	case dbgen.GetEntityRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
 	case dbgen.GetEntitiesByTypeRow:
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
+	case dbgen.GetEntitiesByTypeFilteredRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
 	case dbgen.InsertEntityRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.CreatedAt, r.UpdatedAt)
@@ -572,7 +611,8 @@ func provenanceFromRow(row dbgen.EntityProvenance) matching.ProvenanceEntry {
 
 type relationRow interface {
 	dbgen.EntityRelation | dbgen.GetRelationsFromEntityRow | dbgen.GetRelationsToEntityRow |
-		dbgen.GetRelationsByTypeRow | dbgen.GetRelationsForSourceRow | dbgen.UpsertRelationRow
+		dbgen.GetRelationsByTypeRow | dbgen.GetRelationsForSourceRow | dbgen.UpsertRelationRow |
+		dbgen.UpdateRelationDataRow
 }
 
 func relationFromRow[R relationRow](row R) matching.StoredRelation {
@@ -589,6 +629,8 @@ func relationFromRow[R relationRow](row R) matching.StoredRelation {
 	case dbgen.GetRelationsForSourceRow:
 		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
 	case dbgen.UpsertRelationRow:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	case dbgen.UpdateRelationDataRow:
 		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
 	default:
 		panic("unreachable")

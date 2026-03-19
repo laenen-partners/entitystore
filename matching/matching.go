@@ -22,7 +22,7 @@ import (
 type EntityStore interface {
 	FindByAnchors(ctx context.Context, entityType string, anchors []AnchorQuery, filter *QueryFilter) ([]StoredEntity, error)
 	FindByTokens(ctx context.Context, entityType string, tokens []string, limit int, filter *QueryFilter) ([]StoredEntity, error)
-	FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *QueryFilter) ([]StoredEntity, error)
+	FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *QueryFilter, pageSize int32, cursor *time.Time) ([]StoredEntity, error)
 	FindEntitiesByRelation(ctx context.Context, entityType string, relationType string, filter *QueryFilter) ([]StoredEntity, error)
 }
 

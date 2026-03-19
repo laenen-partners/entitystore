@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -36,7 +37,7 @@ func (m *mockStore) FindByTokens(_ context.Context, _ string, _ []string, _ int,
 	return m.tokenResults, nil
 }
 
-func (m *mockStore) FindConnectedByType(_ context.Context, _ string, _ string, _ []string, _ *QueryFilter) ([]StoredEntity, error) {
+func (m *mockStore) FindConnectedByType(_ context.Context, _ string, _ string, _ []string, _ *QueryFilter, _ int32, _ *time.Time) ([]StoredEntity, error) {
 	return nil, nil
 }
 

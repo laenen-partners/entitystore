@@ -132,6 +132,58 @@ func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 	return s.queries.DeleteEntity(ctx, uid)
 }
 
+// DeleteRelationByKey removes a specific relation by source, target, and type.
+func (s *Store) DeleteRelationByKey(ctx context.Context, sourceID, targetID, relationType string) error {
+	sourceUID, err := uuid.Parse(sourceID)
+	if err != nil {
+		return fmt.Errorf("parse source id: %w", err)
+	}
+	targetUID, err := uuid.Parse(targetID)
+	if err != nil {
+		return fmt.Errorf("parse target id: %w", err)
+	}
+	return s.queries.DeleteRelationByKey(ctx, dbgen.DeleteRelationByKeyParams{
+		SourceID:     sourceUID,
+		TargetID:     targetUID,
+		RelationType: relationType,
+	})
+}
+
+// UpdateRelationData updates the typed data on an existing relation.
+func (s *Store) UpdateRelationData(ctx context.Context, sourceID, targetID, relationType string, data proto.Message) (matching.StoredRelation, error) {
+	sourceUID, err := uuid.Parse(sourceID)
+	if err != nil {
+		return matching.StoredRelation{}, fmt.Errorf("parse source id: %w", err)
+	}
+	targetUID, err := uuid.Parse(targetID)
+	if err != nil {
+		return matching.StoredRelation{}, fmt.Errorf("parse target id: %w", err)
+	}
+
+	var dataType string
+	dataJSON := json.RawMessage("{}")
+	if data != nil {
+		dataType = string(proto.MessageName(data))
+		b, err := protojson.Marshal(data)
+		if err != nil {
+			return matching.StoredRelation{}, fmt.Errorf("marshal relation data: %w", err)
+		}
+		dataJSON = b
+	}
+
+	row, err := s.queries.UpdateRelationData(ctx, dbgen.UpdateRelationDataParams{
+		SourceID:     sourceUID,
+		TargetID:     targetUID,
+		RelationType: relationType,
+		DataType:     dataType,
+		Data:         dataJSON,
+	})
+	if err != nil {
+		return matching.StoredRelation{}, fmt.Errorf("update relation data: %w", err)
+	}
+	return relationFromRow(row), nil
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
