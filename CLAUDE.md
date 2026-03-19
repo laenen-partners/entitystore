@@ -60,6 +60,12 @@ results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 
 // Migrations
 entitystore.Migrate(ctx, pool)
+
+// Shared transactions (e.g., with cashbook)
+tx, _ := pool.Begin(ctx)
+esTx := es.WithTx(tx)
+esTx.BatchWrite(ctx, ops...)
+tx.Commit(ctx)
 ```
 
 ## Common commands
@@ -216,4 +222,7 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - Use `slog` for structured logging.
 - SQL queries are defined in `store/db/queries/*.sql` and generated with SQLC.
 - Migrations are embedded and applied via `github.com/laenen-partners/migrate` (scoped to `entitystore` in `scoped_schema_migrations` table). Use `store.WithAutoMigrate()` option or call `entitystore.Migrate(ctx, pool)` directly.
-- The `matching` package contains pure domain logic with no database dependency.
+- The `matching` package contains pure domain logic. It depends on `google.golang.org/protobuf` for `GetData()` convenience methods.
+- The `extraction` package contains LLM extraction schema types — independent of matching.
+- `Embedder` interface in `matching` is compatible with `github.com/laenen-partners/embedder` — no adapter needed.
+- `WithTx(pgx.Tx)` on `EntityStore` enables shared transactions across stores sharing the same PostgreSQL pool.

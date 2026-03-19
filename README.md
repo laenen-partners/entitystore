@@ -13,7 +13,8 @@ Pure Go library for entity storage, deduplication, and relationship management w
 - **Relationships** — directed edges between entities with typed proto data, confidence, and evidence
 - **Tag filtering** — filter queries by arbitrary string tags
 - **Provenance tracking** — full audit trail of entity extraction origin
-- **Transactions** — atomic multi-step operations via `TxStore`
+- **Transactions** — atomic multi-step operations via `TxStore` or shared `WithTx(pgx.Tx)`
+- **Embedder interface** — batch-native `Embedder` interface compatible with `laenen-partners/embedder`
 - **Code generation** — `protoc-gen-entitystore` buf plugin generates matching configs and extraction schemas from proto annotations
 
 ## Quick start
@@ -204,6 +205,45 @@ Extracted Entity → Anchor Lookup → Fuzzy Candidates → Field Scoring → De
 - **Field-level scoring** — Jaro-Winkler, Levenshtein, Token Jaccard, Exact with configurable weights
 - **Threshold decisions** — auto-match (≥ `auto_match`), review zone, or create new entity
 - **Merge plans** — per-field conflict resolution using configured strategies
+
+## Shared transactions
+
+When multiple stores share the same PostgreSQL database, use `WithTx` for atomic cross-store operations:
+
+```go
+tx, _ := pool.Begin(ctx)
+defer tx.Rollback(ctx)
+
+esTx := entityStore.WithTx(tx)
+cbTx := cashbook.WithTx(tx)  // same tx, different schema
+
+esTx.BatchWrite(ctx, entityOps...)     // schema: public
+cbTx.RecordTransaction(ctx, txOp...)   // schema: cashbook
+
+tx.Commit(ctx)  // atomic: both or neither
+```
+
+## Embedder interface
+
+The `matching.Embedder` interface is compatible with [`laenen-partners/embedder`](https://github.com/laenen-partners/embedder):
+
+```go
+import "github.com/laenen-partners/embedder"
+
+emb := embedder.New(ctx)  // satisfies matching.Embedder
+
+// Extract text from fields marked embed: true
+text := matching.TextToEmbed(entityData, config.EmbedFields)
+
+// Compute embedding
+vecs, _ := emb.Embed(ctx, []string{text})
+
+// Pass to Matcher for candidate retrieval
+matcher := matching.NewMatcher(config, store, matching.WithEmbedder(emb))
+
+// Or store directly
+op.Embedding = vecs[0]
+```
 
 ## Relationships
 
