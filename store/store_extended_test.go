@@ -770,3 +770,133 @@ func TestBatchWrite_CreateWithEmbedding(t *testing.T) {
 		t.Error("entity not found by embedding")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// AnyTags (OR-based tag filtering)
+// ---------------------------------------------------------------------------
+
+func TestFindByAnchors_AnyTags(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	// Create 3 entities with different workspace tags and different anchors.
+	create := func(email, tag string) string {
+		t.Helper()
+		results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+			{WriteEntity: &store.WriteEntityOp{
+				Action:     store.WriteActionCreate,
+				Data:       testData(t, map[string]any{"email": email}),
+				Confidence: 0.9,
+				Tags:       []string{tag},
+				Anchors:    []matching.AnchorQuery{{Field: "email", Value: email}},
+				Provenance: matching.ProvenanceEntry{
+					SourceURN: "test:anytags", ExtractedAt: time.Now(),
+					ModelID: "test", Fields: []string{"email"}, MatchMethod: "create",
+				},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		id := results[0].Entity.ID
+		t.Cleanup(func() { _ = s.DeleteEntity(ctx, id) })
+		return id
+	}
+
+	id1 := create("anytag1@test.com", "ws:family")
+	id2 := create("anytag2@test.com", "ws:holding")
+	id3 := create("anytag3@test.com", "ws:foundation")
+	_ = id3
+
+	// Search all 3 anchors with AnyTags filter — should return only 2.
+	allAnchors := []matching.AnchorQuery{
+		{Field: "email", Value: "anytag1@test.com"},
+		{Field: "email", Value: "anytag2@test.com"},
+		{Field: "email", Value: "anytag3@test.com"},
+	}
+
+	found, err := s.FindByAnchors(ctx, entityType, allAnchors,
+		&matching.QueryFilter{AnyTags: []string{"ws:family", "ws:holding"}})
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if len(found) != 2 {
+		t.Fatalf("expected 2 entities with AnyTags, got %d", len(found))
+	}
+	ids := map[string]bool{}
+	for _, e := range found {
+		ids[e.ID] = true
+	}
+	if !ids[id1] || !ids[id2] {
+		t.Errorf("expected id1 and id2, got %v", ids)
+	}
+
+	// AnyTags + Tags combined — AND + OR.
+	_ = s.AddTags(ctx, id1, []string{"role:customer"})
+
+	found, err = s.FindByAnchors(ctx, entityType, allAnchors,
+		&matching.QueryFilter{
+			Tags:    []string{"role:customer"},           // AND: must have this
+			AnyTags: []string{"ws:family", "ws:holding"}, // OR: must have at least one
+		})
+	if err != nil {
+		t.Fatalf("find combined: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("expected 1 entity with combined filter, got %d", len(found))
+	}
+	if found[0].ID != id1 {
+		t.Errorf("expected id1, got %s", found[0].ID)
+	}
+
+	// No filter — returns all 3.
+	found, err = s.FindByAnchors(ctx, entityType, allAnchors, nil)
+	if err != nil {
+		t.Fatalf("find no filter: %v", err)
+	}
+	if len(found) != 3 {
+		t.Errorf("expected 3 with no filter, got %d", len(found))
+	}
+}
+
+func TestFindByTokens_AnyTags(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	createWithToken := func(tag string) string {
+		t.Helper()
+		results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+			{WriteEntity: &store.WriteEntityOp{
+				Action:     store.WriteActionCreate,
+				Data:       testData(t, map[string]any{"name": "AnyTagToken"}),
+				Confidence: 0.9,
+				Tags:       []string{tag},
+				Tokens:     map[string][]string{"name": {"anytagtoken"}},
+				Provenance: matching.ProvenanceEntry{
+					SourceURN: "test:anytags-token", ExtractedAt: time.Now(),
+					ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+				},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		id := results[0].Entity.ID
+		t.Cleanup(func() { _ = s.DeleteEntity(ctx, id) })
+		return id
+	}
+
+	_ = createWithToken("ws:alpha")
+	_ = createWithToken("ws:beta")
+	_ = createWithToken("ws:gamma")
+
+	// AnyTags OR filter — should return 2 of 3.
+	found, err := s.FindByTokens(ctx, entityType, []string{"anytagtoken"}, 10,
+		&matching.QueryFilter{AnyTags: []string{"ws:alpha", "ws:beta"}})
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if len(found) != 2 {
+		t.Errorf("expected 2 with AnyTags, got %d", len(found))
+	}
+}

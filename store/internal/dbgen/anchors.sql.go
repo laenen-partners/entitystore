@@ -28,6 +28,7 @@ FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
+  AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
 `
 
 type FindByAnchorsParams struct {
@@ -35,6 +36,7 @@ type FindByAnchorsParams struct {
 	AnchorField     string   `json:"anchor_field"`
 	NormalizedValue string   `json:"normalized_value"`
 	Tags            []string `json:"tags"`
+	AnyTags         []string `json:"any_tags"`
 }
 
 type FindByAnchorsRow struct {
@@ -53,6 +55,7 @@ func (q *Queries) FindByAnchors(ctx context.Context, arg FindByAnchorsParams) ([
 		arg.AnchorField,
 		arg.NormalizedValue,
 		arg.Tags,
+		arg.AnyTags,
 	)
 	if err != nil {
 		return nil, err

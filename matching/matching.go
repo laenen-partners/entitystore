@@ -35,7 +35,10 @@ type AnchorQuery struct {
 
 // QueryFilter allows callers to narrow entity searches.
 type QueryFilter struct {
-	Tags        []string `json:"tags,omitempty"`
+	// Tags requires the entity to have ALL of these tags (AND semantics).
+	Tags []string `json:"tags,omitempty"`
+	// AnyTags requires the entity to have AT LEAST ONE of these tags (OR semantics).
+	AnyTags []string `json:"any_tags,omitempty"`
 	// EntityTypes restricts results to entities whose type is in this list.
 	// An empty slice means no restriction. Only honoured by FindByEmbedding.
 	EntityTypes []string `json:"entity_types,omitempty"`

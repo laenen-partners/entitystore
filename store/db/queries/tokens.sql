@@ -4,6 +4,7 @@ FROM entity_tokens t
 JOIN entities e ON e.id = t.entity_id
 WHERE t.entity_type = $1 AND t.tokens && $2::text[]
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
+  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
 ORDER BY array_length(
     ARRAY(SELECT unnest(t.tokens) INTERSECT SELECT unnest($2::text[])),
     1
