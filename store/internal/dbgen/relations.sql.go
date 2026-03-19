@@ -349,21 +349,35 @@ func (q *Queries) FindEntitiesByRelationTarget(ctx context.Context, arg FindEnti
 }
 
 const getRelationsByType = `-- name: GetRelationsByType :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
 WHERE relation_type = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetRelationsByType(ctx context.Context, relationType string) ([]EntityRelation, error) {
+type GetRelationsByTypeRow struct {
+	ID           uuid.UUID       `json:"id"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     pgtype.Text     `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+func (q *Queries) GetRelationsByType(ctx context.Context, relationType string) ([]GetRelationsByTypeRow, error) {
 	rows, err := q.db.Query(ctx, getRelationsByType, relationType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityRelation
+	var items []GetRelationsByTypeRow
 	for rows.Next() {
-		var i EntityRelation
+		var i GetRelationsByTypeRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SourceID,
@@ -373,6 +387,7 @@ func (q *Queries) GetRelationsByType(ctx context.Context, relationType string) (
 			&i.Evidence,
 			&i.Implied,
 			&i.SourceUrn,
+			&i.DataType,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -387,21 +402,35 @@ func (q *Queries) GetRelationsByType(ctx context.Context, relationType string) (
 }
 
 const getRelationsForSource = `-- name: GetRelationsForSource :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
 WHERE source_urn = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetRelationsForSource(ctx context.Context, sourceUrn pgtype.Text) ([]EntityRelation, error) {
+type GetRelationsForSourceRow struct {
+	ID           uuid.UUID       `json:"id"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     pgtype.Text     `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+func (q *Queries) GetRelationsForSource(ctx context.Context, sourceUrn pgtype.Text) ([]GetRelationsForSourceRow, error) {
 	rows, err := q.db.Query(ctx, getRelationsForSource, sourceUrn)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityRelation
+	var items []GetRelationsForSourceRow
 	for rows.Next() {
-		var i EntityRelation
+		var i GetRelationsForSourceRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SourceID,
@@ -411,6 +440,7 @@ func (q *Queries) GetRelationsForSource(ctx context.Context, sourceUrn pgtype.Te
 			&i.Evidence,
 			&i.Implied,
 			&i.SourceUrn,
+			&i.DataType,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -425,21 +455,35 @@ func (q *Queries) GetRelationsForSource(ctx context.Context, sourceUrn pgtype.Te
 }
 
 const getRelationsFromEntity = `-- name: GetRelationsFromEntity :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
 WHERE source_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID) ([]EntityRelation, error) {
+type GetRelationsFromEntityRow struct {
+	ID           uuid.UUID       `json:"id"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     pgtype.Text     `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID) ([]GetRelationsFromEntityRow, error) {
 	rows, err := q.db.Query(ctx, getRelationsFromEntity, sourceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityRelation
+	var items []GetRelationsFromEntityRow
 	for rows.Next() {
-		var i EntityRelation
+		var i GetRelationsFromEntityRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SourceID,
@@ -449,6 +493,7 @@ func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID
 			&i.Evidence,
 			&i.Implied,
 			&i.SourceUrn,
+			&i.DataType,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -463,21 +508,35 @@ func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID
 }
 
 const getRelationsToEntity = `-- name: GetRelationsToEntity :many
-SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
+SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
 WHERE target_id = $1
 ORDER BY created_at DESC
 `
 
-func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) ([]EntityRelation, error) {
+type GetRelationsToEntityRow struct {
+	ID           uuid.UUID       `json:"id"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     pgtype.Text     `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) ([]GetRelationsToEntityRow, error) {
 	rows, err := q.db.Query(ctx, getRelationsToEntity, targetID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityRelation
+	var items []GetRelationsToEntityRow
 	for rows.Next() {
-		var i EntityRelation
+		var i GetRelationsToEntityRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SourceID,
@@ -487,6 +546,7 @@ func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) 
 			&i.Evidence,
 			&i.Implied,
 			&i.SourceUrn,
+			&i.DataType,
 			&i.Data,
 			&i.CreatedAt,
 		); err != nil {
@@ -501,11 +561,11 @@ func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) 
 }
 
 const upsertRelation = `-- name: UpsertRelation :one
-INSERT INTO entity_relations (source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO entity_relations (source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (source_id, target_id, relation_type) WHERE source_urn IS NULL
-DO UPDATE SET confidence = EXCLUDED.confidence, evidence = EXCLUDED.evidence, data = entity_relations.data || EXCLUDED.data
-RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data, created_at
+DO UPDATE SET confidence = EXCLUDED.confidence, evidence = EXCLUDED.evidence, data_type = EXCLUDED.data_type, data = EXCLUDED.data
+RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 `
 
 type UpsertRelationParams struct {
@@ -516,10 +576,25 @@ type UpsertRelationParams struct {
 	Evidence     pgtype.Text     `json:"evidence"`
 	Implied      bool            `json:"implied"`
 	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
 	Data         json.RawMessage `json:"data"`
 }
 
-func (q *Queries) UpsertRelation(ctx context.Context, arg UpsertRelationParams) (EntityRelation, error) {
+type UpsertRelationRow struct {
+	ID           uuid.UUID       `json:"id"`
+	SourceID     uuid.UUID       `json:"source_id"`
+	TargetID     uuid.UUID       `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     pgtype.Text     `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceUrn    pgtype.Text     `json:"source_urn"`
+	DataType     string          `json:"data_type"`
+	Data         json.RawMessage `json:"data"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+func (q *Queries) UpsertRelation(ctx context.Context, arg UpsertRelationParams) (UpsertRelationRow, error) {
 	row := q.db.QueryRow(ctx, upsertRelation,
 		arg.SourceID,
 		arg.TargetID,
@@ -528,9 +603,10 @@ func (q *Queries) UpsertRelation(ctx context.Context, arg UpsertRelationParams) 
 		arg.Evidence,
 		arg.Implied,
 		arg.SourceUrn,
+		arg.DataType,
 		arg.Data,
 	)
-	var i EntityRelation
+	var i UpsertRelationRow
 	err := row.Scan(
 		&i.ID,
 		&i.SourceID,
@@ -540,6 +616,7 @@ func (q *Queries) UpsertRelation(ctx context.Context, arg UpsertRelationParams) 
 		&i.Evidence,
 		&i.Implied,
 		&i.SourceUrn,
+		&i.DataType,
 		&i.Data,
 		&i.CreatedAt,
 	)

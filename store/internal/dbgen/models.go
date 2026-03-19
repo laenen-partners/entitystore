@@ -54,6 +54,7 @@ type EntityRelation struct {
 	SourceUrn    pgtype.Text     `json:"source_urn"`
 	Data         json.RawMessage `json:"data"`
 	CreatedAt    time.Time       `json:"created_at"`
+	DataType     string          `json:"data_type"`
 }
 
 type EntityToken struct {

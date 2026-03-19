@@ -44,11 +44,21 @@ defer es.Close()
 entity, _ := es.GetEntity(ctx, "entity-id")
 matches, _ := es.FindByAnchors(ctx, "entities.v1.Person", anchors, nil)
 
-// Write entities
-results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{...})
+// Unmarshal entity data into proto message
+var person entitiesv1.Person
+entity.GetData(&person)
+
+// Write entities — Data accepts proto.Message, EntityType is derived automatically
+results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {WriteEntity: &entitystore.WriteEntityOp{
+        Action: entitystore.WriteActionCreate,
+        Data:   &entitiesv1.Person{Email: "alice@example.com"},
+        // EntityType derived as "entities.v1.Person"
+    }},
+})
 
 // Migrations
-entitystore.Migrate(connString)
+entitystore.Migrate(ctx, pool)
 ```
 
 ## Common commands

@@ -9,6 +9,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store/internal/dbgen"
@@ -24,11 +26,11 @@ const (
 )
 
 // WriteEntityOp describes a single entity write within a batch.
+// EntityType is derived automatically from Data via proto.MessageName().
 type WriteEntityOp struct {
 	Action          WriteAction
-	ID              string // Optional: client-generated UUID for create.
-	EntityType      string
-	Data            json.RawMessage
+	ID              string        // Optional: client-generated UUID for create.
+	Data            proto.Message // EntityType is derived from the proto message name.
 	Confidence      float64
 	Tags            []string
 	MatchedEntityID string // Required for update and merge.
@@ -39,6 +41,7 @@ type WriteEntityOp struct {
 }
 
 // UpsertRelationOp describes a single relation upsert within a batch.
+// DataType is derived automatically from Data via proto.MessageName().
 type UpsertRelationOp struct {
 	SourceID     string
 	TargetID     string
@@ -47,7 +50,7 @@ type UpsertRelationOp struct {
 	Evidence     string
 	Implied      bool
 	SourceURN    string
-	Data         map[string]any
+	Data         proto.Message // Optional: typed relation payload. DataType is derived automatically.
 }
 
 // BatchWriteOp is a single operation in a batch — either an entity write or a relation upsert.
@@ -83,7 +86,11 @@ func (s *Store) BatchWrite(ctx context.Context, ops []BatchWriteOp) ([]BatchWrit
 			results = append(results, BatchWriteResult{Entity: &ent})
 
 		case op.UpsertRelation != nil:
-			rel, err := upsertRelation(ctx, q, toStoredRelation(op.UpsertRelation))
+			sr, err := toStoredRelation(op.UpsertRelation)
+			if err != nil {
+				return nil, fmt.Errorf("op %d (upsert_relation): %w", i, err)
+			}
+			rel, err := upsertRelation(ctx, q, sr)
 			if err != nil {
 				return nil, fmt.Errorf("op %d (upsert_relation): %w", i, err)
 			}
@@ -113,8 +120,8 @@ func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-func toStoredRelation(op *UpsertRelationOp) matching.StoredRelation {
-	return matching.StoredRelation{
+func toStoredRelation(op *UpsertRelationOp) (matching.StoredRelation, error) {
+	rel := matching.StoredRelation{
 		SourceID:     op.SourceID,
 		TargetID:     op.TargetID,
 		RelationType: op.RelationType,
@@ -122,8 +129,16 @@ func toStoredRelation(op *UpsertRelationOp) matching.StoredRelation {
 		Evidence:     op.Evidence,
 		Implied:      op.Implied,
 		SourceURN:    op.SourceURN,
-		Data:         op.Data,
 	}
+	if op.Data != nil {
+		rel.DataType = string(proto.MessageName(op.Data))
+		b, err := protojson.Marshal(op.Data)
+		if err != nil {
+			return matching.StoredRelation{}, fmt.Errorf("marshal relation data: %w", err)
+		}
+		rel.Data = b
+	}
+	return rel, nil
 }
 
 // applyEntityWrite dispatches to create, update, or merge based on the action.
@@ -138,7 +153,27 @@ func applyEntityWrite(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) 
 	}
 }
 
+func marshalEntityData(op *WriteEntityOp) (entityType string, data json.RawMessage, err error) {
+	if op.Data == nil {
+		return "", nil, fmt.Errorf("Data must not be nil")
+	}
+	entityType = string(proto.MessageName(op.Data))
+	if entityType == "" {
+		return "", nil, fmt.Errorf("could not derive entity type from proto message")
+	}
+	data, err = protojson.Marshal(op.Data)
+	if err != nil {
+		return "", nil, fmt.Errorf("marshal entity data: %w", err)
+	}
+	return entityType, data, nil
+}
+
 func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matching.StoredEntity, error) {
+	entityType, data, err := marshalEntityData(op)
+	if err != nil {
+		return matching.StoredEntity{}, err
+	}
+
 	tags := op.Tags
 	if tags == nil {
 		tags = []string{}
@@ -154,8 +189,8 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 			return matching.StoredEntity{}, fmt.Errorf("parse client id: %w", err)
 		}
 		row, err := q.InsertEntityWithID(ctx, dbgen.InsertEntityWithIDParams{
-			ID: uid, EntityType: op.EntityType,
-			Data: op.Data, Confidence: op.Confidence, Tags: tags,
+			ID: uid, EntityType: entityType,
+			Data: data, Confidence: op.Confidence, Tags: tags,
 		})
 		if err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("insert entity with id: %w", err)
@@ -164,8 +199,8 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 		ent = entityFromRow(row)
 	} else {
 		row, err := q.InsertEntity(ctx, dbgen.InsertEntityParams{
-			EntityType: op.EntityType,
-			Data:       op.Data,
+			EntityType: entityType,
+			Data:       data,
 			Confidence: op.Confidence,
 			Tags:       tags,
 		})
@@ -176,10 +211,10 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 		ent = entityFromRow(row)
 	}
 
-	if err := upsertAnchors(ctx, q, entityID, op.EntityType, op.Anchors); err != nil {
+	if err := upsertAnchors(ctx, q, entityID, entityType, op.Anchors); err != nil {
 		return matching.StoredEntity{}, err
 	}
-	if err := upsertTokens(ctx, q, entityID, op.EntityType, op.Tokens); err != nil {
+	if err := upsertTokens(ctx, q, entityID, entityType, op.Tokens); err != nil {
 		return matching.StoredEntity{}, err
 	}
 	if err := insertProvenance(ctx, q, entityID, op.Provenance); err != nil {
@@ -193,6 +228,11 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 }
 
 func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matching.StoredEntity, error) {
+	entityType, data, err := marshalEntityData(op)
+	if err != nil {
+		return matching.StoredEntity{}, err
+	}
+
 	uid, err := uuid.Parse(op.MatchedEntityID)
 	if err != nil {
 		return matching.StoredEntity{}, fmt.Errorf("parse entity id: %w", err)
@@ -201,13 +241,13 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 	switch op.Action {
 	case WriteActionUpdate:
 		if err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
-			ID: uid, Data: op.Data, Confidence: op.Confidence,
+			ID: uid, Data: data, Confidence: op.Confidence,
 		}); err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("update entity: %w", err)
 		}
 	case WriteActionMerge:
 		if err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
-			ID: uid, Data: op.Data, Confidence: op.Confidence,
+			ID: uid, Data: data, Confidence: op.Confidence,
 		}); err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("merge entity: %w", err)
 		}
@@ -221,10 +261,10 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 		}
 	}
 
-	if err := upsertAnchors(ctx, q, uid, op.EntityType, op.Anchors); err != nil {
+	if err := upsertAnchors(ctx, q, uid, entityType, op.Anchors); err != nil {
 		return matching.StoredEntity{}, err
 	}
-	if err := upsertTokens(ctx, q, uid, op.EntityType, op.Tokens); err != nil {
+	if err := upsertTokens(ctx, q, uid, entityType, op.Tokens); err != nil {
 		return matching.StoredEntity{}, err
 	}
 	if err := insertProvenance(ctx, q, uid, op.Provenance); err != nil {
@@ -319,11 +359,7 @@ func upsertRelation(ctx context.Context, q *dbgen.Queries, rel matching.StoredRe
 
 	dataJSON := json.RawMessage("{}")
 	if len(rel.Data) > 0 {
-		b, err := json.Marshal(rel.Data)
-		if err != nil {
-			return matching.StoredRelation{}, fmt.Errorf("marshal relation data: %w", err)
-		}
-		dataJSON = b
+		dataJSON = rel.Data
 	}
 
 	row, err := q.UpsertRelation(ctx, dbgen.UpsertRelationParams{
@@ -334,6 +370,7 @@ func upsertRelation(ctx context.Context, q *dbgen.Queries, rel matching.StoredRe
 		Evidence:     evidence,
 		Implied:      rel.Implied,
 		SourceUrn:    srcURN,
+		DataType:     rel.DataType,
 		Data:         dataJSON,
 	})
 	if err != nil {

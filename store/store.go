@@ -519,24 +519,50 @@ func provenanceFromRow(row dbgen.EntityProvenance) matching.ProvenanceEntry {
 	}
 }
 
-func relationFromRow(row dbgen.EntityRelation) matching.StoredRelation {
+type relationRow interface {
+	dbgen.EntityRelation | dbgen.GetRelationsFromEntityRow | dbgen.GetRelationsToEntityRow |
+		dbgen.GetRelationsByTypeRow | dbgen.GetRelationsForSourceRow | dbgen.UpsertRelationRow
+}
+
+func relationFromRow[R relationRow](row R) matching.StoredRelation {
+	// All relation row types have identical fields; switch to extract.
+	switch r := any(row).(type) {
+	case dbgen.EntityRelation:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	case dbgen.GetRelationsFromEntityRow:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	case dbgen.GetRelationsToEntityRow:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	case dbgen.GetRelationsByTypeRow:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	case dbgen.GetRelationsForSourceRow:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	case dbgen.UpsertRelationRow:
+		return toStoredRelation2(r.ID, r.SourceID, r.TargetID, r.RelationType, r.Confidence, r.Evidence, r.Implied, r.SourceUrn, r.DataType, r.Data, r.CreatedAt)
+	default:
+		panic("unreachable")
+	}
+}
+
+func toStoredRelation2(id, sourceID, targetID uuid.UUID, relationType string, confidence float64, evidence pgtype.Text, implied bool, sourceUrn pgtype.Text, dataType string, data json.RawMessage, createdAt time.Time) matching.StoredRelation {
 	rel := matching.StoredRelation{
-		ID:           row.ID.String(),
-		SourceID:     row.SourceID.String(),
-		TargetID:     row.TargetID.String(),
-		RelationType: row.RelationType,
-		Confidence:   row.Confidence,
-		Implied:      row.Implied,
-		CreatedAt:    row.CreatedAt,
+		ID:           id.String(),
+		SourceID:     sourceID.String(),
+		TargetID:     targetID.String(),
+		RelationType: relationType,
+		Confidence:   confidence,
+		Implied:      implied,
+		DataType:     dataType,
+		CreatedAt:    createdAt,
 	}
-	if row.Evidence.Valid {
-		rel.Evidence = row.Evidence.String
+	if evidence.Valid {
+		rel.Evidence = evidence.String
 	}
-	if row.SourceUrn.Valid {
-		rel.SourceURN = row.SourceUrn.String
+	if sourceUrn.Valid {
+		rel.SourceURN = sourceUrn.String
 	}
-	if len(row.Data) > 0 && string(row.Data) != "{}" {
-		_ = json.Unmarshal(row.Data, &rel.Data)
+	if len(data) > 0 && string(data) != "{}" {
+		rel.Data = data
 	}
 	return rel
 }

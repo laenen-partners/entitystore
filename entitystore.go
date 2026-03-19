@@ -11,7 +11,6 @@ package entitystore
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -210,7 +209,3 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return store.Migrate(ctx, pool)
 }
 
-// MarshalEntityData is a convenience for marshaling entity data to JSON.
-func MarshalEntityData(v any) (json.RawMessage, error) {
-	return json.Marshal(v)
-}

@@ -45,6 +45,10 @@ func (ts *TxStore) WriteEntity(ctx context.Context, op *WriteEntityOp) (matching
 }
 
 // UpsertRelation creates or updates a relation in the current transaction.
-func (ts *TxStore) UpsertRelation(ctx context.Context, rel matching.StoredRelation) (matching.StoredRelation, error) {
-	return upsertRelation(ctx, ts.queries, rel)
+func (ts *TxStore) UpsertRelation(ctx context.Context, op *UpsertRelationOp) (matching.StoredRelation, error) {
+	sr, err := toStoredRelation(op)
+	if err != nil {
+		return matching.StoredRelation{}, err
+	}
+	return upsertRelation(ctx, ts.queries, sr)
 }

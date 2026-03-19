@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // ---------------------------------------------------------------------------
@@ -64,6 +67,11 @@ type StoredEntity struct {
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
+// GetData unmarshals the entity's JSON data into a proto message.
+func (e StoredEntity) GetData(msg proto.Message) error {
+	return protojson.Unmarshal(e.Data, msg)
+}
+
 // ProvenanceEntry records the origin of an entity.
 type ProvenanceEntry struct {
 	ID              string    `json:"id"`
@@ -79,16 +87,22 @@ type ProvenanceEntry struct {
 
 // StoredRelation is a directed edge between two stored entities.
 type StoredRelation struct {
-	ID           string         `json:"id"`
-	SourceID     string         `json:"source_id"`
-	TargetID     string         `json:"target_id"`
-	RelationType string         `json:"relation_type"`
-	Confidence   float64        `json:"confidence"`
-	Evidence     string         `json:"evidence"`
-	Implied      bool           `json:"implied"`
-	SourceURN   string         `json:"source_urn,omitempty"`
-	Data         map[string]any `json:"data,omitempty"`
-	CreatedAt    time.Time      `json:"created_at"`
+	ID           string          `json:"id"`
+	SourceID     string          `json:"source_id"`
+	TargetID     string          `json:"target_id"`
+	RelationType string          `json:"relation_type"`
+	Confidence   float64         `json:"confidence"`
+	Evidence     string          `json:"evidence"`
+	Implied      bool            `json:"implied"`
+	SourceURN    string          `json:"source_urn,omitempty"`
+	DataType     string          `json:"data_type,omitempty"`
+	Data         json.RawMessage `json:"data,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
+// GetData unmarshals the relation's JSON data into a proto message.
+func (r StoredRelation) GetData(msg proto.Message) error {
+	return protojson.Unmarshal(r.Data, msg)
 }
 
 // ---------------------------------------------------------------------------

@@ -8,12 +8,12 @@ package examples
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/laenen-partners/entitystore"
 	"github.com/laenen-partners/entitystore/matching"
@@ -54,7 +54,7 @@ func SetupEntityStore(ctx context.Context, connString string) (*entitystore.Enti
 // CreateEntityExample shows how to create a new entity with anchors,
 // tokens, tags, and provenance tracking.
 func CreateEntityExample(ctx context.Context, es *entitystore.EntityStore) {
-	data, _ := json.Marshal(map[string]any{
+	data, _ := structpb.NewStruct(map[string]any{
 		"email":         "alice@example.com",
 		"full_name":     "Alice Johnson",
 		"phone":         "+1-555-123-4567",
@@ -65,7 +65,6 @@ func CreateEntityExample(ctx context.Context, es *entitystore.EntityStore) {
 	results, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 		{WriteEntity: &entitystore.WriteEntityOp{
 			Action:     entitystore.WriteActionCreate,
-			EntityType: "examples.v1.Person",
 			Data:       data,
 			Confidence: 0.95,
 			Tags:       []string{"source:crm", "team:engineering"},
@@ -97,7 +96,7 @@ func CreateEntityExample(ctx context.Context, es *entitystore.EntityStore) {
 // CreateWithClientIDExample shows how to create an entity with a
 // client-generated UUID (useful for idempotent writes).
 func CreateWithClientIDExample(ctx context.Context, es *entitystore.EntityStore) {
-	data, _ := json.Marshal(map[string]any{
+	data, _ := structpb.NewStruct(map[string]any{
 		"invoice_number": "INV-2024-001",
 		"issuer_name":    "Acme Corp",
 		"total_amount":   1250.00,
@@ -109,7 +108,6 @@ func CreateWithClientIDExample(ctx context.Context, es *entitystore.EntityStore)
 		{WriteEntity: &entitystore.WriteEntityOp{
 			Action:     entitystore.WriteActionCreate,
 			ID:         "550e8400-e29b-41d4-a716-446655440000", // client-generated UUID
-			EntityType: "examples.v1.Invoice",
 			Data:       data,
 			Confidence: 0.90,
 			Anchors: []entitystore.AnchorQuery{
@@ -138,7 +136,7 @@ func CreateWithClientIDExample(ctx context.Context, es *entitystore.EntityStore)
 
 // UpdateEntityExample shows how to fully replace an entity's data.
 func UpdateEntityExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
-	updatedData, _ := json.Marshal(map[string]any{
+	updatedData, _ := structpb.NewStruct(map[string]any{
 		"email":         "alice.johnson@newcompany.com",
 		"full_name":     "Alice M. Johnson",
 		"phone":         "+1-555-987-6543",
@@ -149,7 +147,6 @@ func UpdateEntityExample(ctx context.Context, es *entitystore.EntityStore, entit
 	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 		{WriteEntity: &entitystore.WriteEntityOp{
 			Action:          entitystore.WriteActionUpdate,
-			EntityType:      "examples.v1.Person",
 			MatchedEntityID: entityID,
 			Data:            updatedData,
 			Confidence:      0.98,
@@ -175,8 +172,8 @@ func UpdateEntityExample(ctx context.Context, es *entitystore.EntityStore, entit
 // MergeEntityExample shows how to merge new data into an existing entity
 // using JSON merge semantics (existing fields not in the new data are kept).
 func MergeEntityExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
-	// Only the fields present in this JSON will be updated; others are preserved.
-	partialData, _ := json.Marshal(map[string]any{
+	// Only the fields present in this data will be updated; others are preserved.
+	partialData, _ := structpb.NewStruct(map[string]any{
 		"job_title": "Chief Product Officer",
 		"phone":     "+1-555-000-1111",
 	})
@@ -184,7 +181,6 @@ func MergeEntityExample(ctx context.Context, es *entitystore.EntityStore, entity
 	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 		{WriteEntity: &entitystore.WriteEntityOp{
 			Action:          entitystore.WriteActionMerge,
-			EntityType:      "examples.v1.Person",
 			MatchedEntityID: entityID,
 			Data:            partialData,
 			Confidence:      0.92,
@@ -289,6 +285,11 @@ func FindByEmbeddingExample(ctx context.Context, es *entitystore.EntityStore) {
 // RelationsExample shows how to create and query entity relationships.
 func RelationsExample(ctx context.Context, es *entitystore.EntityStore, personID, companyID string) {
 	// Create a relation in a batch alongside entity writes.
+	relData, _ := structpb.NewStruct(map[string]any{
+		"role":       "VP of Product",
+		"start_date": "2023-01-15",
+	})
+
 	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 		{UpsertRelation: &entitystore.UpsertRelationOp{
 			SourceID:     personID,
@@ -297,10 +298,7 @@ func RelationsExample(ctx context.Context, es *entitystore.EntityStore, personID
 			Confidence:   0.95,
 			Evidence:     "Extracted from LinkedIn profile",
 			SourceURN:    "linkedin:profile/alice-johnson",
-			Data: map[string]any{
-				"role":       "VP of Product",
-				"start_date": "2023-01-15",
-			},
+			Data:         relData,
 		}},
 	})
 	if err != nil {
@@ -366,13 +364,12 @@ func TransactionExample(ctx context.Context, es *entitystore.EntityStore) {
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	// Write entity within transaction.
-	personData, _ := json.Marshal(map[string]any{
+	personData, _ := structpb.NewStruct(map[string]any{
 		"email":     "bob@example.com",
 		"full_name": "Bob Smith",
 	})
 	person, err := tx.WriteEntity(ctx, &entitystore.WriteEntityOp{
 		Action:     entitystore.WriteActionCreate,
-		EntityType: "examples.v1.Person",
 		Data:       personData,
 		Confidence: 0.90,
 		Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "bob@example.com"}},
@@ -386,7 +383,7 @@ func TransactionExample(ctx context.Context, es *entitystore.EntityStore) {
 	}
 
 	// Upsert relation using the entity ID from the same transaction.
-	_, err = tx.UpsertRelation(ctx, matching.StoredRelation{
+	_, err = tx.UpsertRelation(ctx, &entitystore.UpsertRelationOp{
 		SourceID:     person.ID,
 		TargetID:     "some-company-id",
 		RelationType: "works_at",
@@ -456,10 +453,10 @@ func ProvenanceExample(ctx context.Context, es *entitystore.EntityStore, entityI
 // MixedBatchExample shows how to create multiple entities and their
 // relationships in a single atomic batch operation.
 func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
-	personData, _ := json.Marshal(map[string]any{
+	personData, _ := structpb.NewStruct(map[string]any{
 		"email": "carol@startup.io", "full_name": "Carol Chen",
 	})
-	companyData, _ := json.Marshal(map[string]any{
+	companyData, _ := structpb.NewStruct(map[string]any{
 		"name": "Startup Inc", "domain": "startup.io",
 	})
 
@@ -467,7 +464,6 @@ func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
 		// Op 0: create person
 		{WriteEntity: &entitystore.WriteEntityOp{
 			Action:     entitystore.WriteActionCreate,
-			EntityType: "examples.v1.Person",
 			Data:       personData,
 			Confidence: 0.93,
 			Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "carol@startup.io"}},
@@ -479,7 +475,6 @@ func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
 		// Op 1: create company
 		{WriteEntity: &entitystore.WriteEntityOp{
 			Action:     entitystore.WriteActionCreate,
-			EntityType: "examples.v1.Company",
 			Data:       companyData,
 			Confidence: 0.88,
 			Anchors:    []entitystore.AnchorQuery{{Field: "domain", Value: "startup.io"}},
