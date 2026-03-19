@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pgvector/pgvector-go"
@@ -24,6 +25,7 @@ type Store struct {
 	pool    *pgxpool.Pool
 	queries *dbgen.Queries
 	ownPool bool
+	tx      pgx.Tx // non-nil when operating within an external transaction
 }
 
 // Option configures a Store during construction.
@@ -115,6 +117,18 @@ func (s *Store) Close() {
 // Pool returns the underlying connection pool.
 func (s *Store) Pool() *pgxpool.Pool {
 	return s.pool
+}
+
+// WithTx returns a Store that executes all operations within the given
+// transaction. The caller is responsible for committing or rolling back
+// the transaction. The returned Store must not be used after the
+// transaction ends.
+func (s *Store) WithTx(tx pgx.Tx) *Store {
+	return &Store{
+		pool:    s.pool,
+		queries: s.queries.WithTx(tx),
+		tx:      tx,
+	}
 }
 
 func tagsParam(filter *matching.QueryFilter) []string {

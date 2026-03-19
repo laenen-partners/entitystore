@@ -66,14 +66,33 @@ type BatchWriteResult struct {
 }
 
 // BatchWrite executes mixed entity writes and relation upserts in a single transaction.
+// If the Store was created with WithTx, operations execute within that external
+// transaction (the caller is responsible for commit/rollback).
 func (s *Store) BatchWrite(ctx context.Context, ops []BatchWriteOp) ([]BatchWriteResult, error) {
+	if s.tx != nil {
+		// Operating within an external transaction — use it directly.
+		return s.executeBatchOps(ctx, s.queries, ops)
+	}
+
+	// Normal path — begin and manage our own transaction.
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
-	q := s.queries.WithTx(tx)
+	results, err := s.executeBatchOps(ctx, s.queries.WithTx(tx), ops)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("tx commit: %w", err)
+	}
+	return results, nil
+}
+
+func (s *Store) executeBatchOps(ctx context.Context, q *dbgen.Queries, ops []BatchWriteOp) ([]BatchWriteResult, error) {
 	results := make([]BatchWriteResult, 0, len(ops))
 
 	for i, op := range ops {
@@ -101,9 +120,6 @@ func (s *Store) BatchWrite(ctx context.Context, ops []BatchWriteOp) ([]BatchWrit
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("tx commit: %w", err)
-	}
 	return results, nil
 }
 

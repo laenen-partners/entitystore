@@ -14,6 +14,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/laenen-partners/entitystore/matching"
@@ -43,6 +44,19 @@ func New(opts ...Option) (*EntityStore, error) {
 // Close releases resources held by the underlying store.
 func (es *EntityStore) Close() {
 	es.store.Close()
+}
+
+// WithTx returns an EntityStore that executes all operations within the
+// given transaction. The caller is responsible for committing or rolling
+// back the transaction. The returned EntityStore must not be used after
+// the transaction ends.
+//
+// This enables atomic operations spanning multiple stores that share
+// the same PostgreSQL database and connection pool.
+func (es *EntityStore) WithTx(tx pgx.Tx) *EntityStore {
+	return &EntityStore{
+		store: es.store.WithTx(tx),
+	}
 }
 
 // ---------------------------------------------------------------------------

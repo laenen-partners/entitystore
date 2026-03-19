@@ -1010,3 +1010,197 @@ func TestExcludeTagUnlessFilter(t *testing.T) {
 
 	_ = id3 // used in test 4
 }
+
+// ---------------------------------------------------------------------------
+// WithTx (shared transaction support)
+// ---------------------------------------------------------------------------
+
+func TestWithTx_Commit(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	// Get the pool to begin an external transaction.
+	pool := s.Pool()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Create a tx-scoped store.
+	txStore := s.WithTx(tx)
+
+	// Write an entity through the tx-scoped store.
+	results, err := txStore.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			Data:       testData(t, map[string]any{"name": "WithTxCommit"}),
+			Confidence: 0.9,
+			Anchors:    []matching.AnchorQuery{{Field: "name", Value: "withtxcommit"}},
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:withtx", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("batch write in tx: %v", err)
+	}
+	id := results[0].Entity.ID
+	t.Cleanup(func() { _ = s.DeleteEntity(ctx, id) })
+
+	// Before commit — entity should be visible within the same tx.
+	_, err = txStore.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity within tx: %v", err)
+	}
+
+	// Before commit — entity should NOT be visible outside the tx.
+	_, err = s.GetEntity(ctx, id)
+	if err == nil {
+		t.Error("entity should not be visible outside uncommitted tx")
+	}
+
+	// Commit.
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	// After commit — entity should be visible outside the tx.
+	got, err := s.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity after commit: %v", err)
+	}
+	if got.ID != id {
+		t.Errorf("ID mismatch after commit")
+	}
+}
+
+func TestWithTx_Rollback(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	pool := s.Pool()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+
+	txStore := s.WithTx(tx)
+
+	results, err := txStore.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			Data:       testData(t, map[string]any{"name": "WithTxRollback"}),
+			Confidence: 0.9,
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:withtx-rb", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("batch write in tx: %v", err)
+	}
+	id := results[0].Entity.ID
+
+	// Rollback.
+	if err := tx.Rollback(ctx); err != nil {
+		t.Fatalf("rollback: %v", err)
+	}
+
+	// After rollback — entity should NOT exist.
+	_, err = s.GetEntity(ctx, id)
+	if err == nil {
+		t.Error("entity should not exist after rollback")
+		_ = s.DeleteEntity(ctx, id) // cleanup just in case
+	}
+}
+
+func TestWithTx_MultipleOperations(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	pool := s.Pool()
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatalf("begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	txStore := s.WithTx(tx)
+
+	// Create two entities and a relation — all in one external tx.
+	r1, err := txStore.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			Data:       testData(t, map[string]any{"name": "TxPerson"}),
+			Confidence: 0.9,
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:withtx-multi", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create person: %v", err)
+	}
+	personID := r1[0].Entity.ID
+	t.Cleanup(func() { _ = s.DeleteEntity(ctx, personID) })
+
+	r2, err := txStore.BatchWrite(ctx, []store.BatchWriteOp{
+		{WriteEntity: &store.WriteEntityOp{
+			Action:     store.WriteActionCreate,
+			Data:       testData(t, map[string]any{"name": "TxCompany"}),
+			Confidence: 0.9,
+			Provenance: matching.ProvenanceEntry{
+				SourceURN: "test:withtx-multi", ExtractedAt: time.Now(),
+				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create company: %v", err)
+	}
+	companyID := r2[0].Entity.ID
+	t.Cleanup(func() { _ = s.DeleteEntity(ctx, companyID) })
+
+	// Create relation in same tx.
+	_, err = txStore.BatchWrite(ctx, []store.BatchWriteOp{
+		{UpsertRelation: &store.UpsertRelationOp{
+			SourceID: personID, TargetID: companyID,
+			RelationType: "withtx_works_at", Confidence: 0.9,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("create relation: %v", err)
+	}
+
+	// Commit all at once.
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+
+	// Verify both entities and relation exist.
+	_, err = s.GetEntity(ctx, personID)
+	if err != nil {
+		t.Fatalf("person not found after commit: %v", err)
+	}
+	_, err = s.GetEntity(ctx, companyID)
+	if err != nil {
+		t.Fatalf("company not found after commit: %v", err)
+	}
+	rels, err := s.GetRelationsFromEntity(ctx, personID)
+	if err != nil {
+		t.Fatalf("get relations: %v", err)
+	}
+	found := false
+	for _, r := range rels {
+		if r.RelationType == "withtx_works_at" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("relation not found after commit")
+	}
+}
