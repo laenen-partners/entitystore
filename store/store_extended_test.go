@@ -900,3 +900,113 @@ func TestFindByTokens_AnyTags(t *testing.T) {
 		t.Errorf("expected 2 with AnyTags, got %d", len(found))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ExcludeTag / UnlessTags (conditional visibility)
+// ---------------------------------------------------------------------------
+
+func TestExcludeTagUnlessFilter(t *testing.T) {
+	s := sharedTestStore(t)
+	ctx := context.Background()
+
+	// entity1: open (no vis:restricted)
+	// entity2: restricted, has ag:finances
+	// entity3: restricted, has ag:vehicles
+	create := func(email string, tags []string) string {
+		t.Helper()
+		results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+			{WriteEntity: &store.WriteEntityOp{
+				Action:     store.WriteActionCreate,
+				Data:       testData(t, map[string]any{"email": email}),
+				Confidence: 0.9,
+				Tags:       tags,
+				Anchors:    []matching.AnchorQuery{{Field: "email", Value: email}},
+				Provenance: matching.ProvenanceEntry{
+					SourceURN: "test:exclude", ExtractedAt: time.Now(),
+					ModelID: "test", Fields: []string{"email"}, MatchMethod: "create",
+				},
+			}},
+		})
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		id := results[0].Entity.ID
+		t.Cleanup(func() { _ = s.DeleteEntity(ctx, id) })
+		return id
+	}
+
+	id1 := create("excl-open@test.com", []string{"ws:family"})
+	id2 := create("excl-fin@test.com", []string{"ws:family", "vis:restricted", "ag:finances"})
+	id3 := create("excl-veh@test.com", []string{"ws:family", "vis:restricted", "ag:vehicles"})
+
+	allAnchors := []matching.AnchorQuery{
+		{Field: "email", Value: "excl-open@test.com"},
+		{Field: "email", Value: "excl-fin@test.com"},
+		{Field: "email", Value: "excl-veh@test.com"},
+	}
+
+	// Test 1: No exclude filter → returns all 3.
+	found, err := s.FindByAnchors(ctx, entityType, allAnchors, nil)
+	if err != nil {
+		t.Fatalf("no filter: %v", err)
+	}
+	if len(found) != 3 {
+		t.Fatalf("test1: expected 3, got %d", len(found))
+	}
+
+	// Test 2: ExcludeTag="vis:restricted", UnlessTags=[] → only open entity.
+	found, err = s.FindByAnchors(ctx, entityType, allAnchors,
+		&matching.QueryFilter{ExcludeTag: "vis:restricted"})
+	if err != nil {
+		t.Fatalf("exclude only: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("test2: expected 1, got %d", len(found))
+	}
+	if found[0].ID != id1 {
+		t.Errorf("test2: expected id1, got %s", found[0].ID)
+	}
+
+	// Test 3: ExcludeTag="vis:restricted", UnlessTags=["ag:finances"] → open + finances.
+	found, err = s.FindByAnchors(ctx, entityType, allAnchors,
+		&matching.QueryFilter{ExcludeTag: "vis:restricted", UnlessTags: []string{"ag:finances"}})
+	if err != nil {
+		t.Fatalf("unless finances: %v", err)
+	}
+	if len(found) != 2 {
+		t.Fatalf("test3: expected 2, got %d", len(found))
+	}
+	ids := map[string]bool{}
+	for _, e := range found {
+		ids[e.ID] = true
+	}
+	if !ids[id1] || !ids[id2] {
+		t.Errorf("test3: expected id1+id2, got %v", ids)
+	}
+
+	// Test 4: ExcludeTag="vis:restricted", UnlessTags=["ag:finances","ag:vehicles"] → all 3.
+	found, err = s.FindByAnchors(ctx, entityType, allAnchors,
+		&matching.QueryFilter{ExcludeTag: "vis:restricted", UnlessTags: []string{"ag:finances", "ag:vehicles"}})
+	if err != nil {
+		t.Fatalf("unless both: %v", err)
+	}
+	if len(found) != 3 {
+		t.Fatalf("test4: expected 3, got %d", len(found))
+	}
+
+	// Test 5: Combined with AnyTags — scope to workspace + visibility.
+	found, err = s.FindByAnchors(ctx, entityType, allAnchors,
+		&matching.QueryFilter{
+			AnyTags:    []string{"ws:family"},
+			ExcludeTag: "vis:restricted",
+			UnlessTags: []string{"ag:finances"},
+		})
+	if err != nil {
+		t.Fatalf("combined: %v", err)
+	}
+	if len(found) != 2 {
+		t.Fatalf("test5: expected 2, got %d", len(found))
+	}
+
+	_ = id3 // used in test 4
+}

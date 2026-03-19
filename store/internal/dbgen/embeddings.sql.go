@@ -21,14 +21,17 @@ WHERE (cardinality($1::text[]) = 0 OR e.entity_type = ANY($1))
   AND e.embedding IS NOT NULL
   AND (cardinality($2::text[]) = 0 OR e.tags @> $2::text[])
   AND (cardinality($3::text[]) = 0 OR e.tags && $3::text[])
-ORDER BY e.embedding <=> $4::vector
-LIMIT $5
+  AND ($4 = '' OR NOT ($4 = ANY(e.tags)) OR e.tags && $5::text[])
+ORDER BY e.embedding <=> $6::vector
+LIMIT $7
 `
 
 type FindByEmbeddingParams struct {
 	EntityTypes []string        `json:"entity_types"`
 	Tags        []string        `json:"tags"`
 	AnyTags     []string        `json:"any_tags"`
+	ExcludeTag  interface{}     `json:"exclude_tag"`
+	UnlessTags  []string        `json:"unless_tags"`
 	Embedding   pgvector.Vector `json:"embedding"`
 	TopK        int32           `json:"top_k"`
 }
@@ -48,6 +51,8 @@ func (q *Queries) FindByEmbedding(ctx context.Context, arg FindByEmbeddingParams
 		arg.EntityTypes,
 		arg.Tags,
 		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
 		arg.Embedding,
 		arg.TopK,
 	)

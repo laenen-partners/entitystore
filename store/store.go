@@ -131,6 +131,20 @@ func anyTagsParam(filter *matching.QueryFilter) []string {
 	return filter.AnyTags
 }
 
+func excludeTagParam(filter *matching.QueryFilter) string {
+	if filter == nil {
+		return ""
+	}
+	return filter.ExcludeTag
+}
+
+func unlessTagsParam(filter *matching.QueryFilter) []string {
+	if filter == nil || len(filter.UnlessTags) == 0 {
+		return []string{}
+	}
+	return filter.UnlessTags
+}
+
 // entityTypesParam builds the entity_types slice for FindByEmbedding.
 // If entityType is non-empty it takes precedence; otherwise filter.EntityTypes is used.
 func entityTypesParam(entityType string, filter *matching.QueryFilter) []string {
@@ -160,6 +174,8 @@ func (s *Store) FindByAnchors(ctx context.Context, entityType string, anchors []
 			NormalizedValue: aq.Value,
 			Tags:            tags,
 			AnyTags:         anyTags,
+			ExcludeTag:      excludeTagParam(filter),
+			UnlessTags:      unlessTagsParam(filter),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("find by anchor %s=%s: %w", aq.Field, aq.Value, err)
@@ -181,6 +197,8 @@ func (s *Store) FindByTokens(ctx context.Context, entityType string, tokens []st
 		Column2:    tokens,
 		Tags:       tagsParam(filter),
 		AnyTags:    anyTagsParam(filter),
+		ExcludeTag: excludeTagParam(filter),
+		UnlessTags: unlessTagsParam(filter),
 		Limit:      int32(limit),
 	})
 	if err != nil {
@@ -203,6 +221,8 @@ func (s *Store) FindByEmbedding(ctx context.Context, entityType string, vec []fl
 		Embedding:   pgVec(vec),
 		Tags:        tagsParam(filter),
 		AnyTags:     anyTagsParam(filter),
+		ExcludeTag:  excludeTagParam(filter),
+		UnlessTags:  unlessTagsParam(filter),
 		TopK:        int32(topK),
 	})
 	if err != nil {
@@ -396,6 +416,8 @@ func (s *Store) FindConnectedByType(ctx context.Context, entityID string, entity
 		RelationTypes: relationTypes,
 		Tags:          tagsParam(filter),
 		AnyTags:       anyTagsParam(filter),
+		ExcludeTag:    excludeTagParam(filter),
+		UnlessTags:    unlessTagsParam(filter),
 	}
 	outRows, err := s.queries.FindConnectedByTypeOutbound(ctx, params)
 	if err != nil {
@@ -430,6 +452,8 @@ func (s *Store) FindEntitiesByRelation(ctx context.Context, entityType string, r
 		RelationType: relationType,
 		Tags:         tagsParam(filter),
 		AnyTags:      anyTagsParam(filter),
+		ExcludeTag:   excludeTagParam(filter),
+		UnlessTags:   unlessTagsParam(filter),
 	}
 	srcRows, err := s.queries.FindEntitiesByRelationSource(ctx, params)
 	if err != nil {

@@ -131,14 +131,17 @@ WHERE r.target_id = $1
   AND (cardinality($3::text[]) = 0 OR r.relation_type = ANY($3::text[]))
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
   AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
+  AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])
 `
 
 type FindConnectedByTypeInboundParams struct {
-	EntityID      uuid.UUID `json:"entity_id"`
-	EntityType    string    `json:"entity_type"`
-	RelationTypes []string  `json:"relation_types"`
-	Tags          []string  `json:"tags"`
-	AnyTags       []string  `json:"any_tags"`
+	EntityID      uuid.UUID   `json:"entity_id"`
+	EntityType    string      `json:"entity_type"`
+	RelationTypes []string    `json:"relation_types"`
+	Tags          []string    `json:"tags"`
+	AnyTags       []string    `json:"any_tags"`
+	ExcludeTag    interface{} `json:"exclude_tag"`
+	UnlessTags    []string    `json:"unless_tags"`
 }
 
 type FindConnectedByTypeInboundRow struct {
@@ -158,6 +161,8 @@ func (q *Queries) FindConnectedByTypeInbound(ctx context.Context, arg FindConnec
 		arg.RelationTypes,
 		arg.Tags,
 		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
 	)
 	if err != nil {
 		return nil, err
@@ -194,14 +199,17 @@ WHERE r.source_id = $1
   AND (cardinality($3::text[]) = 0 OR r.relation_type = ANY($3::text[]))
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
   AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
+  AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])
 `
 
 type FindConnectedByTypeOutboundParams struct {
-	EntityID      uuid.UUID `json:"entity_id"`
-	EntityType    string    `json:"entity_type"`
-	RelationTypes []string  `json:"relation_types"`
-	Tags          []string  `json:"tags"`
-	AnyTags       []string  `json:"any_tags"`
+	EntityID      uuid.UUID   `json:"entity_id"`
+	EntityType    string      `json:"entity_type"`
+	RelationTypes []string    `json:"relation_types"`
+	Tags          []string    `json:"tags"`
+	AnyTags       []string    `json:"any_tags"`
+	ExcludeTag    interface{} `json:"exclude_tag"`
+	UnlessTags    []string    `json:"unless_tags"`
 }
 
 type FindConnectedByTypeOutboundRow struct {
@@ -221,6 +229,8 @@ func (q *Queries) FindConnectedByTypeOutbound(ctx context.Context, arg FindConne
 		arg.RelationTypes,
 		arg.Tags,
 		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
 	)
 	if err != nil {
 		return nil, err
@@ -256,13 +266,16 @@ WHERE e.entity_type = $1
   AND r.relation_type = $2
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
+  AND ($5 = '' OR NOT ($5 = ANY(e.tags)) OR e.tags && $6::text[])
 `
 
 type FindEntitiesByRelationSourceParams struct {
-	EntityType   string   `json:"entity_type"`
-	RelationType string   `json:"relation_type"`
-	Tags         []string `json:"tags"`
-	AnyTags      []string `json:"any_tags"`
+	EntityType   string      `json:"entity_type"`
+	RelationType string      `json:"relation_type"`
+	Tags         []string    `json:"tags"`
+	AnyTags      []string    `json:"any_tags"`
+	ExcludeTag   interface{} `json:"exclude_tag"`
+	UnlessTags   []string    `json:"unless_tags"`
 }
 
 type FindEntitiesByRelationSourceRow struct {
@@ -281,6 +294,8 @@ func (q *Queries) FindEntitiesByRelationSource(ctx context.Context, arg FindEnti
 		arg.RelationType,
 		arg.Tags,
 		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
 	)
 	if err != nil {
 		return nil, err
@@ -316,13 +331,16 @@ WHERE e.entity_type = $1
   AND r.relation_type = $2
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
+  AND ($5 = '' OR NOT ($5 = ANY(e.tags)) OR e.tags && $6::text[])
 `
 
 type FindEntitiesByRelationTargetParams struct {
-	EntityType   string   `json:"entity_type"`
-	RelationType string   `json:"relation_type"`
-	Tags         []string `json:"tags"`
-	AnyTags      []string `json:"any_tags"`
+	EntityType   string      `json:"entity_type"`
+	RelationType string      `json:"relation_type"`
+	Tags         []string    `json:"tags"`
+	AnyTags      []string    `json:"any_tags"`
+	ExcludeTag   interface{} `json:"exclude_tag"`
+	UnlessTags   []string    `json:"unless_tags"`
 }
 
 type FindEntitiesByRelationTargetRow struct {
@@ -341,6 +359,8 @@ func (q *Queries) FindEntitiesByRelationTarget(ctx context.Context, arg FindEnti
 		arg.RelationType,
 		arg.Tags,
 		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
 	)
 	if err != nil {
 		return nil, err

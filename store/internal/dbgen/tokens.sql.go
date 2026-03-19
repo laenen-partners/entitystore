@@ -29,6 +29,7 @@ JOIN entities e ON e.id = t.entity_id
 WHERE t.entity_type = $1 AND t.tokens && $2::text[]
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
   AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
+  AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])
 ORDER BY array_length(
     ARRAY(SELECT unnest(t.tokens) INTERSECT SELECT unnest($2::text[])),
     1
@@ -37,11 +38,13 @@ LIMIT $3
 `
 
 type FindByTokenOverlapParams struct {
-	EntityType string   `json:"entity_type"`
-	Column2    []string `json:"column_2"`
-	Limit      int32    `json:"limit"`
-	Tags       []string `json:"tags"`
-	AnyTags    []string `json:"any_tags"`
+	EntityType string      `json:"entity_type"`
+	Column2    []string    `json:"column_2"`
+	Limit      int32       `json:"limit"`
+	Tags       []string    `json:"tags"`
+	AnyTags    []string    `json:"any_tags"`
+	ExcludeTag interface{} `json:"exclude_tag"`
+	UnlessTags []string    `json:"unless_tags"`
 }
 
 type FindByTokenOverlapRow struct {
@@ -61,6 +64,8 @@ func (q *Queries) FindByTokenOverlap(ctx context.Context, arg FindByTokenOverlap
 		arg.Limit,
 		arg.Tags,
 		arg.AnyTags,
+		arg.ExcludeTag,
+		arg.UnlessTags,
 	)
 	if err != nil {
 		return nil, err

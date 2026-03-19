@@ -55,7 +55,8 @@ WHERE r.source_id = @entity_id
   AND e.entity_type = @entity_type
   AND (cardinality(@relation_types::text[]) = 0 OR r.relation_type = ANY(@relation_types::text[]))
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
-  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[]);
+  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
 
 -- name: FindConnectedByTypeInbound :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
@@ -65,7 +66,8 @@ WHERE r.target_id = @entity_id
   AND e.entity_type = @entity_type
   AND (cardinality(@relation_types::text[]) = 0 OR r.relation_type = ANY(@relation_types::text[]))
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
-  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[]);
+  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
 
 -- name: FindEntitiesByRelationSource :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
@@ -74,7 +76,8 @@ JOIN entities e ON e.id = r.source_id
 WHERE e.entity_type = @entity_type
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
-  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[]);
+  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
 
 -- name: FindEntitiesByRelationTarget :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
@@ -83,4 +86,5 @@ JOIN entities e ON e.id = r.target_id
 WHERE e.entity_type = @entity_type
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
-  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[]);
+  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);

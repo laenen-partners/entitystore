@@ -5,6 +5,7 @@ WHERE (cardinality(@entity_types::text[]) = 0 OR e.entity_type = ANY(@entity_typ
   AND e.embedding IS NOT NULL
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[])
 ORDER BY e.embedding <=> @embedding::vector
 LIMIT @top_k;
 

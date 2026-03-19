@@ -4,7 +4,8 @@ FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
-  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[]);
+  AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
+  AND (@exclude_tag = '' OR NOT (@exclude_tag = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
 
 -- name: UpsertAnchor :exec
 INSERT INTO entity_anchors (entity_id, entity_type, anchor_field, normalized_value)

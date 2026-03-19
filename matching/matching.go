@@ -39,6 +39,13 @@ type QueryFilter struct {
 	Tags []string `json:"tags,omitempty"`
 	// AnyTags requires the entity to have AT LEAST ONE of these tags (OR semantics).
 	AnyTags []string `json:"any_tags,omitempty"`
+	// ExcludeTag hides entities that have this tag, UNLESS the entity also has
+	// at least one of UnlessTags. Entities without ExcludeTag are unaffected.
+	// Empty string disables this filter.
+	ExcludeTag string `json:"exclude_tag,omitempty"`
+	// UnlessTags exempts entities from ExcludeTag exclusion if they have at
+	// least one of these tags.
+	UnlessTags []string `json:"unless_tags,omitempty"`
 	// EntityTypes restricts results to entities whose type is in this list.
 	// An empty slice means no restriction. Only honoured by FindByEmbedding.
 	EntityTypes []string `json:"entity_types,omitempty"`
