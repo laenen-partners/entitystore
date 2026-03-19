@@ -1,4 +1,4 @@
-package matching
+package extraction
 
 import (
 	"testing"
@@ -7,7 +7,6 @@ import (
 func TestExtractionSchemaRegistry(t *testing.T) {
 	r := NewExtractionSchemaRegistry()
 
-	// Empty registry.
 	_, ok := r.Get("nonexistent")
 	if ok {
 		t.Error("expected Get on empty registry to return false")
@@ -17,7 +16,6 @@ func TestExtractionSchemaRegistry(t *testing.T) {
 		t.Errorf("expected empty All(), got %d", len(all))
 	}
 
-	// Register and retrieve.
 	schema := ExtractionSchema{
 		EntityType:  "test.v1.Person",
 		DisplayName: "Person",
@@ -58,13 +56,11 @@ func TestExtractionSchemaRegistry(t *testing.T) {
 		t.Errorf("field[1].Type = %q", got.Fields[1].Type)
 	}
 
-	// All returns copy.
 	all = r.All()
 	if len(all) != 1 {
 		t.Errorf("expected 1 in All(), got %d", len(all))
 	}
 
-	// Replace registration.
 	schema2 := ExtractionSchema{
 		EntityType:  "test.v1.Person",
 		DisplayName: "Updated Person",
@@ -75,7 +71,6 @@ func TestExtractionSchemaRegistry(t *testing.T) {
 		t.Errorf("after replace: DisplayName = %q", got.DisplayName)
 	}
 
-	// Multiple registrations.
 	r.Register(ExtractionSchema{EntityType: "test.v1.Company"})
 	all = r.All()
 	if len(all) != 2 {

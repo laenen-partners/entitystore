@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/laenen-partners/entitystore/extraction"
 	"github.com/laenen-partners/entitystore/matching"
 )
 
@@ -131,8 +132,8 @@ func BuildAnchorsAndTokensExample() {
 
 // SetupExtractionSchemaRegistry shows how to register generated extraction
 // schemas for use with an LLM extraction framework (e.g., Genkit).
-func SetupExtractionSchemaRegistry() *matching.ExtractionSchemaRegistry {
-	esr := matching.NewExtractionSchemaRegistry()
+func SetupExtractionSchemaRegistry() *extraction.ExtractionSchemaRegistry {
+	esr := extraction.NewExtractionSchemaRegistry()
 
 	// In a real project, these come from generated code:
 	//   esr.Register(examplesv1.PersonExtractionSchema())
@@ -141,17 +142,17 @@ func SetupExtractionSchemaRegistry() *matching.ExtractionSchemaRegistry {
 
 	// For this example, we register a manually-constructed schema
 	// that mirrors what the generator produces.
-	esr.Register(matching.ExtractionSchema{
+	esr.Register(extraction.ExtractionSchema{
 		EntityType:   "examples.v1.Person",
 		DisplayName:  "Person",
 		Prompt:       "Extract person details from the provided text.",
 		Instructions: "If multiple people are mentioned, extract only the primary subject. Ignore quoted or referenced individuals.",
-		Fields: []matching.ExtractionField{
+		Fields: []extraction.ExtractionField{
 			{
 				Name:        "email",
 				Description: "Primary email address",
 				Hint:        "Extract the primary email, not CC or forwarded addresses",
-				Type:        matching.ExtractionFieldTypeString,
+				Type:        extraction.ExtractionFieldTypeString,
 				Required:    true, // anchor field
 				Examples:    []string{"john.doe@example.com", "jane@company.org"},
 			},
@@ -159,33 +160,33 @@ func SetupExtractionSchemaRegistry() *matching.ExtractionSchemaRegistry {
 				Name:        "full_name",
 				Description: "Full legal name of the person",
 				Hint:        "Use the full name as written, including middle names if present",
-				Type:        matching.ExtractionFieldTypeString,
+				Type:        extraction.ExtractionFieldTypeString,
 				Examples:    []string{"John Michael Doe", "Jane Smith-Williams"},
 			},
 			{
 				Name:        "phone",
 				Description: "Phone number in E.164 format",
 				Hint:        "Include country code if available, e.g. +1 for US numbers",
-				Type:        matching.ExtractionFieldTypeString,
+				Type:        extraction.ExtractionFieldTypeString,
 				Examples:    []string{"+1-555-867-5309", "+44 20 7946 0958"},
 			},
 			{
 				Name:        "date_of_birth",
 				Description: "Date of birth in ISO 8601 format (YYYY-MM-DD)",
 				Hint:        "Format as YYYY-MM-DD",
-				Type:        matching.ExtractionFieldTypeString,
+				Type:        extraction.ExtractionFieldTypeString,
 				Examples:    []string{"1990-05-15", "1985-12-01"},
 			},
 			{
 				Name:        "job_title",
 				Description: "Current job title or role",
-				Type:        matching.ExtractionFieldTypeString,
+				Type:        extraction.ExtractionFieldTypeString,
 			},
 			// Note: crm_id has extract: false, so it's excluded.
 			{
 				Name:        "notes",
 				Description: "notes", // humanized from field name (no comment, no annotation)
-				Type:        matching.ExtractionFieldTypeString,
+				Type:        extraction.ExtractionFieldTypeString,
 			},
 		},
 	})

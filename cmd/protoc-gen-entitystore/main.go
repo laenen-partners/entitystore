@@ -15,11 +15,19 @@ import (
 )
 
 const matchingPkg = "github.com/laenen-partners/entitystore/matching"
+const extractionPkg = "github.com/laenen-partners/entitystore/extraction"
 
 func ident(name string) protogen.GoIdent {
 	return protogen.GoIdent{
 		GoName:       name,
 		GoImportPath: protogen.GoImportPath(matchingPkg),
+	}
+}
+
+func extractionIdent(name string) protogen.GoIdent {
+	return protogen.GoIdent{
+		GoName:       name,
+		GoImportPath: protogen.GoImportPath(extractionPkg),
 	}
 }
 
@@ -363,8 +371,8 @@ func generateExtractionSchema(g *protogen.GeneratedFile, msg *protogen.Message) 
 
 	g.P("// ", msgName, "ExtractionSchema returns the proto-annotation-derived extraction")
 	g.P("// schema for ", entityType, ".")
-	g.P("func ", msgName, "ExtractionSchema() ", ident("ExtractionSchema"), " {")
-	g.P("return ", ident("ExtractionSchema"), "{")
+	g.P("func ", msgName, "ExtractionSchema() ", extractionIdent("ExtractionSchema"), " {")
+	g.P("return ", extractionIdent("ExtractionSchema"), "{")
 	g.P("EntityType: ", fmt.Sprintf("%q", entityType), ",")
 	g.P("DisplayName: ", fmt.Sprintf("%q", displayName), ",")
 
@@ -375,7 +383,7 @@ func generateExtractionSchema(g *protogen.GeneratedFile, msg *protogen.Message) 
 		g.P("Instructions: ", fmt.Sprintf("%q", msgOpts.ExtractionInstructions), ",")
 	}
 
-	g.P("Fields: []", ident("ExtractionField"), "{")
+	g.P("Fields: []", extractionIdent("ExtractionField"), "{")
 	for _, ef := range fields {
 		g.P("{")
 		g.P("Name: ", fmt.Sprintf("%q", ef.name), ",")
@@ -383,7 +391,7 @@ func generateExtractionSchema(g *protogen.GeneratedFile, msg *protogen.Message) 
 		if ef.hint != "" {
 			g.P("Hint: ", fmt.Sprintf("%q", ef.hint), ",")
 		}
-		g.P("Type: ", ident(ef.fieldType), ",")
+		g.P("Type: ", extractionIdent(ef.fieldType), ",")
 		if ef.required {
 			g.P("Required: true,")
 		}

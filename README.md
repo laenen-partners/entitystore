@@ -139,7 +139,7 @@ buf dep update && buf generate
 This generates two functions per annotated message:
 
 - `PersonMatchConfig()` → `matching.EntityMatchConfig` for dedup and matching
-- `PersonExtractionSchema()` → `matching.ExtractionSchema` for LLM extraction
+- `PersonExtractionSchema()` → `extraction.ExtractionSchema` for LLM extraction
 
 ```go
 // Register matching configs
@@ -147,7 +147,7 @@ configs := matching.NewMatchConfigRegistry()
 configs.Register(entitiesv1.PersonMatchConfig())
 
 // Register extraction schemas (for LLM entity extraction)
-schemas := matching.NewExtractionSchemaRegistry()
+schemas := extraction.NewExtractionSchemaRegistry()
 schemas.Register(entitiesv1.PersonExtractionSchema())
 
 // Create matcher for entity resolution
@@ -236,7 +236,8 @@ options.go                   Options: WithPgStore()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + extraction schemas
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 gen/                         Generated protobuf code (do not edit)
-matching/                    Domain logic: matcher, similarity, anchors, tokens, embeddings, extraction schemas
+matching/                    Domain logic: matcher, similarity, anchors, tokens, embeddings, normalizers
+extraction/                  LLM extraction schema types and registry
 store/                       PostgreSQL persistence layer (SQLC)
 store/db/migrations          SQL migrations (embedded at build time)
 store/db/queries             SQLC query definitions

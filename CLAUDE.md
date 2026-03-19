@@ -18,7 +18,8 @@ options.go                   Options: WithPgStore()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 gen/                         Generated protobuf code (do not edit)
-matching/                    Domain logic: anchors, tokens, embeddings, normalizers, extraction schemas
+matching/                    Domain logic: matcher, similarity, anchors, tokens, embeddings, normalizers
+extraction/                  LLM extraction schema types and registry
 store/                       PostgreSQL persistence layer (SQLC)
 store/db/migrations          SQL migrations (embedded at build time)
 store/db/queries             SQLC query definitions
@@ -76,7 +77,7 @@ task tidy             # go mod tidy
 
 Buf plugin that reads `(entitystore.v1.field)` and `(entitystore.v1.message)` proto annotations and generates two Go functions per annotated message:
 - `{Message}MatchConfig()` → `matching.EntityMatchConfig` for deduplication and matching
-- `{Message}ExtractionSchema()` → `matching.ExtractionSchema` for LLM-based entity extraction
+- `{Message}ExtractionSchema()` → `extraction.ExtractionSchema` for LLM-based entity extraction
 
 ### Using in a downstream project
 
@@ -170,7 +171,7 @@ mcr := matching.NewMatchConfigRegistry()
 mcr.Register(jobsv1.JobPostingMatchConfig())
 
 // Extraction schemas for LLM entity extraction.
-esr := matching.NewExtractionSchemaRegistry()
+esr := extraction.NewExtractionSchemaRegistry()
 esr.Register(jobsv1.JobPostingExtractionSchema())
 ```
 
