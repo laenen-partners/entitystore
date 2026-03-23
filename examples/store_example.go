@@ -639,3 +639,90 @@ func PreConditionStatusGuardExample(ctx context.Context, es *entitystore.EntityS
 	}
 	fmt.Println("Shipment created")
 }
+
+// ---------------------------------------------------------------------------
+// 12. Scoped stores — multi-tenant tag-based filtering
+// ---------------------------------------------------------------------------
+
+// ScopedStoreWorkspaceExample shows how to create a workspace-scoped store
+// that automatically filters reads and tags creates.
+func ScopedStoreWorkspaceExample(ctx context.Context, es *entitystore.EntityStore, workspaceID string) {
+	// Create a scoped store for a specific workspace.
+	scoped := es.Scoped(entitystore.ScopeConfig{
+		RequireTags: []string{"ws:" + workspaceID},
+		ExcludeTag:  "restricted",
+		UnlessTags:  []string{"admin"},
+		AutoTags:    []string{"ws:" + workspaceID},
+	})
+
+	// Creates are auto-tagged — the entity will have "ws:<workspaceID>" tag.
+	personData, _ := structpb.NewStruct(map[string]any{
+		"email": "alice@acme.com", "full_name": "Alice Johnson",
+	})
+	results, err := scoped.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			Data:       personData,
+			Confidence: 0.95,
+			Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "alice@acme.com"}},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Created entity %s (auto-tagged with ws:%s)\n", results[0].Entity.ID, workspaceID)
+
+	// Reads only return entities visible to this workspace.
+	entities, err := scoped.FindByAnchors(ctx, "google.protobuf.Struct",
+		[]entitystore.AnchorQuery{{Field: "email", Value: "alice@acme.com"}}, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d entities in workspace %s\n", len(entities), workspaceID)
+
+	// GetEntity returns ErrAccessDenied for out-of-scope entities.
+	_, err = scoped.GetEntity(ctx, "some-other-workspace-entity-id")
+	if errors.Is(err, entitystore.ErrAccessDenied) {
+		fmt.Println("Entity not visible in this scope")
+	}
+}
+
+// ScopedStoreTenantExample shows simple tenant-level isolation.
+func ScopedStoreTenantExample(ctx context.Context, es *entitystore.EntityStore, tenantID string) {
+	scoped := es.Scoped(entitystore.ScopeConfig{
+		RequireTags: []string{"tenant:" + tenantID},
+		AutoTags:    []string{"tenant:" + tenantID},
+	})
+
+	// All reads and creates are now scoped to this tenant.
+	invoiceData, _ := structpb.NewStruct(map[string]any{
+		"invoice_number": "INV-001",
+		"total_amount":   5000.00,
+	})
+	results, err := scoped.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			Data:       invoiceData,
+			Confidence: 0.9,
+			Anchors:    []entitystore.AnchorQuery{{Field: "invoice_number", Value: "inv-001"}},
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Created tenant-scoped invoice: %s\n", results[0].Entity.ID)
+}
+
+// ScopedStoreWithTxExample shows scoped stores working with transactions.
+func ScopedStoreWithTxExample(ctx context.Context, es *entitystore.EntityStore, pool interface{ Begin(ctx context.Context) (interface{ Rollback(ctx context.Context) error; Commit(ctx context.Context) error }, error) }) {
+	scoped := es.Scoped(entitystore.ScopeConfig{
+		RequireTags: []string{"ws:acme"},
+		AutoTags:    []string{"ws:acme"},
+	})
+
+	// Scope config is preserved across transactions.
+	_ = scoped // WithTx preserves the scope config:
+	// txScoped := scoped.WithTx(tx)
+	// txScoped.BatchWrite(ctx, ops...) // still auto-tags with ws:acme
+	fmt.Println("Scoped store with transaction support")
+}

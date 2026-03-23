@@ -13,6 +13,7 @@ Pure Go library for entity storage, deduplication, and relationship management w
 - **Relationships** — directed edges between entities with typed proto data, confidence, and evidence
 - **Tag filtering** — filter queries by arbitrary string tags
 - **Provenance tracking** — full audit trail of entity extraction origin
+- **Scoped stores** — tag-based multi-tenant filtering with auto-tagging on writes
 - **Preconditions** — transactionally safe existence, uniqueness, and tag guards on `BatchWrite`
 - **Transactions** — atomic multi-step operations via `TxStore` or shared `WithTx(pgx.Tx)`
 - **Embedder interface** — batch-native `Embedder` interface compatible with `laenen-partners/embedder`
@@ -207,6 +208,74 @@ Extracted Entity → Anchor Lookup → Fuzzy Candidates → Field Scoring → De
 - **Threshold decisions** — auto-match (≥ `auto_match`), review zone, or create new entity
 - **Merge plans** — per-field conflict resolution using configured strategies
 
+## Scoped stores
+
+`ScopedStore` wraps an `EntityStore` with tag-based read/write filtering for multi-tenant scoping. All reads are filtered, all creates are auto-tagged.
+
+```go
+scoped := es.Scoped(entitystore.ScopeConfig{
+    RequireTags: []string{"ws:acme"},          // reads: entity must have ALL these tags
+    ExcludeTag:  "restricted",                 // reads: hide entities with this tag
+    UnlessTags:  []string{"admin"},            // reads: exempt from ExcludeTag
+    AutoTags:    []string{"ws:acme"},          // writes: auto-added on create
+})
+
+// All reads are now scoped — only entities with "ws:acme" tag are visible.
+entities, _ := scoped.FindByAnchors(ctx, entityType, anchors, nil)
+
+// Creates are auto-tagged — no need to manually add workspace tags.
+scoped.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {WriteEntity: &entitystore.WriteEntityOp{
+        Action: entitystore.WriteActionCreate,
+        Data:   &personv1.Person{Email: "alice@acme.com"},
+        // Tags will include "ws:acme" automatically
+    }},
+})
+```
+
+### ScopeConfig options
+
+| Field | Type | Description |
+|---|---|---|
+| `RequireTags` | `[]string` | Reads: entity must have ALL of these tags (AND) |
+| `ExcludeTag` | `string` | Reads: hide entities with this tag |
+| `UnlessTags` | `[]string` | Reads: exempt from ExcludeTag if entity has any of these |
+| `AutoTags` | `[]string` | Writes: appended to Tags on `WriteActionCreate` only |
+
+### Common patterns
+
+**Workspace scoping** — isolate data per workspace:
+
+```go
+scoped := es.Scoped(entitystore.ScopeConfig{
+    RequireTags: []string{tags.Workspace(workspaceID)},
+    ExcludeTag:  tags.Restricted(),
+    UnlessTags:  userAccessGroupTags,
+    AutoTags:    []string{tags.Workspace(workspaceID)},
+})
+```
+
+**Tenant scoping** — simple tenant isolation:
+
+```go
+scoped := es.Scoped(entitystore.ScopeConfig{
+    RequireTags: []string{tags.Tenant(tenantID)},
+    AutoTags:    []string{tags.Tenant(tenantID)},
+})
+```
+
+**Read-only scope** — no auto-tagging, just filtering:
+
+```go
+scoped := es.Scoped(entitystore.ScopeConfig{
+    RequireTags: []string{tags.Workspace(workspaceID)},
+})
+```
+
+`GetEntity` returns `ErrAccessDenied` for entities outside the scope. Callers can choose to disguise this as "not found" or surface it directly.
+
+Scoped stores support `WithTx` — the scope config is preserved across transactions.
+
 ## Preconditions
 
 `BatchWrite` supports optional preconditions that are evaluated **inside** the transaction before each operation is applied. If any precondition fails, the entire batch is rolled back atomically.
@@ -387,6 +456,7 @@ Tests use [testcontainers](https://testcontainers.com) with `pgvector/pgvector:p
 - [ADR-001: LLM Extraction Schemas](docs/adr/001-llm-entity-extraction-schema-generation.md)
 - [ADR-002: Matching Engine](docs/adr/002-matching-engine.md)
 - [ADR-005: Preconditions](docs/adr/005_pre-conditions.md)
+- [ADR-006: Scoped Store](docs/adr/006_scoped-store.md)
 - [Example protos](examples/proto/) — fully annotated Person, Invoice, JobPosting
 - [Example Go code](examples/) — codegen, matching, and store usage patterns
 
