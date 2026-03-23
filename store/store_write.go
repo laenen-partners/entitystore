@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,10 +54,38 @@ type UpsertRelationOp struct {
 	Data         proto.Message // Optional: typed relation payload. DataType is derived automatically.
 }
 
+// PreCondition is a check evaluated inside the BatchWrite transaction before
+// applying the associated operation. If any precondition fails, the entire
+// batch is rolled back.
+type PreCondition struct {
+	// What to look up.
+	EntityType string
+	Anchors    []matching.AnchorQuery
+
+	// What to assert.
+	MustExist    bool   // true → fail if no entity matches
+	MustNotExist bool   // true → fail if any entity matches (uniqueness)
+	TagRequired  string // if set, matched entity must carry this tag
+	TagForbidden string // if set, matched entity must NOT carry this tag
+}
+
+// PreConditionError is returned when a precondition check fails during BatchWrite.
+type PreConditionError struct {
+	OpIndex   int          // which BatchWriteOp failed
+	Condition PreCondition // the failing precondition
+	Violation string       // "not_found", "already_exists", "tag_required", "tag_forbidden"
+}
+
+func (e *PreConditionError) Error() string {
+	return fmt.Sprintf("precondition failed on op %d: %s for %s",
+		e.OpIndex, e.Violation, e.Condition.EntityType)
+}
+
 // BatchWriteOp is a single operation in a batch — either an entity write or a relation upsert.
 type BatchWriteOp struct {
 	WriteEntity    *WriteEntityOp
 	UpsertRelation *UpsertRelationOp
+	PreConditions  []PreCondition // checked before applying this op
 }
 
 // BatchWriteResult is the result of a single operation in a batch.
@@ -96,6 +125,10 @@ func (s *Store) executeBatchOps(ctx context.Context, q *dbgen.Queries, ops []Bat
 	results := make([]BatchWriteResult, 0, len(ops))
 
 	for i, op := range ops {
+		if err := evaluatePreConditions(ctx, q, i, op.PreConditions); err != nil {
+			return nil, err
+		}
+
 		switch {
 		case op.WriteEntity != nil:
 			ent, err := applyEntityWrite(ctx, q, op.WriteEntity)
@@ -182,6 +215,76 @@ func (s *Store) UpdateRelationData(ctx context.Context, sourceID, targetID, rela
 		return matching.StoredRelation{}, fmt.Errorf("update relation data: %w", err)
 	}
 	return relationFromRow(row), nil
+}
+
+// ---------------------------------------------------------------------------
+// Precondition evaluation
+// ---------------------------------------------------------------------------
+
+func evaluatePreConditions(ctx context.Context, q *dbgen.Queries, opIndex int, pcs []PreCondition) error {
+	for _, pc := range pcs {
+		if pc.MustExist && pc.MustNotExist {
+			return fmt.Errorf("precondition on op %d: MustExist and MustNotExist are mutually exclusive", opIndex)
+		}
+
+		entities, err := findByAnchorsTx(ctx, q, pc.EntityType, pc.Anchors)
+		if err != nil {
+			return fmt.Errorf("precondition query op %d: %w", opIndex, err)
+		}
+
+		if pc.MustExist && len(entities) == 0 {
+			return &PreConditionError{OpIndex: opIndex, Condition: pc, Violation: "not_found"}
+		}
+		if pc.MustNotExist && len(entities) > 0 {
+			return &PreConditionError{OpIndex: opIndex, Condition: pc, Violation: "already_exists"}
+		}
+		if pc.TagRequired != "" && !entitiesHaveTag(entities, pc.TagRequired) {
+			return &PreConditionError{OpIndex: opIndex, Condition: pc, Violation: "tag_required"}
+		}
+		if pc.TagForbidden != "" && entitiesHaveTag(entities, pc.TagForbidden) {
+			return &PreConditionError{OpIndex: opIndex, Condition: pc, Violation: "tag_forbidden"}
+		}
+	}
+	return nil
+}
+
+// findByAnchorsTx performs an anchor lookup using the transaction-scoped queries.
+func findByAnchorsTx(ctx context.Context, q *dbgen.Queries, entityType string, anchors []matching.AnchorQuery) ([]matching.StoredEntity, error) {
+	seen := make(map[uuid.UUID]struct{})
+	var result []matching.StoredEntity
+
+	for _, aq := range anchors {
+		rows, err := q.FindByAnchors(ctx, dbgen.FindByAnchorsParams{
+			EntityType:      entityType,
+			AnchorField:     aq.Field,
+			NormalizedValue: aq.Value,
+			Tags:            []string{},
+			AnyTags:         []string{},
+			ExcludeTag:      "",
+			UnlessTags:      []string{},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("find by anchor %s=%s: %w", aq.Field, aq.Value, err)
+		}
+		for _, row := range rows {
+			if _, ok := seen[row.ID]; ok {
+				continue
+			}
+			seen[row.ID] = struct{}{}
+			result = append(result, entityFromRow(row))
+		}
+	}
+	return result, nil
+}
+
+// entitiesHaveTag returns true if any entity in the slice carries the given tag.
+func entitiesHaveTag(entities []matching.StoredEntity, tag string) bool {
+	for _, e := range entities {
+		if slices.Contains(e.Tags, tag) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------

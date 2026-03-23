@@ -8,6 +8,7 @@ package examples
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -507,4 +508,134 @@ func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
 	}
 
 	fmt.Printf("Created person %s, company %s, and works_at relation\n", personID, companyID)
+}
+
+// ---------------------------------------------------------------------------
+// 11. Preconditions — transactionally safe guards on BatchWrite
+// ---------------------------------------------------------------------------
+
+// PreConditionReferentialIntegrityExample shows how to ensure a referenced
+// entity exists before applying a write — checked atomically inside the
+// BatchWrite transaction with no TOCTOU gap.
+func PreConditionReferentialIntegrityExample(ctx context.Context, es *entitystore.EntityStore, productID, rulesetID string) {
+	updatedProduct, _ := structpb.NewStruct(map[string]any{
+		"name":       "Widget Pro",
+		"ruleset_id": rulesetID,
+	})
+
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{
+			WriteEntity: &entitystore.WriteEntityOp{
+				Action:          entitystore.WriteActionUpdate,
+				MatchedEntityID: productID,
+				Data:            updatedProduct,
+				Confidence:      0.95,
+			},
+			PreConditions: []entitystore.PreCondition{
+				{
+					EntityType:   "rulesets.v1.Ruleset",
+					Anchors:      []entitystore.AnchorQuery{{Field: "ruleset_id", Value: rulesetID}},
+					MustExist:    true,
+					TagForbidden: "disabled:true", // also reject disabled rulesets
+				},
+			},
+		},
+	})
+
+	var pcErr *entitystore.PreConditionError
+	if errors.As(err, &pcErr) {
+		fmt.Printf("Precondition failed: %s (op %d, entity type %s)\n",
+			pcErr.Violation, pcErr.OpIndex, pcErr.Condition.EntityType)
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Product updated with ruleset link")
+}
+
+// PreConditionUniquenessExample shows how to prevent duplicate entity creation
+// by asserting that no entity with the same anchor already exists.
+func PreConditionUniquenessExample(ctx context.Context, es *entitystore.EntityStore) {
+	invoiceData, _ := structpb.NewStruct(map[string]any{
+		"invoice_number": "INV-2024-042",
+		"issuer_name":    "Acme Corp",
+		"total_amount":   3500.00,
+	})
+
+	results, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{
+			WriteEntity: &entitystore.WriteEntityOp{
+				Action:     entitystore.WriteActionCreate,
+				Data:       invoiceData,
+				Confidence: 0.90,
+				Anchors:    []entitystore.AnchorQuery{{Field: "invoice_number", Value: "inv-2024-042"}},
+			},
+			PreConditions: []entitystore.PreCondition{
+				{
+					EntityType:   "google.protobuf.Struct",
+					Anchors:      []entitystore.AnchorQuery{{Field: "invoice_number", Value: "inv-2024-042"}},
+					MustNotExist: true,
+				},
+			},
+		},
+	})
+
+	var pcErr *entitystore.PreConditionError
+	if errors.As(err, &pcErr) {
+		fmt.Printf("Invoice already exists: %s\n", pcErr.Violation)
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Created invoice: %s\n", results[0].Entity.ID)
+}
+
+// PreConditionStatusGuardExample shows how to use tag-based preconditions
+// to enforce status checks — e.g., only allow writes when a related entity
+// carries (or does not carry) a specific tag.
+func PreConditionStatusGuardExample(ctx context.Context, es *entitystore.EntityStore, orderID, warehouseID string) {
+	shipmentData, _ := structpb.NewStruct(map[string]any{
+		"order_id":     orderID,
+		"warehouse_id": warehouseID,
+		"status":       "pending",
+	})
+
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{
+			WriteEntity: &entitystore.WriteEntityOp{
+				Action:     entitystore.WriteActionCreate,
+				Data:       shipmentData,
+				Confidence: 0.95,
+			},
+			PreConditions: []entitystore.PreCondition{
+				// Order must exist and be confirmed.
+				{
+					EntityType:  "orders.v1.Order",
+					Anchors:     []entitystore.AnchorQuery{{Field: "order_id", Value: orderID}},
+					MustExist:   true,
+					TagRequired: "confirmed",
+				},
+				// Warehouse must exist and not be suspended.
+				{
+					EntityType:   "warehouses.v1.Warehouse",
+					Anchors:      []entitystore.AnchorQuery{{Field: "warehouse_id", Value: warehouseID}},
+					MustExist:    true,
+					TagForbidden: "suspended",
+				},
+			},
+		},
+	})
+
+	var pcErr *entitystore.PreConditionError
+	if errors.As(err, &pcErr) {
+		fmt.Printf("Cannot create shipment: %s for %s\n",
+			pcErr.Violation, pcErr.Condition.EntityType)
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Shipment created")
 }
