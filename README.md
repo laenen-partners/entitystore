@@ -13,6 +13,7 @@ Pure Go library for entity storage, deduplication, and relationship management w
 - **Relationships** — directed edges between entities with typed proto data, confidence, and evidence
 - **Tag filtering** — filter queries by arbitrary string tags
 - **Provenance tracking** — full audit trail of entity extraction origin
+- **Preconditions** — transactionally safe existence, uniqueness, and tag guards on `BatchWrite`
 - **Transactions** — atomic multi-step operations via `TxStore` or shared `WithTx(pgx.Tx)`
 - **Embedder interface** — batch-native `Embedder` interface compatible with `laenen-partners/embedder`
 - **Code generation** — `protoc-gen-entitystore` buf plugin generates matching configs and extraction schemas from proto annotations
@@ -206,6 +207,85 @@ Extracted Entity → Anchor Lookup → Fuzzy Candidates → Field Scoring → De
 - **Threshold decisions** — auto-match (≥ `auto_match`), review zone, or create new entity
 - **Merge plans** — per-field conflict resolution using configured strategies
 
+## Preconditions
+
+`BatchWrite` supports optional preconditions that are evaluated **inside** the transaction before each operation is applied. If any precondition fails, the entire batch is rolled back atomically.
+
+This eliminates TOCTOU (time-of-check-time-of-use) gaps — no more "check entity exists, then write" with a race window in between.
+
+```go
+_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {
+        WriteEntity: &entitystore.WriteEntityOp{
+            Action:          entitystore.WriteActionUpdate,
+            MatchedEntityID: productID,
+            Data:            updatedProduct,
+            Confidence:      0.95,
+        },
+        // Ensure the referenced ruleset exists and is not disabled.
+        PreConditions: []entitystore.PreCondition{
+            {
+                EntityType:   "rulesets.v1.Ruleset",
+                Anchors:      []entitystore.AnchorQuery{{Field: "ruleset_id", Value: rulesetID}},
+                MustExist:    true,
+                TagForbidden: "disabled:true",
+            },
+        },
+    },
+})
+```
+
+### Precondition options
+
+| Field | Type | Description |
+|---|---|---|
+| `EntityType` | string | Entity type to look up |
+| `Anchors` | `[]AnchorQuery` | Anchor values to search for |
+| `MustExist` | bool | Fail if no entity matches |
+| `MustNotExist` | bool | Fail if any entity matches (uniqueness guard) |
+| `TagRequired` | string | Matched entity must carry this tag |
+| `TagForbidden` | string | Matched entity must NOT carry this tag |
+
+`MustExist` and `MustNotExist` are mutually exclusive.
+
+### Error handling
+
+Precondition failures return a `*PreConditionError` that can be inspected with `errors.As`:
+
+```go
+var pcErr *entitystore.PreConditionError
+if errors.As(err, &pcErr) {
+    fmt.Printf("op %d failed: %s for %s\n", pcErr.OpIndex, pcErr.Violation, pcErr.Condition.EntityType)
+    // pcErr.Violation is one of: "not_found", "already_exists", "tag_required", "tag_forbidden"
+}
+```
+
+### Common patterns
+
+**Referential integrity** — ensure a related entity exists before writing:
+
+```go
+PreConditions: []entitystore.PreCondition{
+    {EntityType: "companies.v1.Company", Anchors: companyAnchors, MustExist: true},
+}
+```
+
+**Uniqueness guard** — prevent duplicate creation:
+
+```go
+PreConditions: []entitystore.PreCondition{
+    {EntityType: "invoices.v1.Invoice", Anchors: invoiceAnchors, MustNotExist: true},
+}
+```
+
+**Status guard** — check entity state via tags:
+
+```go
+PreConditions: []entitystore.PreCondition{
+    {EntityType: "rulesets.v1.Ruleset", Anchors: rulesetAnchors, MustExist: true, TagForbidden: "disabled:true"},
+}
+```
+
 ## Shared transactions
 
 When multiple stores share the same PostgreSQL database, use `WithTx` for atomic cross-store operations:
@@ -306,6 +386,7 @@ Tests use [testcontainers](https://testcontainers.com) with `pgvector/pgvector:p
 - [Migration Guide v0.7→v0.8](docs/migration-v0.8.md) — proto-native write API migration
 - [ADR-001: LLM Extraction Schemas](docs/adr/001-llm-entity-extraction-schema-generation.md)
 - [ADR-002: Matching Engine](docs/adr/002-matching-engine.md)
+- [ADR-005: Preconditions](docs/adr/005_pre-conditions.md)
 - [Example protos](examples/proto/) — fully annotated Person, Invoice, JobPosting
 - [Example Go code](examples/) — codegen, matching, and store usage patterns
 

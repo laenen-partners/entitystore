@@ -221,6 +221,12 @@ type BatchWriteOp = store.BatchWriteOp
 // BatchWriteResult is the result of a single operation in a batch.
 type BatchWriteResult = store.BatchWriteResult
 
+// PreCondition is a check evaluated inside the BatchWrite transaction.
+type PreCondition = store.PreCondition
+
+// PreConditionError is returned when a precondition check fails.
+type PreConditionError = store.PreConditionError
+
 // StoredEntity is a persisted entity record.
 type StoredEntity = matching.StoredEntity
 
