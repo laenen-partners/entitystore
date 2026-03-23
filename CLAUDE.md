@@ -14,6 +14,7 @@ Pure Go library for entity storage, deduplication, and relationship management w
 
 ```
 entitystore.go               Library entry point: New(), EntityStore, re-exported types
+scoped.go                    ScopedStore: tag-based multi-tenant filtering wrapper
 options.go                   Options: WithPgStore()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
@@ -226,3 +227,4 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - The `extraction` package contains LLM extraction schema types — independent of matching.
 - `Embedder` interface in `matching` is compatible with `github.com/laenen-partners/embedder` — no adapter needed.
 - `WithTx(pgx.Tx)` on `EntityStore` enables shared transactions across stores sharing the same PostgreSQL pool.
+- `ScopedStore` wraps `EntityStore` with tag-based multi-tenant filtering. Created via `es.Scoped(ScopeConfig{...})`. Reads are filtered by `RequireTags`/`ExcludeTag`/`UnlessTags`; creates are auto-tagged with `AutoTags`. Scope config is preserved across `WithTx`.
