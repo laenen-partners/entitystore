@@ -59,6 +59,17 @@ results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
     }},
 })
 
+// Graph traversal — multi-hop exploration from an entity
+results, _ := es.Traverse(ctx, "entity-id", &entitystore.TraverseOpts{
+    MaxDepth:      3,
+    Direction:     entitystore.DirectionBoth,
+    RelationTypes: []string{"employed_by", "knows"},
+    MinConfidence: 0.5,
+})
+for _, r := range results {
+    fmt.Printf("depth %d: %s (%s)\n", r.Depth, r.Entity.ID, r.Entity.EntityType)
+}
+
 // Migrations
 entitystore.Migrate(ctx, pool)
 
@@ -228,3 +239,4 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - `Embedder` interface in `matching` is compatible with `github.com/laenen-partners/embedder` — no adapter needed.
 - `WithTx(pgx.Tx)` on `EntityStore` enables shared transactions across stores sharing the same PostgreSQL pool.
 - `ScopedStore` wraps `EntityStore` with tag-based multi-tenant filtering. Created via `es.Scoped(ScopeConfig{...})`. Reads are filtered by `RequireTags`/`ExcludeTag`/`UnlessTags`; creates are auto-tagged with `AutoTags`. Scope config is preserved across `WithTx`.
+- `Traverse(ctx, entityID, opts)` performs multi-hop graph traversal using a recursive CTE. Supports direction control, relation/entity type filtering, confidence thresholds, tag filtering, and depth/result caps. Raw SQL (not SQLC) due to recursive CTE complexity. See ADR-007.

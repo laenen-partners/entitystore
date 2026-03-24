@@ -112,6 +112,15 @@ func (es *EntityStore) ConnectedEntities(ctx context.Context, entityID string) (
 }
 
 // ---------------------------------------------------------------------------
+// Graph traversal
+// ---------------------------------------------------------------------------
+
+// Traverse performs a multi-hop graph traversal starting from the given entity.
+func (es *EntityStore) Traverse(ctx context.Context, entityID string, opts *store.TraverseOpts) ([]store.TraverseResult, error) {
+	return es.store.Traverse(ctx, entityID, opts)
+}
+
+// ---------------------------------------------------------------------------
 // Relation reads
 // ---------------------------------------------------------------------------
 
@@ -241,6 +250,25 @@ type AnchorQuery = matching.AnchorQuery
 
 // QueryFilter narrows entity searches by tags.
 type QueryFilter = matching.QueryFilter
+
+// Direction controls which edge directions the traversal follows.
+type Direction = store.Direction
+
+// Direction constants.
+const (
+	DirectionBoth     = store.DirectionBoth
+	DirectionOutbound = store.DirectionOutbound
+	DirectionInbound  = store.DirectionInbound
+)
+
+// TraverseOpts configures a graph traversal.
+type TraverseOpts = store.TraverseOpts
+
+// TraverseResult represents a single entity discovered during traversal.
+type TraverseResult = store.TraverseResult
+
+// TraverseEdge represents a single edge in a traversal path.
+type TraverseEdge = store.TraverseEdge
 
 // Migrate applies all pending database migrations using the given pool.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {

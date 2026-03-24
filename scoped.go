@@ -147,6 +147,16 @@ func (s *ScopedStore) FindEntitiesByRelation(ctx context.Context, entityType str
 	return s.inner.FindEntitiesByRelation(ctx, entityType, relationType, s.mergeFilter(filter))
 }
 
+// Traverse performs a multi-hop graph traversal with scope filters applied.
+func (s *ScopedStore) Traverse(ctx context.Context, entityID string, opts *store.TraverseOpts) ([]store.TraverseResult, error) {
+	o := store.TraverseOpts{}
+	if opts != nil {
+		o = *opts
+	}
+	o.Filter = s.mergeFilter(o.Filter)
+	return s.inner.Traverse(ctx, entityID, &o)
+}
+
 // ConnectedEntities returns all entities connected to the given entity,
 // filtered by the scope (post-fetch).
 func (s *ScopedStore) ConnectedEntities(ctx context.Context, entityID string) ([]matching.StoredEntity, error) {
