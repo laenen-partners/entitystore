@@ -16,6 +16,7 @@ import (
 
 const matchingPkg = "github.com/laenen-partners/entitystore/matching"
 const extractionPkg = "github.com/laenen-partners/entitystore/extraction"
+const storePkg = "github.com/laenen-partners/entitystore/store"
 
 func ident(name string) protogen.GoIdent {
 	return protogen.GoIdent{
@@ -28,6 +29,13 @@ func extractionIdent(name string) protogen.GoIdent {
 	return protogen.GoIdent{
 		GoName:       name,
 		GoImportPath: protogen.GoImportPath(extractionPkg),
+	}
+}
+
+func storeIdent(name string) protogen.GoIdent {
+	return protogen.GoIdent{
+		GoName:       name,
+		GoImportPath: protogen.GoImportPath(storePkg),
 	}
 }
 
@@ -68,6 +76,10 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) error {
 	for _, msg := range annotated {
 		generateMatchConfig(g, msg)
 		generateExtractionSchema(g, msg)
+		generateTokens(g, msg)
+		generateEmbedText(g, msg)
+		generateAnchors(g, msg)
+		generateWriteOp(g, msg)
 	}
 
 	return nil
@@ -112,6 +124,12 @@ func getFieldOptions(field *protogen.Field) *entitystorev1.FieldOptions {
 type fieldInfo struct {
 	name string
 	opts *entitystorev1.FieldOptions
+}
+
+// fieldInfoEx extends fieldInfo with the protogen field reference for getter generation.
+type fieldInfoEx struct {
+	fieldInfo
+	field *protogen.Field
 }
 
 func generateMatchConfig(g *protogen.GeneratedFile, msg *protogen.Message) {
@@ -451,4 +469,226 @@ func cleanComment(s string) string {
 // e.g., "full_name" → "full name", "date_of_birth" → "date of birth".
 func humanizeFieldName(name string) string {
 	return strings.ReplaceAll(name, "_", " ")
+}
+
+// ---------------------------------------------------------------------------
+// Token extraction generation
+// ---------------------------------------------------------------------------
+
+// annotatedFieldsEx collects all annotated fields with their protogen field references.
+func annotatedFieldsEx(msg *protogen.Message) []fieldInfoEx {
+	var fields []fieldInfoEx
+	for _, f := range msg.Fields {
+		fo := getFieldOptions(f)
+		if fo != nil {
+			fields = append(fields, fieldInfoEx{
+				fieldInfo: fieldInfo{name: string(f.Desc.Name()), opts: fo},
+				field:     f,
+			})
+		}
+	}
+	return fields
+}
+
+func generateTokens(g *protogen.GeneratedFile, msg *protogen.Message) {
+	fields := annotatedFieldsEx(msg)
+	var tokenFields []fieldInfoEx
+	for _, fi := range fields {
+		if fi.opts.TokenField {
+			tokenFields = append(tokenFields, fi)
+		}
+	}
+	if len(tokenFields) == 0 {
+		return
+	}
+
+	msgName := msg.GoIdent.GoName
+
+	g.P("// ", msgName, "Tokens extracts search tokens from the proto message.")
+	g.P("// Generated from fields annotated with token_field: true.")
+	g.P("func ", msgName, "Tokens(msg *", msg.GoIdent, ") map[string][]string {")
+	g.P("tokens := make(map[string][]string)")
+	for _, fi := range tokenFields {
+		getter := "Get" + fi.field.GoName
+		g.P("if v := msg.", getter, "(); v != \"\" {")
+		g.P("tokens[", fmt.Sprintf("%q", fi.name), "] = ", ident("Tokenize"), "(v)")
+		g.P("}")
+	}
+	g.P("return tokens")
+	g.P("}")
+	g.P()
+}
+
+// ---------------------------------------------------------------------------
+// Embed text generation
+// ---------------------------------------------------------------------------
+
+func generateEmbedText(g *protogen.GeneratedFile, msg *protogen.Message) {
+	fields := annotatedFieldsEx(msg)
+	var embedFields []fieldInfoEx
+	for _, fi := range fields {
+		if fi.opts.Embed {
+			embedFields = append(embedFields, fi)
+		}
+	}
+	if len(embedFields) == 0 {
+		return
+	}
+
+	msgName := msg.GoIdent.GoName
+	stringsJoin := protogen.GoIdent{GoName: "Join", GoImportPath: "strings"}
+
+	g.P("// ", msgName, "EmbedText returns the concatenated text from fields")
+	g.P("// annotated with embed: true, suitable for embedding model input.")
+	g.P("// Field ordering follows proto field numbers for deterministic output.")
+	g.P("func ", msgName, "EmbedText(msg *", msg.GoIdent, ") string {")
+	g.P("var parts []string")
+	for _, fi := range embedFields {
+		getter := "Get" + fi.field.GoName
+		g.P("if v := msg.", getter, "(); v != \"\" {")
+		g.P("parts = append(parts, v)")
+		g.P("}")
+	}
+	g.P("return ", stringsJoin, "(parts, \" \")")
+	g.P("}")
+	g.P()
+}
+
+// ---------------------------------------------------------------------------
+// Anchor extraction generation
+// ---------------------------------------------------------------------------
+
+func generateAnchors(g *protogen.GeneratedFile, msg *protogen.Message) {
+	fields := annotatedFieldsEx(msg)
+	msgOpts := getMessageOptions(msg)
+
+	var singleAnchors []fieldInfoEx
+	for _, fi := range fields {
+		if fi.opts.Anchor {
+			singleAnchors = append(singleAnchors, fi)
+		}
+	}
+
+	hasComposites := msgOpts != nil && len(msgOpts.CompositeAnchors) > 0
+	if len(singleAnchors) == 0 && !hasComposites {
+		return
+	}
+
+	msgName := msg.GoIdent.GoName
+	lowerName := strings.ToLower(msgName[:1]) + msgName[1:]
+
+	g.P("// ", lowerName, "Anchors extracts anchor queries from the proto message.")
+	g.P("// Generated from fields annotated with anchor: true and composite_anchors.")
+	g.P("func ", lowerName, "Anchors(msg *", msg.GoIdent, ") []", ident("AnchorQuery"), " {")
+	g.P("var anchors []", ident("AnchorQuery"))
+
+	// Single anchors.
+	for _, fi := range singleAnchors {
+		getter := "Get" + fi.field.GoName
+		g.P("if v := msg.", getter, "(); v != \"\" {")
+		if fi.opts.Normalizer != entitystorev1.Normalizer_NORMALIZER_UNSPECIFIED {
+			g.P("v = ", normalizerIdent(fi.opts.Normalizer), "(v)")
+		}
+		g.P("anchors = append(anchors, ", ident("AnchorQuery"), "{Field: ", fmt.Sprintf("%q", fi.name), ", Value: v})")
+		g.P("}")
+	}
+
+	// Composite anchors.
+	if hasComposites {
+		// Build a lookup of field name → fieldInfoEx for getter access.
+		fieldMap := make(map[string]fieldInfoEx)
+		for _, fi := range fields {
+			fieldMap[fi.name] = fi
+		}
+
+		for _, ca := range msgOpts.CompositeAnchors {
+			// Generate: if all fields are non-empty, build composite.
+			var conditions []string
+			for _, fn := range ca.Fields {
+				if fi, ok := fieldMap[fn]; ok {
+					conditions = append(conditions, fmt.Sprintf("msg.Get%s() != \"\"", fi.field.GoName))
+				}
+			}
+			if len(conditions) > 0 {
+				g.P("if ", strings.Join(conditions, " && "), " {")
+				g.P("var compositeVal string")
+				for i, fn := range ca.Fields {
+					if fi, ok := fieldMap[fn]; ok {
+						getter := "Get" + fi.field.GoName
+						if i == 0 {
+							if fi.opts.Normalizer != entitystorev1.Normalizer_NORMALIZER_UNSPECIFIED {
+								g.P("compositeVal = ", normalizerIdent(fi.opts.Normalizer), "(msg.", getter, "())")
+							} else {
+								g.P("compositeVal = msg.", getter, "()")
+							}
+						} else {
+							if fi.opts.Normalizer != entitystorev1.Normalizer_NORMALIZER_UNSPECIFIED {
+								g.P("compositeVal += \"|\" + ", normalizerIdent(fi.opts.Normalizer), "(msg.", getter, "())")
+							} else {
+								g.P("compositeVal += \"|\" + msg.", getter, "()")
+							}
+						}
+					}
+				}
+				compositeField := strings.Join(ca.Fields, "+")
+				g.P("anchors = append(anchors, ", ident("AnchorQuery"), "{Field: ", fmt.Sprintf("%q", compositeField), ", Value: compositeVal})")
+				g.P("}")
+			}
+		}
+	}
+
+	g.P("return anchors")
+	g.P("}")
+	g.P()
+}
+
+// ---------------------------------------------------------------------------
+// WriteOp generation
+// ---------------------------------------------------------------------------
+
+func generateWriteOp(g *protogen.GeneratedFile, msg *protogen.Message) {
+	fields := annotatedFieldsEx(msg)
+	msgOpts := getMessageOptions(msg)
+
+	// Only generate WriteOp if there's at least one anchor or token field.
+	hasAnchors := false
+	hasTokens := false
+	for _, fi := range fields {
+		if fi.opts.Anchor {
+			hasAnchors = true
+		}
+		if fi.opts.TokenField {
+			hasTokens = true
+		}
+	}
+	hasComposites := msgOpts != nil && len(msgOpts.CompositeAnchors) > 0
+	if !hasAnchors && !hasTokens && !hasComposites {
+		return
+	}
+
+	msgName := msg.GoIdent.GoName
+	lowerName := strings.ToLower(msgName[:1]) + msgName[1:]
+
+	g.P("// ", msgName, "WriteOp builds a WriteEntityOp with all proto annotations applied.")
+	g.P("// Anchors, tokens, and data are wired automatically from the message.")
+	g.P("func ", msgName, "WriteOp(msg *", msg.GoIdent, ", action ", storeIdent("WriteAction"), ", opts ...", storeIdent("WriteOpOption"), ") *", storeIdent("WriteEntityOp"), " {")
+	g.P("op := &", storeIdent("WriteEntityOp"), "{")
+	g.P("Action: action,")
+	g.P("Data: msg,")
+	g.P("Confidence: 1.0,")
+
+	if hasAnchors || hasComposites {
+		g.P("Anchors: ", lowerName, "Anchors(msg),")
+	}
+	if hasTokens {
+		g.P("Tokens: ", msgName, "Tokens(msg),")
+	}
+
+	g.P("}")
+	g.P("for _, o := range opts {")
+	g.P("o(op)")
+	g.P("}")
+	g.P("return op")
+	g.P("}")
+	g.P()
 }

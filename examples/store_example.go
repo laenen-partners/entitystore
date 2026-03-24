@@ -723,6 +723,150 @@ func ScopedStoreWithTxExample(ctx context.Context, es *entitystore.EntityStore, 
 	// Scope config is preserved across transactions.
 	_ = scoped // WithTx preserves the scope config:
 	// txScoped := scoped.WithTx(tx)
-	// txScoped.BatchWrite(ctx, ops...) // still auto-tags with ws:acme
+	// txScoped.BatchWrite(ctx, ops) // still auto-tags with ws:acme
 	fmt.Println("Scoped store with transaction support")
+}
+
+// ---------------------------------------------------------------------------
+// 13. Graph traversal — multi-hop entity exploration
+// ---------------------------------------------------------------------------
+
+// TraverseBasicExample shows how to explore entities within N hops of a
+// starting entity. This is the simplest traversal — follow all edges in
+// both directions up to the default depth (2).
+func TraverseBasicExample(ctx context.Context, es *entitystore.EntityStore, startEntityID string) {
+	results, err := es.Traverse(ctx, startEntityID, nil) // nil opts = defaults
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, r := range results {
+		fmt.Printf("depth %d: %s (%s)\n", r.Depth, r.Entity.ID, r.Entity.EntityType)
+	}
+}
+
+// TraverseWithDirectionExample shows directional traversal — only follow
+// outbound (source→target) or inbound (target→source) edges.
+func TraverseWithDirectionExample(ctx context.Context, es *entitystore.EntityStore, personID string) {
+	// Outbound only: find entities this person points to (e.g., companies they work at).
+	outbound, err := es.Traverse(ctx, personID, &entitystore.TraverseOpts{
+		Direction: entitystore.DirectionOutbound,
+		MaxDepth:  2,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Outbound from %s: %d entities\n", personID, len(outbound))
+
+	// Inbound only: find entities that point to this person (e.g., documents mentioning them).
+	inbound, err := es.Traverse(ctx, personID, &entitystore.TraverseOpts{
+		Direction: entitystore.DirectionInbound,
+		MaxDepth:  2,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Inbound to %s: %d entities\n", personID, len(inbound))
+}
+
+// TraverseWithFiltersExample shows how to narrow traversal by relation type,
+// entity type, and minimum edge confidence.
+func TraverseWithFiltersExample(ctx context.Context, es *entitystore.EntityStore, companyID string) {
+	// Find all people connected to a company through "works_at" or "founded"
+	// relations, skipping low-confidence edges.
+	results, err := es.Traverse(ctx, companyID, &entitystore.TraverseOpts{
+		MaxDepth:      2,
+		RelationTypes: []string{"works_at", "founded"},      // only follow these edge types
+		EntityType:    "entities.v1.Person",                  // only return Person entities
+		MinConfidence: 0.7,                                   // skip edges below 70% confidence
+		MaxResults:    50,                                    // safety cap
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, r := range results {
+		fmt.Printf("  %s at depth %d\n", r.Entity.ID, r.Depth)
+		// Each result includes the full path of edges from the start entity.
+		for _, edge := range r.Path {
+			fmt.Printf("    %s -[%s]-> %s (confidence: %.2f)\n",
+				edge.FromID, edge.RelationType, edge.ToID, edge.Confidence)
+		}
+	}
+}
+
+// TraverseWithTagFilterExample shows how to combine traversal with
+// tag-based filtering. Filtered-out entities block the path — the
+// traversal does not pass through them to reach entities beyond.
+func TraverseWithTagFilterExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
+	results, err := es.Traverse(ctx, entityID, &entitystore.TraverseOpts{
+		MaxDepth: 3,
+		Filter: &entitystore.QueryFilter{
+			Tags:       []string{"ws:acme"},            // entity must have this tag
+			ExcludeTag: "archived",                     // skip archived entities
+			UnlessTags: []string{"pinned"},             // unless they're pinned
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Found %d entities within 3 hops (scoped to ws:acme)\n", len(results))
+}
+
+// TraverseRAGContextExample shows how to use traversal for RAG context
+// enrichment — gather related entities around a matched entity to provide
+// richer context to an LLM.
+func TraverseRAGContextExample(ctx context.Context, es *entitystore.EntityStore, matchedEntityID string) {
+	// Retrieve the matched entity and its neighborhood for LLM context.
+	entity, err := es.GetEntity(ctx, matchedEntityID)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Traverse 2 hops in all directions to gather context.
+	neighbors, err := es.Traverse(ctx, matchedEntityID, &entitystore.TraverseOpts{
+		MaxDepth:   2,
+		MaxResults: 20,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Build context for LLM.
+	fmt.Printf("Primary entity: %s (%s)\n", entity.ID, entity.EntityType)
+	fmt.Printf("Context entities: %d\n", len(neighbors))
+	for _, r := range neighbors {
+		fmt.Printf("  [depth %d] %s (%s) via:", r.Depth, r.Entity.ID, r.Entity.EntityType)
+		for i, edge := range r.Path {
+			if i > 0 {
+				fmt.Print(" →")
+			}
+			fmt.Printf(" %s", edge.RelationType)
+		}
+		fmt.Println()
+	}
+}
+
+// TraverseScopedExample shows traversal through a ScopedStore — the scope
+// filters are applied at the SQL level, so traversal stops at scope
+// boundaries. Entities outside the scope are never visited, and paths
+// through them are blocked.
+func TraverseScopedExample(ctx context.Context, es *entitystore.EntityStore, workspaceID string, startID string) {
+	scoped := es.Scoped(entitystore.ScopeConfig{
+		RequireTags: []string{"ws:" + workspaceID},
+		ExcludeTag:  "deleted",
+		UnlessTags:  []string{"pinned"},
+	})
+
+	// Traversal respects the scope — entities without the workspace tag are
+	// invisible and block further traversal through them.
+	results, err := scoped.Traverse(ctx, startID, &entitystore.TraverseOpts{
+		MaxDepth: 3,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Found %d entities within workspace %s (3 hops)\n", len(results), workspaceID)
 }

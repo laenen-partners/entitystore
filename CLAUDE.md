@@ -115,9 +115,13 @@ task tidy             # go mod tidy
 
 ## protoc-gen-entitystore
 
-Buf plugin that reads `(entitystore.v1.field)` and `(entitystore.v1.message)` proto annotations and generates two Go functions per annotated message:
+Buf plugin that reads `(entitystore.v1.field)` and `(entitystore.v1.message)` proto annotations and generates up to six functions per annotated message:
 - `{Message}MatchConfig()` → `matching.EntityMatchConfig` for deduplication and matching
 - `{Message}ExtractionSchema()` → `extraction.ExtractionSchema` for LLM-based entity extraction
+- `{Message}Tokens(msg)` → `map[string][]string` — statically-typed token extraction (no reflection)
+- `{Message}EmbedText(msg)` → `string` — concatenated embed fields for embedding input
+- `{message}Anchors(msg)` → `[]matching.AnchorQuery` — anchor extraction with normalizers applied (unexported)
+- `{Message}WriteOp(msg, action, opts...)` → `*store.WriteEntityOp` — complete write op with anchors, tokens, and data wired automatically
 
 ### Using in a downstream project
 
@@ -196,21 +200,33 @@ With `go install github.com/laenen-partners/entitystore/cmd/protoc-gen-entitysto
 buf generate
 ```
 
-This produces `job_posting_entitystore.go` with `JobPostingMatchConfig()` and `JobPostingExtractionSchema()` functions.
+This produces `job_posting_entitystore.go` with all generated functions.
 
-**5. Register in Go code:**
+**5. Use in Go code:**
 
 ```go
 import (
-    "github.com/laenen-partners/entitystore/matching"
+    "github.com/laenen-partners/entitystore/store"
     jobsv1 "example.com/jobs/gen/jobs/v1"
 )
 
-// Match configs for deduplication.
+// Create entity — anchors, tokens wired automatically from proto annotations.
+posting := &jobsv1.JobPosting{Reference: "JOB-001", Title: "Senior Engineer"}
+op := jobsv1.JobPostingWriteOp(posting, store.WriteActionCreate,
+    store.WithTags("ws:acme", "status:active"),
+    store.WithProvenance(matching.ProvenanceEntry{SourceURN: "crm:job/1", ModelID: "gpt-4o"}),
+)
+results, _ := es.BatchWrite(ctx, []store.BatchWriteOp{{WriteEntity: op}})
+
+// Token extraction (no reflection).
+tokens := jobsv1.JobPostingTokens(posting)  // map[string][]string
+
+// Embed text for embedding models.
+text := jobsv1.JobPostingEmbedText(posting)  // "Senior Engineer"
+
+// Match configs and extraction schemas for registries.
 mcr := matching.NewMatchConfigRegistry()
 mcr.Register(jobsv1.JobPostingMatchConfig())
-
-// Extraction schemas for LLM entity extraction.
 esr := extraction.NewExtractionSchemaRegistry()
 esr.Register(jobsv1.JobPostingExtractionSchema())
 ```
@@ -262,3 +278,5 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - `WithTx(pgx.Tx)` on `EntityStore` enables shared transactions across stores sharing the same PostgreSQL pool.
 - `ScopedStore` wraps `EntityStore` with tag-based multi-tenant filtering. Created via `es.Scoped(ScopeConfig{...})`. Reads are filtered by `RequireTags`/`ExcludeTag`/`UnlessTags`; creates are auto-tagged with `AutoTags`. Scope config is preserved across `WithTx`.
 - `Traverse(ctx, entityID, opts)` performs multi-hop graph traversal using a recursive CTE. Supports direction control, relation/entity type filtering, confidence thresholds, tag filtering, and depth/result caps. Raw SQL (not SQLC) due to recursive CTE complexity. See ADR-007.
+- `WriteOpOption` type and option functions (`WithTags`, `WithConfidence`, `WithMatchedEntityID`, `WithEmbedding`, `WithID`, `WithProvenance`) live in `store/write_options.go` and are re-exported from the root package. Used by generated `WriteOp` functions.
+- Generated `{Entity}WriteOp` returns `*store.WriteEntityOp` so callers can write `{WriteEntity: jobsv1.JobPostingWriteOp(msg, action, opts...)}` directly.

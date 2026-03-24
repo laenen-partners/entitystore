@@ -270,6 +270,22 @@ type TraverseResult = store.TraverseResult
 // TraverseEdge represents a single edge in a traversal path.
 type TraverseEdge = store.TraverseEdge
 
+// WriteOpOption configures a WriteEntityOp built by generated code.
+type WriteOpOption = store.WriteOpOption
+
+// Write option functions for use with generated WriteOp functions.
+var (
+	WithMatchedEntityID = store.WithMatchedEntityID
+	WithConfidence      = store.WithConfidence
+	WithTags            = store.WithTags
+	WithEmbedding       = store.WithEmbedding
+	WithID              = store.WithID
+	WithProvenance      = store.WithProvenance
+)
+
+// Provenance builds a ProvenanceEntry with sensible defaults.
+var Provenance = store.Provenance
+
 // Migrate applies all pending database migrations using the given pool.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return store.Migrate(ctx, pool)

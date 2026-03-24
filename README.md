@@ -519,6 +519,7 @@ Tests use [testcontainers](https://testcontainers.com) with `pgvector/pgvector:p
 ## Documentation
 
 - [Entity Extraction Tutorial](docs/tutorial-entity-extraction.md) — full pipeline with Genkit
+- [Migration Guide v0.17→v0.18](docs/migration-v0.18.md) — generated Tokens, Anchors, WriteOp, option helpers
 - [Migration Guide v0.7→v0.8](docs/migration-v0.8.md) — proto-native write API migration
 - [ADR-001: LLM Extraction Schemas](docs/adr/001-llm-entity-extraction-schema-generation.md)
 - [ADR-002: Matching Engine](docs/adr/002-matching-engine.md)
