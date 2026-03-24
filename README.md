@@ -396,26 +396,93 @@ op.Embedding = vecs[0]
 
 ## Relationships
 
-Relations are directed edges between entities with optional typed proto data:
+Relations are directed edges between entities with optional typed proto data.
+
+### Writing relations
 
 ```go
-// Write — Data accepts proto.Message, DataType derived automatically
+// Upsert — Data accepts proto.Message, DataType derived automatically
 es.BatchWrite(ctx, []entitystore.BatchWriteOp{
     {UpsertRelation: &entitystore.UpsertRelationOp{
         SourceID:     personID,
         TargetID:     companyID,
         RelationType: "works_at",
         Confidence:   0.95,
+        Evidence:     "Mentioned in invoice header",
         Data:         &employmentv1.Employment{Role: "VP of Product"},
     }},
 })
 
-// Read — unmarshal typed relation data
+// Update typed data on an existing relation
+es.UpdateRelationData(ctx, personID, companyID, "works_at",
+    &employmentv1.Employment{Role: "CTO"})
+
+// Delete a specific relation
+es.DeleteRelationByKey(ctx, personID, companyID, "works_at")
+```
+
+### Querying relations
+
+```go
+// Outbound relations from an entity (source → target)
 rels, _ := es.GetRelationsFromEntity(ctx, personID)
 fmt.Println(rels[0].DataType) // "employment.v1.Employment"
 var emp employmentv1.Employment
 rels[0].GetData(&emp)
+
+// Inbound relations to an entity (source → target)
+rels, _ = es.GetRelationsToEntity(ctx, companyID)
+
+// All connected entities (both directions, deduplicated)
+connected, _ := es.ConnectedEntities(ctx, personID)
+
+// Connected entities filtered by entity type and relation type
+companies, _ := es.FindConnectedByType(ctx, personID,
+    "companies.v1.Company",        // target entity type
+    []string{"works_at"},          // relation types (empty = all)
+    nil,                           // optional QueryFilter for tag filtering
+    100,                           // page size
+    nil,                           // cursor (nil = first page)
+)
+
+// All entities participating in a relation type
+employees, _ := es.FindEntitiesByRelation(ctx,
+    "persons.v1.Person",           // entity type
+    "works_at",                    // relation type
+    nil,                           // optional QueryFilter
+)
 ```
+
+### Graph traversal
+
+`Traverse` performs multi-hop exploration from a starting entity using a single PostgreSQL recursive CTE:
+
+```go
+results, _ := es.Traverse(ctx, personID, &entitystore.TraverseOpts{
+    MaxDepth:      3,                              // hops (default 2, max 10)
+    Direction:     entitystore.DirectionBoth,       // or DirectionOutbound / DirectionInbound
+    RelationTypes: []string{"works_at", "knows"},  // filter edges (empty = all)
+    EntityType:    "persons.v1.Person",            // filter discovered entities (empty = all)
+    MinConfidence: 0.5,                            // skip low-confidence edges
+    Filter:        &entitystore.QueryFilter{        // tag filtering on discovered entities
+        Tags: []string{"ws:acme"},
+    },
+})
+
+for _, r := range results {
+    fmt.Printf("depth %d: %s (%s)\n", r.Depth, r.Entity.ID, r.Entity.EntityType)
+    for _, edge := range r.Path {
+        fmt.Printf("  via %s: %s → %s (%.2f)\n",
+            edge.RelationType, edge.FromID, edge.ToID, edge.Confidence)
+    }
+}
+```
+
+Key properties:
+- **Single round-trip** — recursive CTE handles all hops server-side
+- **Cycle-safe** — visited array prevents infinite loops
+- **Scope-aware** — `ScopedStore.Traverse` stops traversal at scope boundaries
+- **Transitive filtering** — filtered-out entities block the path to entities beyond them
 
 ## Project structure
 
@@ -457,6 +524,7 @@ Tests use [testcontainers](https://testcontainers.com) with `pgvector/pgvector:p
 - [ADR-002: Matching Engine](docs/adr/002-matching-engine.md)
 - [ADR-005: Preconditions](docs/adr/005_pre-conditions.md)
 - [ADR-006: Scoped Store](docs/adr/006_scoped-store.md)
+- [ADR-007: Graph Traversal](docs/adr/007_traverse.md)
 - [Example protos](examples/proto/) — fully annotated Person, Invoice, JobPosting
 - [Example Go code](examples/) — codegen, matching, and store usage patterns
 

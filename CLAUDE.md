@@ -59,6 +59,28 @@ results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
     }},
 })
 
+// Write relations — Data accepts proto.Message, DataType derived automatically
+es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {UpsertRelation: &entitystore.UpsertRelationOp{
+        SourceID: personID, TargetID: companyID,
+        RelationType: "works_at", Confidence: 0.95,
+        Data: &employmentv1.Employment{Role: "CTO"},
+    }},
+})
+
+// Query relations
+outbound, _ := es.GetRelationsFromEntity(ctx, personID)       // source → target
+inbound, _ := es.GetRelationsToEntity(ctx, companyID)         // source → target (where target = companyID)
+connected, _ := es.ConnectedEntities(ctx, personID)           // all connected entities (both directions)
+companies, _ := es.FindConnectedByType(ctx, personID,         // filtered by entity type + relation type
+    "companies.v1.Company", []string{"works_at"}, nil, 100, nil)
+employees, _ := es.FindEntitiesByRelation(ctx,                // all entities in a relation type
+    "persons.v1.Person", "works_at", nil)
+
+// Update / delete relations
+es.UpdateRelationData(ctx, personID, companyID, "works_at", updatedData)
+es.DeleteRelationByKey(ctx, personID, companyID, "works_at")
+
 // Graph traversal — multi-hop exploration from an entity
 results, _ := es.Traverse(ctx, "entity-id", &entitystore.TraverseOpts{
     MaxDepth:      3,
