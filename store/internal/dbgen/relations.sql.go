@@ -14,14 +14,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const connectedEntitiesInbound = `-- name: ConnectedEntitiesInbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
-FROM entity_relations r
-JOIN entities e ON e.id = r.source_id
-WHERE r.target_id = $1
+const connectedEntities = `-- name: ConnectedEntities :many
+SELECT DISTINCT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+FROM (
+    SELECT r.target_id AS connected_id FROM entity_relations r WHERE r.source_id = $1
+    UNION
+    SELECT r.source_id AS connected_id FROM entity_relations r WHERE r.target_id = $1
+) AS conns
+JOIN entities e ON e.id = conns.connected_id
+LIMIT $2
 `
 
-type ConnectedEntitiesInboundRow struct {
+type ConnectedEntitiesParams struct {
+	EntityID uuid.UUID `json:"entity_id"`
+	PageSize int32     `json:"page_size"`
+}
+
+type ConnectedEntitiesRow struct {
 	ID         uuid.UUID       `json:"id"`
 	EntityType string          `json:"entity_type"`
 	Data       json.RawMessage `json:"data"`
@@ -31,60 +40,15 @@ type ConnectedEntitiesInboundRow struct {
 	UpdatedAt  time.Time       `json:"updated_at"`
 }
 
-func (q *Queries) ConnectedEntitiesInbound(ctx context.Context, targetID uuid.UUID) ([]ConnectedEntitiesInboundRow, error) {
-	rows, err := q.db.Query(ctx, connectedEntitiesInbound, targetID)
+func (q *Queries) ConnectedEntities(ctx context.Context, arg ConnectedEntitiesParams) ([]ConnectedEntitiesRow, error) {
+	rows, err := q.db.Query(ctx, connectedEntities, arg.EntityID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ConnectedEntitiesInboundRow
+	var items []ConnectedEntitiesRow
 	for rows.Next() {
-		var i ConnectedEntitiesInboundRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.EntityType,
-			&i.Data,
-			&i.Confidence,
-			&i.Tags,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const connectedEntitiesOutbound = `-- name: ConnectedEntitiesOutbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
-FROM entity_relations r
-JOIN entities e ON e.id = r.target_id
-WHERE r.source_id = $1
-`
-
-type ConnectedEntitiesOutboundRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
-}
-
-func (q *Queries) ConnectedEntitiesOutbound(ctx context.Context, sourceID uuid.UUID) ([]ConnectedEntitiesOutboundRow, error) {
-	rows, err := q.db.Query(ctx, connectedEntitiesOutbound, sourceID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ConnectedEntitiesOutboundRow
-	for rows.Next() {
-		var i ConnectedEntitiesOutboundRow
+		var i ConnectedEntitiesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EntityType,
@@ -530,8 +494,16 @@ const getRelationsFromEntity = `-- name: GetRelationsFromEntity :many
 SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
 WHERE source_id = $1
+  AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
 ORDER BY created_at DESC
+LIMIT $3
 `
+
+type GetRelationsFromEntityParams struct {
+	SourceID uuid.UUID          `json:"source_id"`
+	Cursor   pgtype.Timestamptz `json:"cursor"`
+	PageSize int32              `json:"page_size"`
+}
 
 type GetRelationsFromEntityRow struct {
 	ID           uuid.UUID       `json:"id"`
@@ -547,8 +519,8 @@ type GetRelationsFromEntityRow struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
-func (q *Queries) GetRelationsFromEntity(ctx context.Context, sourceID uuid.UUID) ([]GetRelationsFromEntityRow, error) {
-	rows, err := q.db.Query(ctx, getRelationsFromEntity, sourceID)
+func (q *Queries) GetRelationsFromEntity(ctx context.Context, arg GetRelationsFromEntityParams) ([]GetRelationsFromEntityRow, error) {
+	rows, err := q.db.Query(ctx, getRelationsFromEntity, arg.SourceID, arg.Cursor, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -583,8 +555,16 @@ const getRelationsToEntity = `-- name: GetRelationsToEntity :many
 SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
 WHERE target_id = $1
+  AND ($2::timestamptz IS NULL OR created_at < $2::timestamptz)
 ORDER BY created_at DESC
+LIMIT $3
 `
+
+type GetRelationsToEntityParams struct {
+	TargetID uuid.UUID          `json:"target_id"`
+	Cursor   pgtype.Timestamptz `json:"cursor"`
+	PageSize int32              `json:"page_size"`
+}
 
 type GetRelationsToEntityRow struct {
 	ID           uuid.UUID       `json:"id"`
@@ -600,8 +580,8 @@ type GetRelationsToEntityRow struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
-func (q *Queries) GetRelationsToEntity(ctx context.Context, targetID uuid.UUID) ([]GetRelationsToEntityRow, error) {
-	rows, err := q.db.Query(ctx, getRelationsToEntity, targetID)
+func (q *Queries) GetRelationsToEntity(ctx context.Context, arg GetRelationsToEntityParams) ([]GetRelationsToEntityRow, error) {
+	rows, err := q.db.Query(ctx, getRelationsToEntity, arg.TargetID, arg.Cursor, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}

@@ -8,14 +8,18 @@ RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied
 -- name: GetRelationsFromEntity :many
 SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
-WHERE source_id = $1
-ORDER BY created_at DESC;
+WHERE source_id = @source_id
+  AND (sqlc.narg('cursor')::timestamptz IS NULL OR created_at < sqlc.narg('cursor')::timestamptz)
+ORDER BY created_at DESC
+LIMIT @page_size;
 
 -- name: GetRelationsToEntity :many
 SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
 FROM entity_relations
-WHERE target_id = $1
-ORDER BY created_at DESC;
+WHERE target_id = @target_id
+  AND (sqlc.narg('cursor')::timestamptz IS NULL OR created_at < sqlc.narg('cursor')::timestamptz)
+ORDER BY created_at DESC
+LIMIT @page_size;
 
 -- name: GetRelationsByType :many
 SELECT id, source_id, target_id, relation_type, confidence, evidence, implied, source_urn, data_type, data, created_at
@@ -49,17 +53,15 @@ RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied
 -- name: DeleteRelationsForEntity :exec
 DELETE FROM entity_relations WHERE source_id = $1 OR target_id = $1;
 
--- name: ConnectedEntitiesOutbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
-FROM entity_relations r
-JOIN entities e ON e.id = r.target_id
-WHERE r.source_id = $1;
-
--- name: ConnectedEntitiesInbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
-FROM entity_relations r
-JOIN entities e ON e.id = r.source_id
-WHERE r.target_id = $1;
+-- name: ConnectedEntities :many
+SELECT DISTINCT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+FROM (
+    SELECT r.target_id AS connected_id FROM entity_relations r WHERE r.source_id = @entity_id
+    UNION
+    SELECT r.source_id AS connected_id FROM entity_relations r WHERE r.target_id = @entity_id
+) AS conns
+JOIN entities e ON e.id = conns.connected_id
+LIMIT @page_size;
 
 -- name: FindConnectedByTypeOutbound :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at

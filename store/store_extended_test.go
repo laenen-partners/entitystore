@@ -350,7 +350,7 @@ func TestGetRelationsToEntity(t *testing.T) {
 		t.Fatalf("upsert relation: %v", err)
 	}
 
-	rels, err := s.GetRelationsToEntity(ctx, companyID)
+	rels, err := s.GetRelationsToEntity(ctx, companyID, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations to: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestUpsertRelation_WithProtoData(t *testing.T) {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	rels, err := s.GetRelationsFromEntity(ctx, e1)
+	rels, err := s.GetRelationsFromEntity(ctx, e1, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations: %v", err)
 	}
@@ -517,7 +517,7 @@ func TestUpsertRelation_NilData(t *testing.T) {
 		t.Fatalf("upsert: %v", err)
 	}
 
-	rels, err := s.GetRelationsFromEntity(ctx, e1)
+	rels, err := s.GetRelationsFromEntity(ctx, e1, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations: %v", err)
 	}
@@ -631,7 +631,7 @@ func TestTransaction_UpsertRelation(t *testing.T) {
 		t.Fatalf("commit: %v", err)
 	}
 
-	rels, err := s.GetRelationsFromEntity(ctx, person)
+	rels, err := s.GetRelationsFromEntity(ctx, person, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations: %v", err)
 	}
@@ -1092,7 +1092,7 @@ func TestDeleteRelationByKey(t *testing.T) {
 	}
 
 	// Only "knows" should remain.
-	rels, err := s.GetRelationsFromEntity(ctx, e1)
+	rels, err := s.GetRelationsFromEntity(ctx, e1, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations: %v", err)
 	}
@@ -1382,7 +1382,7 @@ func TestWithTx_MultipleOperations(t *testing.T) {
 	if err != nil {
 		t.Fatalf("company not found after commit: %v", err)
 	}
-	rels, err := s.GetRelationsFromEntity(ctx, personID)
+	rels, err := s.GetRelationsFromEntity(ctx, personID, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations: %v", err)
 	}

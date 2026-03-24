@@ -98,6 +98,22 @@ type BatchWriteResult struct {
 // If the Store was created with WithTx, operations execute within that external
 // transaction (the caller is responsible for commit/rollback).
 func (s *Store) BatchWrite(ctx context.Context, ops []BatchWriteOp) ([]BatchWriteResult, error) {
+	if len(ops) > MaxBatchSize {
+		return nil, fmt.Errorf("batch size %d exceeds maximum %d", len(ops), MaxBatchSize)
+	}
+	for i, op := range ops {
+		if op.WriteEntity != nil {
+			if err := validateTags(op.WriteEntity.Tags); err != nil {
+				return nil, fmt.Errorf("op %d: %w", i, err)
+			}
+		}
+		if op.UpsertRelation != nil {
+			if err := validateRelationType(op.UpsertRelation.RelationType); err != nil {
+				return nil, fmt.Errorf("op %d: %w", i, err)
+			}
+		}
+	}
+	s.log.DebugContext(ctx, "BatchWrite", "ops", len(ops))
 	if s.tx != nil {
 		// Operating within an external transaction — use it directly.
 		return s.executeBatchOps(ctx, s.queries, ops)
@@ -167,6 +183,9 @@ func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 
 // DeleteRelationByKey removes a specific relation by source, target, and type.
 func (s *Store) DeleteRelationByKey(ctx context.Context, sourceID, targetID, relationType string) error {
+	if err := validateRelationType(relationType); err != nil {
+		return err
+	}
 	sourceUID, err := uuid.Parse(sourceID)
 	if err != nil {
 		return fmt.Errorf("parse source id: %w", err)
@@ -184,6 +203,9 @@ func (s *Store) DeleteRelationByKey(ctx context.Context, sourceID, targetID, rel
 
 // UpdateRelationData updates the typed data on an existing relation.
 func (s *Store) UpdateRelationData(ctx context.Context, sourceID, targetID, relationType string, data proto.Message) (matching.StoredRelation, error) {
+	if err := validateRelationType(relationType); err != nil {
+		return matching.StoredRelation{}, err
+	}
 	sourceUID, err := uuid.Parse(sourceID)
 	if err != nil {
 		return matching.StoredRelation{}, fmt.Errorf("parse source id: %w", err)

@@ -307,7 +307,7 @@ func RelationsExample(ctx context.Context, es *entitystore.EntityStore, personID
 	}
 
 	// Query outbound relations.
-	outbound, err := es.GetRelationsFromEntity(ctx, personID)
+	outbound, err := es.GetRelationsFromEntity(ctx, personID, 0, nil)
 	if err != nil {
 		log.Fatal(err)
 	}

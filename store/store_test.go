@@ -202,7 +202,7 @@ func TestBatchWrite_MixedEntitiesAndRelations(t *testing.T) {
 		t.Errorf("expected relation type employed_by, got %s", relResults[0].Relation.RelationType)
 	}
 
-	fromRels, err := s.GetRelationsFromEntity(ctx, e1.ID)
+	fromRels, err := s.GetRelationsFromEntity(ctx, e1.ID, 0, nil)
 	if err != nil {
 		t.Fatalf("get relations from: %v", err)
 	}

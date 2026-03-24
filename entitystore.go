@@ -35,11 +35,11 @@ func New(opts ...Option) (*EntityStore, error) {
 		opt(&o)
 	}
 
-	if o.store == nil {
+	if o.pool == nil {
 		return nil, errors.New("entitystore: no store backend configured (use WithPgStore)")
 	}
 
-	return &EntityStore{store: o.store}, nil
+	return &EntityStore{store: store.NewFromPool(o.pool, o.storeOps...)}, nil
 }
 
 // Close releases resources held by the underlying store.
@@ -78,6 +78,11 @@ func (es *EntityStore) GetEntitiesByType(ctx context.Context, entityType string,
 // pagination and tag/visibility filtering.
 func (es *EntityStore) GetEntitiesByTypeFiltered(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	return es.store.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, filter)
+}
+
+// GetByAnchor returns a single entity matching the given anchor, or ErrNotFound.
+func (es *EntityStore) GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error) {
+	return es.store.GetByAnchor(ctx, entityType, field, value, filter)
 }
 
 // FindByAnchors searches for entities matching the given anchor values.
@@ -124,14 +129,16 @@ func (es *EntityStore) Traverse(ctx context.Context, entityID string, opts *stor
 // Relation reads
 // ---------------------------------------------------------------------------
 
-// GetRelationsFromEntity returns all outbound relations from the given entity.
-func (es *EntityStore) GetRelationsFromEntity(ctx context.Context, entityID string) ([]matching.StoredRelation, error) {
-	return es.store.GetRelationsFromEntity(ctx, entityID)
+// GetRelationsFromEntity returns outbound relations from the given entity with pagination.
+// Pass pageSize=0 for default (1000). Pass cursor=nil for first page.
+func (es *EntityStore) GetRelationsFromEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	return es.store.GetRelationsFromEntity(ctx, entityID, pageSize, cursor)
 }
 
-// GetRelationsToEntity returns all inbound relations to the given entity.
-func (es *EntityStore) GetRelationsToEntity(ctx context.Context, entityID string) ([]matching.StoredRelation, error) {
-	return es.store.GetRelationsToEntity(ctx, entityID)
+// GetRelationsToEntity returns inbound relations to the given entity with pagination.
+// Pass pageSize=0 for default (1000). Pass cursor=nil for first page.
+func (es *EntityStore) GetRelationsToEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	return es.store.GetRelationsToEntity(ctx, entityID, pageSize, cursor)
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +276,12 @@ type TraverseResult = store.TraverseResult
 
 // TraverseEdge represents a single edge in a traversal path.
 type TraverseEdge = store.TraverseEdge
+
+// MaxBatchSize is the maximum number of operations in a single BatchWrite call.
+const MaxBatchSize = store.MaxBatchSize
+
+// ErrNotFound is returned when a single-entity lookup finds no match.
+var ErrNotFound = store.ErrNotFound
 
 // WriteOpOption configures a WriteEntityOp built by generated code.
 type WriteOpOption = store.WriteOpOption

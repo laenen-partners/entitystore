@@ -122,6 +122,18 @@ func (s *ScopedStore) GetEntitiesByTypeFiltered(ctx context.Context, entityType 
 	return s.inner.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, s.mergeFilter(filter))
 }
 
+// GetByAnchor returns a single entity matching the given anchor, or ErrNotFound.
+func (s *ScopedStore) GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error) {
+	ent, err := s.inner.GetByAnchor(ctx, entityType, field, value, s.mergeFilter(filter))
+	if err != nil {
+		return matching.StoredEntity{}, err
+	}
+	if !s.entityVisible(ent) {
+		return matching.StoredEntity{}, ErrAccessDenied
+	}
+	return ent, nil
+}
+
 // FindByAnchors searches for entities matching the given anchor values.
 func (s *ScopedStore) FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	return s.inner.FindByAnchors(ctx, entityType, anchors, s.mergeFilter(filter))
@@ -177,14 +189,14 @@ func (s *ScopedStore) ConnectedEntities(ctx context.Context, entityID string) ([
 // Relation reads
 // ---------------------------------------------------------------------------
 
-// GetRelationsFromEntity returns all outbound relations from the given entity.
-func (s *ScopedStore) GetRelationsFromEntity(ctx context.Context, entityID string) ([]matching.StoredRelation, error) {
-	return s.inner.GetRelationsFromEntity(ctx, entityID)
+// GetRelationsFromEntity returns outbound relations from the given entity with pagination.
+func (s *ScopedStore) GetRelationsFromEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	return s.inner.GetRelationsFromEntity(ctx, entityID, pageSize, cursor)
 }
 
-// GetRelationsToEntity returns all inbound relations to the given entity.
-func (s *ScopedStore) GetRelationsToEntity(ctx context.Context, entityID string) ([]matching.StoredRelation, error) {
-	return s.inner.GetRelationsToEntity(ctx, entityID)
+// GetRelationsToEntity returns inbound relations to the given entity with pagination.
+func (s *ScopedStore) GetRelationsToEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	return s.inner.GetRelationsToEntity(ctx, entityID, pageSize, cursor)
 }
 
 // ---------------------------------------------------------------------------

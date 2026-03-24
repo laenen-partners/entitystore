@@ -207,5 +207,6 @@ func (s *Store) Traverse(ctx context.Context, entityID string, opts *TraverseOpt
 		return nil, fmt.Errorf("traverse rows: %w", err)
 	}
 
+	s.log.DebugContext(ctx, "Traverse", "start", entityID, "max_depth", o.MaxDepth, "results", len(results))
 	return results, nil
 }

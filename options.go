@@ -1,6 +1,8 @@
 package entitystore
 
 import (
+	"log/slog"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/laenen-partners/entitystore/store"
 )
@@ -9,7 +11,8 @@ import (
 type Option func(*options)
 
 type options struct {
-	store *store.Store
+	pool     *pgxpool.Pool
+	storeOps []store.Option
 }
 
 // WithPgStore configures the EntityStore to use a PostgreSQL backend with
@@ -17,6 +20,13 @@ type options struct {
 // is responsible for closing it.
 func WithPgStore(pool *pgxpool.Pool) Option {
 	return func(o *options) {
-		o.store = store.NewFromPool(pool)
+		o.pool = pool
+	}
+}
+
+// WithLogger sets a structured logger for the store.
+func WithLogger(l *slog.Logger) Option {
+	return func(o *options) {
+		o.storeOps = append(o.storeOps, store.WithLogger(l))
 	}
 }
