@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 
 ## [Unreleased]
 
+### Breaking
+- **`GetEntitiesByTypeFiltered` removed** — merged into `GetEntitiesByType` which now accepts an optional `*QueryFilter` as the last parameter. Pass `nil` for no filtering.
+- **`FindConnectedByType`** takes `*FindConnectedOpts` struct instead of 7 positional parameters.
+- **`Tx()`** returns `*entitystore.TxStore` (root package) instead of `*store.TxStore`. Consumers no longer need to import the `store` package for transactions.
+
+### Added
+- `FindConnectedOpts` struct for cleaner `FindConnectedByType` calls.
+- `TxStore` wrapper in root package with full read + write surface (GetEntity, FindByAnchors, GetRelationsFrom/To, WriteEntity, UpsertRelation, DeleteRelationByKey, UpdateRelationData).
+- Expanded godoc package comment with quick-start example and pointers to key types.
+
+### Changed
+- ADR-001, ADR-002 status updated to "Implemented". ADR-003 updated to "Partially implemented".
+
+See [Migration Guide v0.20→v1.0](docs/migration-v1.0.md).
+
 ## [v0.20.0] - 2026-03-24
 
 ### Added

@@ -48,6 +48,63 @@ If your code depends on `DeleteEntity` immediately freeing storage or cascading 
 
 Previously returned all connected entities with no limit (two unbounded queries). Now uses a single UNION query with LIMIT 1000. If you have entities with more than 1000 connections, use `FindConnectedByType` with explicit pagination.
 
+### 4. `GetEntitiesByTypeFiltered` removed — merged into `GetEntitiesByType`
+
+`GetEntitiesByType` now accepts an optional `*QueryFilter` as the last parameter. `GetEntitiesByTypeFiltered` is removed.
+
+**Before:**
+```go
+// Unfiltered
+es.GetEntitiesByType(ctx, entityType, 100, nil)
+// Filtered
+es.GetEntitiesByTypeFiltered(ctx, entityType, 100, nil, filter)
+```
+
+**After:**
+```go
+es.GetEntitiesByType(ctx, entityType, 100, nil, nil)     // unfiltered (pass nil)
+es.GetEntitiesByType(ctx, entityType, 100, nil, filter)  // filtered
+```
+
+### 5. `FindConnectedByType` takes an options struct
+
+The 7-parameter signature is replaced with a `*FindConnectedOpts` struct, consistent with `TraverseOpts`.
+
+**Before:**
+```go
+es.FindConnectedByType(ctx, entityID, "companies.v1.Company", []string{"works_at"}, nil, 100, nil)
+```
+
+**After:**
+```go
+es.FindConnectedByType(ctx, entityID, &entitystore.FindConnectedOpts{
+    EntityType:    "companies.v1.Company",
+    RelationTypes: []string{"works_at"},
+    PageSize:      100,
+})
+```
+
+### 6. `Tx()` returns `*entitystore.TxStore` (not `*store.TxStore`)
+
+`Tx()` now returns a `TxStore` defined in the root `entitystore` package. Consumers no longer need to import `github.com/laenen-partners/entitystore/store` for transactions.
+
+**Before:**
+```go
+import "github.com/laenen-partners/entitystore/store"
+
+tx, _ := es.Tx(ctx)  // returns *store.TxStore
+```
+
+**After:**
+```go
+// No store import needed
+tx, _ := es.Tx(ctx)  // returns *entitystore.TxStore
+tx.GetEntity(ctx, id)           // reads within tx
+tx.FindByAnchors(ctx, ...)      // anchor lookup within tx
+tx.WriteEntity(ctx, &op)
+tx.Commit(ctx)
+```
+
 ## Database migration
 
 Two new migrations run automatically via `Migrate()` or `WithAutoMigrate()`:
@@ -159,6 +216,9 @@ See [Migration Guide v0.17→v0.18](migration-v0.18.md) for the `protoc-gen-enti
 - [ ] Run migrations: `entitystore.Migrate(ctx, pool)` — applies migration 3 (indexes) and 4 (soft deletes)
 - [ ] Update `GetRelationsFromEntity` calls — add `0, nil` for default pagination
 - [ ] Update `GetRelationsToEntity` calls — add `0, nil` for default pagination
+- [ ] Rename `GetEntitiesByTypeFiltered` → `GetEntitiesByType`, add `nil` filter to unfiltered calls
+- [ ] Update `FindConnectedByType` calls — use `*FindConnectedOpts` struct
+- [ ] Remove `store` package imports if only used for `TxStore` — `Tx()` now returns `*entitystore.TxStore`
 - [ ] Review `DeleteEntity` usage — now soft deletes; use `HardDeleteEntity` if permanent removal needed
 - [ ] Adopt `EntityStorer` interface for dependency injection (optional but recommended)
 - [ ] Regenerate proto code if using `protoc-gen-entitystore` codegen: `buf generate`

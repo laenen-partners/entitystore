@@ -442,13 +442,10 @@ rels, _ = es.GetRelationsToEntity(ctx, companyID, 100, nil)
 connected, _ := es.ConnectedEntities(ctx, personID)
 
 // Connected entities filtered by entity type and relation type
-companies, _ := es.FindConnectedByType(ctx, personID,
-    "companies.v1.Company",        // target entity type
-    []string{"works_at"},          // relation types (empty = all)
-    nil,                           // optional QueryFilter for tag filtering
-    100,                           // page size
-    nil,                           // cursor (nil = first page)
-)
+companies, _ := es.FindConnectedByType(ctx, personID, &entitystore.FindConnectedOpts{
+    EntityType:    "companies.v1.Company",
+    RelationTypes: []string{"works_at"},
+})
 
 // All entities participating in a relation type
 employees, _ := es.FindEntitiesByRelation(ctx,

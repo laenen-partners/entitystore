@@ -74,7 +74,7 @@ outbound, _ := es.GetRelationsFromEntity(ctx, personID, 0, nil)  // source → t
 inbound, _ := es.GetRelationsToEntity(ctx, companyID, 0, nil)    // inbound to companyID
 connected, _ := es.ConnectedEntities(ctx, personID)              // all connected (both directions)
 companies, _ := es.FindConnectedByType(ctx, personID,         // filtered by entity type + relation type
-    "companies.v1.Company", []string{"works_at"}, nil, 100, nil)
+    &entitystore.FindConnectedOpts{EntityType: "companies.v1.Company", RelationTypes: []string{"works_at"}})
 employees, _ := es.FindEntitiesByRelation(ctx,                // all entities in a relation type
     "persons.v1.Person", "works_at", nil)
 
@@ -298,7 +298,9 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - `ScopedStore` wraps `EntityStore` with tag-based multi-tenant filtering. Created via `es.Scoped(ScopeConfig{...})`. Reads are filtered by `RequireTags`/`ExcludeTag`/`UnlessTags`; creates are auto-tagged with `AutoTags`. Scope config is preserved across `WithTx`.
 - `EntityStorer` interface in `interface.go` is satisfied by both `EntityStore` and `ScopedStore`. Use for dependency injection and mocking in tests.
 - `DeleteEntity` performs a soft delete (sets `deleted_at`). All reads filter `deleted_at IS NULL`. Use `HardDeleteEntity` for permanent removal.
-- `TxStore` supports reads (`GetEntity`, `FindByAnchors`, `GetRelationsFromEntity`, `GetRelationsToEntity`) alongside writes for transactional read-modify-write patterns.
+- `TxStore` is defined in the root package (not `store`). Consumers never need to import `store` for transactions. Supports reads (`GetEntity`, `FindByAnchors`, `GetRelationsFromEntity`, `GetRelationsToEntity`) alongside writes.
+- `GetEntitiesByType` accepts an optional `*QueryFilter` as the last parameter (nil = no filter). The old `GetEntitiesByTypeFiltered` method is removed.
+- `FindConnectedByType` takes a `*FindConnectedOpts` struct instead of 7 positional parameters. Consistent with `TraverseOpts` pattern.
 - `Stats(ctx)` returns aggregate counts (entities, relations, soft-deleted, per-type breakdowns). Individual count methods also available.
 - `WithLogger(*slog.Logger)` enables structured debug logging for operations.
 - `MaxBatchSize = 1000` caps BatchWrite operations. Input validation enforces tag limits (255 chars, 100 max) and relation type limits (255 chars).
