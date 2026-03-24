@@ -1,6 +1,6 @@
 # ADR-003: Relation Data Querying and Graph Search
 
-**Status:** Proposed
+**Status:** Partially implemented — Phase 3 (recursive CTE traversal) shipped in v0.17.0. Phases 1-2 (JSONB queries, relation anchors) deferred.
 **Date:** 2026-03-19
 **Author:** Pascal Laenen
 

@@ -16,12 +16,11 @@ type EntityStorer interface {
 	// Entity reads
 	GetEntity(ctx context.Context, id string) (matching.StoredEntity, error)
 	GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error)
-	GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error)
-	GetEntitiesByTypeFiltered(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
+	GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
 	FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
 	FindByTokens(ctx context.Context, entityType string, tokens []string, limit int, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
 	FindByEmbedding(ctx context.Context, entityType string, vec []float32, topK int, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
-	FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error)
+	FindConnectedByType(ctx context.Context, entityID string, opts *FindConnectedOpts) ([]matching.StoredEntity, error)
 	FindEntitiesByRelation(ctx context.Context, entityType string, relationType string, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
 	ConnectedEntities(ctx context.Context, entityID string) ([]matching.StoredEntity, error)
 

@@ -1,12 +1,36 @@
 // Package entitystore provides entity storage, deduplication, and relationship
-// management backed by pluggable stores.
+// management with PostgreSQL + pgvector backend.
 //
-// Create an EntityStore with a PostgreSQL backend:
+// It is designed for entity resolution pipelines: extract entities from
+// unstructured sources, match against existing records via anchors, tokens,
+// and embeddings, then store with full provenance tracking.
+//
+// # Quick start
 //
 //	pool, _ := pgxpool.New(ctx, connString)
-//	es, err := entitystore.New(
-//	    entitystore.WithPgStore(pool),
+//	entitystore.Migrate(ctx, pool)
+//	es, _ := entitystore.New(entitystore.WithPgStore(pool))
+//	defer es.Close()
+//
+//	// Write — anchors, tokens wired by generated code
+//	op := personv1.PersonWriteOp(person, entitystore.WriteActionCreate,
+//	    entitystore.WithTags("ws:acme"),
 //	)
+//	results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{{WriteEntity: op}})
+//
+//	// Read
+//	entity, _ := es.GetEntity(ctx, results[0].Entity.ID)
+//	found, _ := es.GetByAnchor(ctx, "persons.v1.Person", "email", "alice@example.com", nil)
+//
+//	// Traverse
+//	neighbors, _ := es.Traverse(ctx, entity.ID, &entitystore.TraverseOpts{MaxDepth: 2})
+//
+// Use [EntityStorer] as the interface for dependency injection and testing.
+// Both [EntityStore] and [ScopedStore] satisfy it.
+//
+// Use protoc-gen-entitystore to generate typed token extractors, anchor
+// builders, and WriteOp helpers from proto annotations. See the cmd/
+// directory and examples/ for usage patterns.
 package entitystore
 
 import (
@@ -69,14 +93,10 @@ func (es *EntityStore) GetEntity(ctx context.Context, id string) (matching.Store
 	return es.store.GetEntity(ctx, id)
 }
 
-// GetEntitiesByType returns entities of the given type with cursor-based pagination.
-func (es *EntityStore) GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
-	return es.store.GetEntitiesByType(ctx, entityType, pageSize, cursor)
-}
-
-// GetEntitiesByTypeFiltered returns entities of the given type with cursor-based
-// pagination and tag/visibility filtering.
-func (es *EntityStore) GetEntitiesByTypeFiltered(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+// GetEntitiesByType returns entities of the given type with cursor-based
+// pagination and optional tag/visibility filtering.
+// Pass filter=nil for no filtering. Pass pageSize=0 for default (100).
+func (es *EntityStore) GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *QueryFilter) ([]matching.StoredEntity, error) {
 	return es.store.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, filter)
 }
 
@@ -100,10 +120,21 @@ func (es *EntityStore) FindByEmbedding(ctx context.Context, entityType string, v
 	return es.store.FindByEmbedding(ctx, entityType, vec, topK, filter)
 }
 
-// FindConnectedByType finds entities connected to the given entity by relation type.
-// Pass pageSize=0 for default (1000). Pass cursor=nil for first page.
-func (es *EntityStore) FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
-	return es.store.FindConnectedByType(ctx, entityID, entityType, relationTypes, filter, pageSize, cursor)
+// FindConnectedOpts configures a FindConnectedByType query.
+type FindConnectedOpts struct {
+	EntityType    string          // filter connected entities by type (empty = all)
+	RelationTypes []string        // filter edges by type (empty = all)
+	Filter        *QueryFilter    // tag filtering on connected entities
+	PageSize      int32           // default 1000
+	Cursor        *time.Time      // cursor for pagination (nil = first page)
+}
+
+// FindConnectedByType finds entities connected to the given entity.
+func (es *EntityStore) FindConnectedByType(ctx context.Context, entityID string, opts *FindConnectedOpts) ([]matching.StoredEntity, error) {
+	if opts == nil {
+		opts = &FindConnectedOpts{}
+	}
+	return es.store.FindConnectedByType(ctx, entityID, opts.EntityType, opts.RelationTypes, opts.Filter, opts.PageSize, opts.Cursor)
 }
 
 // FindEntitiesByRelation finds entities that participate in a given relation type.
@@ -211,9 +242,65 @@ func (es *EntityStore) UpdateEmbedding(ctx context.Context, entityID string, vec
 // Transactions
 // ---------------------------------------------------------------------------
 
-// Tx begins a new transaction and returns a TxStore for atomic multi-step operations.
-func (es *EntityStore) Tx(ctx context.Context) (*store.TxStore, error) {
-	return es.store.Tx(ctx)
+// TxStore wraps a database transaction for atomic multi-step operations.
+// Use Commit or Rollback to end the transaction.
+type TxStore struct {
+	inner *store.TxStore
+}
+
+// Tx begins a new transaction and returns a TxStore.
+func (es *EntityStore) Tx(ctx context.Context) (*TxStore, error) {
+	tx, err := es.store.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &TxStore{inner: tx}, nil
+}
+
+// Commit commits the transaction.
+func (tx *TxStore) Commit(ctx context.Context) error { return tx.inner.Commit(ctx) }
+
+// Rollback aborts the transaction.
+func (tx *TxStore) Rollback(ctx context.Context) error { return tx.inner.Rollback(ctx) }
+
+// GetEntity returns a single entity by ID within the transaction.
+func (tx *TxStore) GetEntity(ctx context.Context, id string) (matching.StoredEntity, error) {
+	return tx.inner.GetEntity(ctx, id)
+}
+
+// FindByAnchors searches for entities within the transaction.
+func (tx *TxStore) FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	return tx.inner.FindByAnchors(ctx, entityType, anchors, filter)
+}
+
+// GetRelationsFromEntity returns outbound relations within the transaction.
+func (tx *TxStore) GetRelationsFromEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	return tx.inner.GetRelationsFromEntity(ctx, entityID, pageSize, cursor)
+}
+
+// GetRelationsToEntity returns inbound relations within the transaction.
+func (tx *TxStore) GetRelationsToEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	return tx.inner.GetRelationsToEntity(ctx, entityID, pageSize, cursor)
+}
+
+// WriteEntity applies a single entity write within the transaction.
+func (tx *TxStore) WriteEntity(ctx context.Context, op *store.WriteEntityOp) (matching.StoredEntity, error) {
+	return tx.inner.WriteEntity(ctx, op)
+}
+
+// UpsertRelation creates or updates a relation within the transaction.
+func (tx *TxStore) UpsertRelation(ctx context.Context, op *store.UpsertRelationOp) (matching.StoredRelation, error) {
+	return tx.inner.UpsertRelation(ctx, op)
+}
+
+// DeleteRelationByKey removes a relation within the transaction.
+func (tx *TxStore) DeleteRelationByKey(ctx context.Context, sourceID, targetID, relationType string) error {
+	return tx.inner.DeleteRelationByKey(ctx, sourceID, targetID, relationType)
+}
+
+// UpdateRelationData updates typed data on an existing relation within the transaction.
+func (tx *TxStore) UpdateRelationData(ctx context.Context, sourceID, targetID, relationType string, data proto.Message) (matching.StoredRelation, error) {
+	return tx.inner.UpdateRelationData(ctx, sourceID, targetID, relationType, data)
 }
 
 // ---------------------------------------------------------------------------

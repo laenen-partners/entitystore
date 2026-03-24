@@ -1,6 +1,6 @@
 # ADR-002: Matching Engine — Scoring and Match Decision Pipeline
 
-**Status:** Proposed
+**Status:** Implemented (v0.9.0)
 **Date:** 2026-03-19
 **Author:** Pascal Laenen
 

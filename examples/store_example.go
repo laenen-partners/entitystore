@@ -325,9 +325,10 @@ func RelationsExample(ctx context.Context, es *entitystore.EntityStore, personID
 
 	// Find connected entities filtered by type and relation.
 	companies, err := es.FindConnectedByType(ctx, personID,
-		"examples.v1.Company",
-		[]string{"works_at"},
-		nil, 0, nil,
+		&entitystore.FindConnectedOpts{
+			EntityType:    "examples.v1.Company",
+			RelationTypes: []string{"works_at"},
+		},
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -410,7 +411,7 @@ func PaginationExample(ctx context.Context, es *entitystore.EntityStore) {
 	pageSize := int32(50)
 
 	for {
-		entities, err := es.GetEntitiesByType(ctx, "examples.v1.Person", pageSize, cursor)
+		entities, err := es.GetEntitiesByType(ctx, "examples.v1.Person", pageSize, cursor, nil)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -111,15 +111,9 @@ func (s *ScopedStore) GetEntity(ctx context.Context, id string) (matching.Stored
 }
 
 // GetEntitiesByType returns entities of the given type with cursor-based
-// pagination, filtered by the scope.
-func (s *ScopedStore) GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
-	return s.inner.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, s.mergeFilter(nil))
-}
-
-// GetEntitiesByTypeFiltered returns entities with the caller's filter merged
-// with the scope filter.
-func (s *ScopedStore) GetEntitiesByTypeFiltered(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
-	return s.inner.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, s.mergeFilter(filter))
+// pagination and optional filtering, merged with the scope filter.
+func (s *ScopedStore) GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	return s.inner.GetEntitiesByType(ctx, entityType, pageSize, cursor, s.mergeFilter(filter))
 }
 
 // GetByAnchor returns a single entity matching the given anchor, or ErrNotFound.
@@ -149,9 +143,14 @@ func (s *ScopedStore) FindByEmbedding(ctx context.Context, entityType string, ve
 	return s.inner.FindByEmbedding(ctx, entityType, vec, topK, s.mergeFilter(filter))
 }
 
-// FindConnectedByType finds entities connected to the given entity by relation type.
-func (s *ScopedStore) FindConnectedByType(ctx context.Context, entityID string, entityType string, relationTypes []string, filter *matching.QueryFilter, pageSize int32, cursor *time.Time) ([]matching.StoredEntity, error) {
-	return s.inner.FindConnectedByType(ctx, entityID, entityType, relationTypes, s.mergeFilter(filter), pageSize, cursor)
+// FindConnectedByType finds entities connected to the given entity.
+func (s *ScopedStore) FindConnectedByType(ctx context.Context, entityID string, opts *FindConnectedOpts) ([]matching.StoredEntity, error) {
+	if opts == nil {
+		opts = &FindConnectedOpts{}
+	}
+	merged := *opts
+	merged.Filter = s.mergeFilter(opts.Filter)
+	return s.inner.FindConnectedByType(ctx, entityID, &merged)
 }
 
 // FindEntitiesByRelation finds entities that participate in a given relation type.
@@ -302,6 +301,6 @@ func (s *ScopedStore) UpdateEmbedding(ctx context.Context, entityID string, vec 
 // ---------------------------------------------------------------------------
 
 // Tx begins a new transaction and returns a TxStore for atomic operations.
-func (s *ScopedStore) Tx(ctx context.Context) (*store.TxStore, error) {
+func (s *ScopedStore) Tx(ctx context.Context) (*TxStore, error) {
 	return s.inner.Tx(ctx)
 }

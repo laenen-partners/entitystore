@@ -275,7 +275,7 @@ func TestScopedStore_GetEntitiesByType_Filtered(t *testing.T) {
 		RequireTags: []string{"ws:acme"},
 	})
 
-	found, err := scoped.GetEntitiesByType(ctx, entityType, 100, nil)
+	found, err := scoped.GetEntitiesByType(ctx, entityType, 100, nil, nil)
 	if err != nil {
 		t.Fatalf("get entities by type: %v", err)
 	}

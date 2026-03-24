@@ -1,6 +1,6 @@
 # ADR-001: Generate LLM Entity Extraction Schemas from Proto Annotations
 
-**Status:** Proposed
+**Status:** Implemented (v0.7.0)
 **Date:** 2026-03-17
 **Author:** Pascal Laenen
 
