@@ -14,8 +14,121 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAllEntities = `-- name: CountAllEntities :one
+SELECT count(*) FROM entities WHERE deleted_at IS NULL
+`
+
+func (q *Queries) CountAllEntities(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllEntities)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countAllRelations = `-- name: CountAllRelations :one
+SELECT count(*) FROM entity_relations
+`
+
+func (q *Queries) CountAllRelations(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllRelations)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countEntitiesByType = `-- name: CountEntitiesByType :one
+SELECT count(*) FROM entities WHERE entity_type = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) CountEntitiesByType(ctx context.Context, entityType string) (int64, error) {
+	row := q.db.QueryRow(ctx, countEntitiesByType, entityType)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countEntityTypes = `-- name: CountEntityTypes :many
+SELECT entity_type, count(*) AS count FROM entities WHERE deleted_at IS NULL GROUP BY entity_type ORDER BY count DESC
+`
+
+type CountEntityTypesRow struct {
+	EntityType string `json:"entity_type"`
+	Count      int64  `json:"count"`
+}
+
+func (q *Queries) CountEntityTypes(ctx context.Context) ([]CountEntityTypesRow, error) {
+	rows, err := q.db.Query(ctx, countEntityTypes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountEntityTypesRow
+	for rows.Next() {
+		var i CountEntityTypesRow
+		if err := rows.Scan(&i.EntityType, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countRelationTypes = `-- name: CountRelationTypes :many
+SELECT relation_type, count(*) AS count FROM entity_relations GROUP BY relation_type ORDER BY count DESC
+`
+
+type CountRelationTypesRow struct {
+	RelationType string `json:"relation_type"`
+	Count        int64  `json:"count"`
+}
+
+func (q *Queries) CountRelationTypes(ctx context.Context) ([]CountRelationTypesRow, error) {
+	rows, err := q.db.Query(ctx, countRelationTypes)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountRelationTypesRow
+	for rows.Next() {
+		var i CountRelationTypesRow
+		if err := rows.Scan(&i.RelationType, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countRelationsForEntity = `-- name: CountRelationsForEntity :one
+SELECT count(*) FROM entity_relations WHERE (source_id = $1 OR target_id = $1)
+`
+
+func (q *Queries) CountRelationsForEntity(ctx context.Context, entityID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countRelationsForEntity, entityID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSoftDeleted = `-- name: CountSoftDeleted :one
+SELECT count(*) FROM entities WHERE deleted_at IS NOT NULL
+`
+
+func (q *Queries) CountSoftDeleted(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countSoftDeleted)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteEntity = `-- name: DeleteEntity :exec
-DELETE FROM entities WHERE id = $1
+UPDATE entities SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) DeleteEntity(ctx context.Context, id uuid.UUID) error {
@@ -27,6 +140,7 @@ const getEntitiesByType = `-- name: GetEntitiesByType :many
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities
 WHERE entity_type = $1
+  AND deleted_at IS NULL
   AND ($2::timestamptz IS NULL OR updated_at < $2::timestamptz)
 ORDER BY updated_at DESC
 LIMIT $3
@@ -80,6 +194,7 @@ const getEntitiesByTypeFiltered = `-- name: GetEntitiesByTypeFiltered :many
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities
 WHERE entity_type = $1
+  AND deleted_at IS NULL
   AND ($2::timestamptz IS NULL OR updated_at < $2::timestamptz)
   AND (cardinality($3::text[]) = 0 OR tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR tags && $4::text[])
@@ -147,7 +262,7 @@ func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntities
 const getEntity = `-- name: GetEntity :one
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 type GetEntityRow struct {
@@ -173,6 +288,15 @@ func (q *Queries) GetEntity(ctx context.Context, id uuid.UUID) (GetEntityRow, er
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const hardDeleteEntity = `-- name: HardDeleteEntity :exec
+DELETE FROM entities WHERE id = $1
+`
+
+func (q *Queries) HardDeleteEntity(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, hardDeleteEntity, id)
+	return err
 }
 
 const insertEntity = `-- name: InsertEntity :one

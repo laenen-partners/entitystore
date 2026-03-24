@@ -77,7 +77,7 @@ WITH RECURSIVE traverse AS (
     SELECT e.id, e.entity_type, e.data, e.confidence, e.tags,
            e.created_at, e.updated_at,
            0 AS depth, ARRAY[e.id] AS visited, '[]'::jsonb AS path
-    FROM entities e WHERE e.id = $1
+    FROM entities e WHERE e.id = $1 AND e.deleted_at IS NULL
 
     UNION ALL
 
@@ -93,6 +93,7 @@ WITH RECURSIVE traverse AS (
     JOIN entities next_e ON next_e.id = CASE
         WHEN r.source_id = t.id THEN r.target_id ELSE r.source_id END
     WHERE t.depth < $4
+      AND next_e.deleted_at IS NULL
       AND NOT (next_e.id = ANY(t.visited))
       AND (cardinality($5::text[]) = 0 OR r.relation_type = ANY($5::text[]))
       AND ($6::text = '' OR next_e.entity_type = $6::text)

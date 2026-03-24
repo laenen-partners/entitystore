@@ -3,6 +3,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_tokens t
 JOIN entities e ON e.id = t.entity_id
 WHERE (@entity_type::text = '' OR t.entity_type = @entity_type::text) AND t.tokens && @tokens::text[]
+  AND e.deleted_at IS NULL
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
   AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[])

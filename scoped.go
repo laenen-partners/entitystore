@@ -234,9 +234,29 @@ func (s *ScopedStore) BatchWrite(ctx context.Context, ops []store.BatchWriteOp) 
 	return s.inner.BatchWrite(ctx, scoped)
 }
 
-// DeleteEntity removes an entity and its associated data.
+// DeleteEntity soft-deletes an entity.
 func (s *ScopedStore) DeleteEntity(ctx context.Context, id string) error {
 	return s.inner.DeleteEntity(ctx, id)
+}
+
+// HardDeleteEntity permanently removes an entity and all its associated data.
+func (s *ScopedStore) HardDeleteEntity(ctx context.Context, id string) error {
+	return s.inner.HardDeleteEntity(ctx, id)
+}
+
+// Stats returns aggregate statistics about the store contents.
+func (s *ScopedStore) Stats(ctx context.Context) (store.StoreStats, error) {
+	return s.inner.Stats(ctx)
+}
+
+// CountEntitiesByType returns the number of non-deleted entities of the given type.
+func (s *ScopedStore) CountEntitiesByType(ctx context.Context, entityType string) (int64, error) {
+	return s.inner.CountEntitiesByType(ctx, entityType)
+}
+
+// CountRelationsForEntity returns the number of relations for an entity.
+func (s *ScopedStore) CountRelationsForEntity(ctx context.Context, entityID string) (int64, error) {
+	return s.inner.CountRelationsForEntity(ctx, entityID)
 }
 
 // DeleteRelationByKey removes a specific relation by source, target, and type.

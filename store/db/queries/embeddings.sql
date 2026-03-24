@@ -2,6 +2,7 @@
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
 FROM entities e
 WHERE (cardinality(@entity_types::text[]) = 0 OR e.entity_type = ANY(@entity_types))
+  AND e.deleted_at IS NULL
   AND e.embedding IS NOT NULL
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])

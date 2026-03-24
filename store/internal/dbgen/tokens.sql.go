@@ -27,6 +27,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_tokens t
 JOIN entities e ON e.id = t.entity_id
 WHERE ($1::text = '' OR t.entity_type = $1::text) AND t.tokens && $2::text[]
+  AND e.deleted_at IS NULL
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
   AND ($5::text = '' OR NOT ($5::text = ANY(e.tags)) OR e.tags && $6::text[])

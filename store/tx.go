@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
@@ -41,6 +43,114 @@ func (ts *TxStore) Commit(ctx context.Context) error {
 func (ts *TxStore) Rollback(ctx context.Context) error {
 	return ts.tx.Rollback(ctx)
 }
+
+// ---------------------------------------------------------------------------
+// Reads within transaction
+// ---------------------------------------------------------------------------
+
+// GetEntity returns a single entity by ID within the transaction.
+func (ts *TxStore) GetEntity(ctx context.Context, id string) (matching.StoredEntity, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("parse entity id: %w", err)
+	}
+	row, err := ts.queries.GetEntity(ctx, uid)
+	if err != nil {
+		return matching.StoredEntity{}, fmt.Errorf("get entity: %w", err)
+	}
+	return entityFromRow(row), nil
+}
+
+// FindByAnchors searches for entities matching the given anchor values within the transaction.
+func (ts *TxStore) FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	seen := make(map[uuid.UUID]struct{})
+	var result []matching.StoredEntity
+	tags := tagsParam(filter)
+	anyTags := anyTagsParam(filter)
+
+	for _, aq := range anchors {
+		rows, err := ts.queries.FindByAnchors(ctx, dbgen.FindByAnchorsParams{
+			EntityType:      entityType,
+			AnchorField:     aq.Field,
+			NormalizedValue: aq.Value,
+			Tags:            tags,
+			AnyTags:         anyTags,
+			ExcludeTag:      excludeTagParam(filter),
+			UnlessTags:      unlessTagsParam(filter),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("find by anchor %s=%s: %w", aq.Field, aq.Value, err)
+		}
+		for _, row := range rows {
+			if _, ok := seen[row.ID]; ok {
+				continue
+			}
+			seen[row.ID] = struct{}{}
+			result = append(result, entityFromRow(row))
+		}
+	}
+	return result, nil
+}
+
+// GetRelationsFromEntity returns outbound relations within the transaction.
+func (ts *TxStore) GetRelationsFromEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	uid, err := uuid.Parse(entityID)
+	if err != nil {
+		return nil, fmt.Errorf("parse entity id: %w", err)
+	}
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
+	var pgCursor pgtype.Timestamptz
+	if cursor != nil {
+		pgCursor = pgtype.Timestamptz{Time: *cursor, Valid: true}
+	}
+	rows, err := ts.queries.GetRelationsFromEntity(ctx, dbgen.GetRelationsFromEntityParams{
+		SourceID: uid,
+		Cursor:   pgCursor,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get relations from: %w", err)
+	}
+	result := make([]matching.StoredRelation, len(rows))
+	for i, row := range rows {
+		result[i] = relationFromRow(row)
+	}
+	return result, nil
+}
+
+// GetRelationsToEntity returns inbound relations within the transaction.
+func (ts *TxStore) GetRelationsToEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
+	uid, err := uuid.Parse(entityID)
+	if err != nil {
+		return nil, fmt.Errorf("parse entity id: %w", err)
+	}
+	if pageSize <= 0 {
+		pageSize = 1000
+	}
+	var pgCursor pgtype.Timestamptz
+	if cursor != nil {
+		pgCursor = pgtype.Timestamptz{Time: *cursor, Valid: true}
+	}
+	rows, err := ts.queries.GetRelationsToEntity(ctx, dbgen.GetRelationsToEntityParams{
+		TargetID: uid,
+		Cursor:   pgCursor,
+		PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get relations to: %w", err)
+	}
+	result := make([]matching.StoredRelation, len(rows))
+	for i, row := range rows {
+		result[i] = relationFromRow(row)
+	}
+	return result, nil
+}
+
+// ---------------------------------------------------------------------------
+// Writes within transaction
+// ---------------------------------------------------------------------------
 
 // WriteEntity applies a single entity write (create, update, or merge) in the
 // current transaction.

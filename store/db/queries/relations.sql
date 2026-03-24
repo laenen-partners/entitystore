@@ -61,6 +61,7 @@ FROM (
     SELECT r.source_id AS connected_id FROM entity_relations r WHERE r.target_id = @entity_id
 ) AS conns
 JOIN entities e ON e.id = conns.connected_id
+WHERE e.deleted_at IS NULL
 LIMIT @page_size;
 
 -- name: FindConnectedByTypeOutbound :many
@@ -68,6 +69,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE r.source_id = @entity_id
+  AND e.deleted_at IS NULL
   AND (@entity_type::text = '' OR e.entity_type = @entity_type::text)
   AND (cardinality(@relation_types::text[]) = 0 OR r.relation_type = ANY(@relation_types::text[]))
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
@@ -82,6 +84,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE r.target_id = @entity_id
+  AND e.deleted_at IS NULL
   AND (@entity_type::text = '' OR e.entity_type = @entity_type::text)
   AND (cardinality(@relation_types::text[]) = 0 OR r.relation_type = ANY(@relation_types::text[]))
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
@@ -96,6 +99,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE e.entity_type = @entity_type
+  AND e.deleted_at IS NULL
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
@@ -106,6 +110,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE e.entity_type = @entity_type
+  AND e.deleted_at IS NULL
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])

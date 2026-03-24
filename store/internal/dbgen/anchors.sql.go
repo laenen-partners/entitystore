@@ -27,6 +27,7 @@ SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.update
 FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3
+  AND e.deleted_at IS NULL
   AND (cardinality($4::text[]) = 0 OR e.tags @> $4::text[])
   AND (cardinality($5::text[]) = 0 OR e.tags && $5::text[])
   AND ($6 = '' OR NOT ($6 = ANY(e.tags)) OR e.tags && $7::text[])

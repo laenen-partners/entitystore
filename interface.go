@@ -38,6 +38,7 @@ type EntityStorer interface {
 	// Writes
 	BatchWrite(ctx context.Context, ops []store.BatchWriteOp) ([]store.BatchWriteResult, error)
 	DeleteEntity(ctx context.Context, id string) error
+	HardDeleteEntity(ctx context.Context, id string) error
 	DeleteRelationByKey(ctx context.Context, sourceID, targetID, relationType string) error
 	UpdateRelationData(ctx context.Context, sourceID, targetID, relationType string, data proto.Message) (matching.StoredRelation, error)
 
@@ -48,6 +49,11 @@ type EntityStorer interface {
 
 	// Embedding
 	UpdateEmbedding(ctx context.Context, entityID string, vec []float32) error
+
+	// Stats
+	Stats(ctx context.Context) (store.StoreStats, error)
+	CountEntitiesByType(ctx context.Context, entityType string) (int64, error)
+	CountRelationsForEntity(ctx context.Context, entityID string) (int64, error)
 }
 
 // Compile-time checks.

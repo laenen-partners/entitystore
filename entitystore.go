@@ -159,9 +159,14 @@ func (es *EntityStore) BatchWrite(ctx context.Context, ops []store.BatchWriteOp)
 	return es.store.BatchWrite(ctx, ops)
 }
 
-// DeleteEntity removes an entity and its associated data.
+// DeleteEntity soft-deletes an entity (sets deleted_at, preserves data for audit).
 func (es *EntityStore) DeleteEntity(ctx context.Context, id string) error {
 	return es.store.DeleteEntity(ctx, id)
+}
+
+// HardDeleteEntity permanently removes an entity and all its associated data.
+func (es *EntityStore) HardDeleteEntity(ctx context.Context, id string) error {
+	return es.store.HardDeleteEntity(ctx, id)
 }
 
 // DeleteRelationByKey removes a specific relation by source, target, and type.
@@ -209,6 +214,25 @@ func (es *EntityStore) UpdateEmbedding(ctx context.Context, entityID string, vec
 // Tx begins a new transaction and returns a TxStore for atomic multi-step operations.
 func (es *EntityStore) Tx(ctx context.Context) (*store.TxStore, error) {
 	return es.store.Tx(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+// Stats returns aggregate statistics about the store contents.
+func (es *EntityStore) Stats(ctx context.Context) (store.StoreStats, error) {
+	return es.store.Stats(ctx)
+}
+
+// CountEntitiesByType returns the number of non-deleted entities of the given type.
+func (es *EntityStore) CountEntitiesByType(ctx context.Context, entityType string) (int64, error) {
+	return es.store.CountEntitiesByType(ctx, entityType)
+}
+
+// CountRelationsForEntity returns the number of relations for an entity.
+func (es *EntityStore) CountRelationsForEntity(ctx context.Context, entityID string) (int64, error) {
+	return es.store.CountRelationsForEntity(ctx, entityID)
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +322,12 @@ var (
 
 // Provenance builds a ProvenanceEntry with sensible defaults.
 var Provenance = store.Provenance
+
+// StoreStats contains aggregate statistics about the store contents.
+type StoreStats = store.StoreStats
+
+// TypeCount represents the count of entities or relations for a given type.
+type TypeCount = store.TypeCount
 
 // Migrate applies all pending database migrations using the given pool.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {

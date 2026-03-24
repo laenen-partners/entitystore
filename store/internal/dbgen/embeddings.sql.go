@@ -18,6 +18,7 @@ const findByEmbedding = `-- name: FindByEmbedding :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
 FROM entities e
 WHERE (cardinality($1::text[]) = 0 OR e.entity_type = ANY($1))
+  AND e.deleted_at IS NULL
   AND e.embedding IS NOT NULL
   AND (cardinality($2::text[]) = 0 OR e.tags @> $2::text[])
   AND (cardinality($3::text[]) = 0 OR e.tags && $3::text[])

@@ -1,12 +1,13 @@
 -- name: GetEntity :one
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities
-WHERE id = $1;
+WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetEntitiesByType :many
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities
 WHERE entity_type = @entity_type
+  AND deleted_at IS NULL
   AND (sqlc.narg('cursor')::timestamptz IS NULL OR updated_at < sqlc.narg('cursor')::timestamptz)
 ORDER BY updated_at DESC
 LIMIT @page_size;
@@ -15,6 +16,7 @@ LIMIT @page_size;
 SELECT id, entity_type, data, confidence, tags, created_at, updated_at
 FROM entities
 WHERE entity_type = @entity_type
+  AND deleted_at IS NULL
   AND (sqlc.narg('cursor')::timestamptz IS NULL OR updated_at < sqlc.narg('cursor')::timestamptz)
   AND (cardinality(@tags::text[]) = 0 OR tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR tags && @any_tags::text[])
@@ -43,4 +45,28 @@ SET data = data || $2, confidence = $3, updated_at = now()
 WHERE id = $1;
 
 -- name: DeleteEntity :exec
+UPDATE entities SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: HardDeleteEntity :exec
 DELETE FROM entities WHERE id = $1;
+
+-- name: CountEntitiesByType :one
+SELECT count(*) FROM entities WHERE entity_type = @entity_type AND deleted_at IS NULL;
+
+-- name: CountAllEntities :one
+SELECT count(*) FROM entities WHERE deleted_at IS NULL;
+
+-- name: CountRelationsForEntity :one
+SELECT count(*) FROM entity_relations WHERE (source_id = @entity_id OR target_id = @entity_id);
+
+-- name: CountAllRelations :one
+SELECT count(*) FROM entity_relations;
+
+-- name: CountEntityTypes :many
+SELECT entity_type, count(*) AS count FROM entities WHERE deleted_at IS NULL GROUP BY entity_type ORDER BY count DESC;
+
+-- name: CountRelationTypes :many
+SELECT relation_type, count(*) AS count FROM entity_relations GROUP BY relation_type ORDER BY count DESC;
+
+-- name: CountSoftDeleted :one
+SELECT count(*) FROM entities WHERE deleted_at IS NOT NULL;
