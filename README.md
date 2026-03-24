@@ -4,20 +4,25 @@ Pure Go library for entity storage, deduplication, and relationship management w
 
 ## Features
 
-- **Entity CRUD** — create, update, merge, delete entities with typed proto data
+- **Entity CRUD** — create, update, merge, soft-delete entities with typed proto data
 - **Anchor matching** — O(1) deduplication via normalized field values (email, tax ID, etc.)
 - **Token matching** — fuzzy blocking via tokenized field values with overlap scoring
 - **Embedding search** — vector similarity search via pgvector (cosine distance)
 - **Matching engine** — field-level scoring with Jaro-Winkler, Levenshtein, Token Jaccard, threshold-based decisions, and merge plans
+- **Graph traversal** — multi-hop exploration via recursive CTE with direction, type, confidence, and tag filtering
 - **LLM extraction schemas** — generate structured extraction schemas from proto annotations for use with Genkit or any LLM framework
 - **Relationships** — directed edges between entities with typed proto data, confidence, and evidence
-- **Tag filtering** — filter queries by arbitrary string tags
+- **Tag filtering** — filter queries by arbitrary string tags with AND/OR semantics
 - **Provenance tracking** — full audit trail of entity extraction origin
+- **Soft deletes** — `DeleteEntity` preserves data for audit; `HardDeleteEntity` for permanent removal
 - **Scoped stores** — tag-based multi-tenant filtering with auto-tagging on writes
 - **Preconditions** — transactionally safe existence, uniqueness, and tag guards on `BatchWrite`
-- **Transactions** — atomic multi-step operations via `TxStore` or shared `WithTx(pgx.Tx)`
-- **Embedder interface** — batch-native `Embedder` interface compatible with `laenen-partners/embedder`
-- **Code generation** — `protoc-gen-entitystore` buf plugin generates matching configs and extraction schemas from proto annotations
+- **Transactions** — atomic read + write operations via `TxStore` or shared `WithTx(pgx.Tx)`
+- **Stats** — aggregate counts by entity type, relation type, soft-deleted; `Stats()` for full overview
+- **EntityStorer interface** — for dependency injection and testing; satisfied by both `EntityStore` and `ScopedStore`
+- **Input validation** — tag length/count limits, relation type validation, batch size cap (1000)
+- **Structured logging** — `WithLogger(*slog.Logger)` for debug-level operation tracing
+- **Code generation** — `protoc-gen-entitystore` generates matching configs, extraction schemas, typed token/anchor extractors, and `WriteOp` builders from proto annotations
 
 ## Quick start
 
@@ -424,14 +429,14 @@ es.DeleteRelationByKey(ctx, personID, companyID, "works_at")
 ### Querying relations
 
 ```go
-// Outbound relations from an entity (source → target)
-rels, _ := es.GetRelationsFromEntity(ctx, personID)
+// Outbound relations from an entity (source → target), paginated
+rels, _ := es.GetRelationsFromEntity(ctx, personID, 0, nil) // 0 = default page size, nil = first page
 fmt.Println(rels[0].DataType) // "employment.v1.Employment"
 var emp employmentv1.Employment
 rels[0].GetData(&emp)
 
 // Inbound relations to an entity (source → target)
-rels, _ = es.GetRelationsToEntity(ctx, companyID)
+rels, _ = es.GetRelationsToEntity(ctx, companyID, 100, nil)
 
 // All connected entities (both directions, deduplicated)
 connected, _ := es.ConnectedEntities(ctx, personID)
@@ -484,11 +489,57 @@ Key properties:
 - **Scope-aware** — `ScopedStore.Traverse` stops traversal at scope boundaries
 - **Transitive filtering** — filtered-out entities block the path to entities beyond them
 
+## Soft deletes
+
+`DeleteEntity` sets `deleted_at` instead of removing the row — data is preserved for audit. All read queries automatically filter deleted entities. Use `HardDeleteEntity` for permanent cleanup.
+
+```go
+es.DeleteEntity(ctx, id)     // soft delete — data preserved
+es.HardDeleteEntity(ctx, id) // permanent removal with CASCADE
+
+// Soft-deleted entities are invisible to all reads, traversals, and scoped stores.
+```
+
+## Stats
+
+Get a view of what's in the database:
+
+```go
+stats, _ := es.Stats(ctx)
+fmt.Printf("Entities: %d, Relations: %d, Soft-deleted: %d\n",
+    stats.TotalEntities, stats.TotalRelations, stats.SoftDeleted)
+
+// Breakdown by type (GROUP BY with counts)
+for _, tc := range stats.EntityTypes {
+    fmt.Printf("  %s: %d\n", tc.Type, tc.Count)
+}
+for _, tc := range stats.RelationTypes {
+    fmt.Printf("  %s: %d\n", tc.Type, tc.Count)
+}
+
+// Individual counts
+count, _ := es.CountEntitiesByType(ctx, "persons.v1.Person")
+relCount, _ := es.CountRelationsForEntity(ctx, entityID)
+```
+
+## EntityStorer interface
+
+Both `EntityStore` and `ScopedStore` satisfy `EntityStorer` — use it for dependency injection and testing:
+
+```go
+type MyService struct {
+    es entitystore.EntityStorer  // accepts EntityStore or ScopedStore
+}
+
+// In tests, use a mock that satisfies EntityStorer.
+```
+
 ## Project structure
 
 ```
 entitystore.go               Library entry point: New(), EntityStore, re-exported types
-options.go                   Options: WithPgStore()
+interface.go                 EntityStorer interface (EntityStore + ScopedStore)
+options.go                   Options: WithPgStore(), WithLogger()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + extraction schemas
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 gen/                         Generated protobuf code (do not edit)
@@ -519,6 +570,7 @@ Tests use [testcontainers](https://testcontainers.com) with `pgvector/pgvector:p
 ## Documentation
 
 - [Entity Extraction Tutorial](docs/tutorial-entity-extraction.md) — full pipeline with Genkit
+- [Migration Guide v0.20→v1.0](docs/migration-v1.0.md) — soft deletes, pagination, EntityStorer interface, stats
 - [Migration Guide v0.17→v0.18](docs/migration-v0.18.md) — generated Tokens, Anchors, WriteOp, option helpers
 - [Migration Guide v0.7→v0.8](docs/migration-v0.8.md) — proto-native write API migration
 - [ADR-001: LLM Extraction Schemas](docs/adr/001-llm-entity-extraction-schema-generation.md)

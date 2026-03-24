@@ -1,6 +1,6 @@
 # EntityStore
 
-Pure Go library for entity storage, deduplication, and relationship management with PostgreSQL + pgvector backend. Includes `protoc-gen-entitystore`, a buf plugin that generates entity matching configs and LLM extraction schemas from proto annotations.
+Pure Go library for entity storage, deduplication, and relationship management with PostgreSQL + pgvector backend. Includes `protoc-gen-entitystore`, a buf plugin that generates matching configs, extraction schemas, and typed write helpers from proto annotations.
 
 ## Quick reference
 
@@ -14,9 +14,10 @@ Pure Go library for entity storage, deduplication, and relationship management w
 
 ```
 entitystore.go               Library entry point: New(), EntityStore, re-exported types
+interface.go                 EntityStorer interface (satisfied by EntityStore + ScopedStore)
 scoped.go                    ScopedStore: tag-based multi-tenant filtering wrapper
-options.go                   Options: WithPgStore()
-cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs
+options.go                   Options: WithPgStore(), WithLogger()
+cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + write helpers
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 gen/                         Generated protobuf code (do not edit)
 matching/                    Domain logic: matcher, similarity, anchors, tokens, embeddings, normalizers
@@ -68,10 +69,10 @@ es.BatchWrite(ctx, []entitystore.BatchWriteOp{
     }},
 })
 
-// Query relations
-outbound, _ := es.GetRelationsFromEntity(ctx, personID)       // source → target
-inbound, _ := es.GetRelationsToEntity(ctx, companyID)         // source → target (where target = companyID)
-connected, _ := es.ConnectedEntities(ctx, personID)           // all connected entities (both directions)
+// Query relations (paginated)
+outbound, _ := es.GetRelationsFromEntity(ctx, personID, 0, nil)  // source → target
+inbound, _ := es.GetRelationsToEntity(ctx, companyID, 0, nil)    // inbound to companyID
+connected, _ := es.ConnectedEntities(ctx, personID)              // all connected (both directions)
 companies, _ := es.FindConnectedByType(ctx, personID,         // filtered by entity type + relation type
     "companies.v1.Company", []string{"works_at"}, nil, 100, nil)
 employees, _ := es.FindEntitiesByRelation(ctx,                // all entities in a relation type
@@ -92,13 +93,31 @@ for _, r := range results {
     fmt.Printf("depth %d: %s (%s)\n", r.Depth, r.Entity.ID, r.Entity.EntityType)
 }
 
+// Soft deletes — data preserved for audit
+es.DeleteEntity(ctx, id)     // sets deleted_at, filtered from all reads
+es.HardDeleteEntity(ctx, id) // permanent removal with CASCADE
+
+// Stats — understand what's in the database
+stats, _ := es.Stats(ctx)
+// stats.TotalEntities, stats.TotalRelations, stats.SoftDeleted
+// stats.EntityTypes  → [{Type: "persons.v1.Person", Count: 1234}, ...]
+// stats.RelationTypes → [{Type: "works_at", Count: 567}, ...]
+
+// Single anchor lookup
+entity, _ := es.GetByAnchor(ctx, "persons.v1.Person", "email", "alice@example.com", nil)
+
+// EntityStorer interface — use for dependency injection and testing
+var store entitystore.EntityStorer = es  // or es.Scoped(cfg)
+
 // Migrations
 entitystore.Migrate(ctx, pool)
 
-// Shared transactions (e.g., with cashbook)
-tx, _ := pool.Begin(ctx)
-esTx := es.WithTx(tx)
-esTx.BatchWrite(ctx, ops...)
+// Shared transactions with reads + writes
+tx, _ := es.Tx(ctx)
+defer tx.Rollback(ctx)
+existing, _ := tx.GetEntity(ctx, id)        // read within tx
+matches, _ := tx.FindByAnchors(ctx, ...)    // anchor lookup within tx
+tx.WriteEntity(ctx, &op)
 tx.Commit(ctx)
 ```
 
@@ -277,6 +296,12 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - `Embedder` interface in `matching` is compatible with `github.com/laenen-partners/embedder` — no adapter needed.
 - `WithTx(pgx.Tx)` on `EntityStore` enables shared transactions across stores sharing the same PostgreSQL pool.
 - `ScopedStore` wraps `EntityStore` with tag-based multi-tenant filtering. Created via `es.Scoped(ScopeConfig{...})`. Reads are filtered by `RequireTags`/`ExcludeTag`/`UnlessTags`; creates are auto-tagged with `AutoTags`. Scope config is preserved across `WithTx`.
+- `EntityStorer` interface in `interface.go` is satisfied by both `EntityStore` and `ScopedStore`. Use for dependency injection and mocking in tests.
+- `DeleteEntity` performs a soft delete (sets `deleted_at`). All reads filter `deleted_at IS NULL`. Use `HardDeleteEntity` for permanent removal.
+- `TxStore` supports reads (`GetEntity`, `FindByAnchors`, `GetRelationsFromEntity`, `GetRelationsToEntity`) alongside writes for transactional read-modify-write patterns.
+- `Stats(ctx)` returns aggregate counts (entities, relations, soft-deleted, per-type breakdowns). Individual count methods also available.
+- `WithLogger(*slog.Logger)` enables structured debug logging for operations.
+- `MaxBatchSize = 1000` caps BatchWrite operations. Input validation enforces tag limits (255 chars, 100 max) and relation type limits (255 chars).
 - `Traverse(ctx, entityID, opts)` performs multi-hop graph traversal using a recursive CTE. Supports direction control, relation/entity type filtering, confidence thresholds, tag filtering, and depth/result caps. Raw SQL (not SQLC) due to recursive CTE complexity. See ADR-007.
 - `WriteOpOption` type and option functions (`WithTags`, `WithConfidence`, `WithMatchedEntityID`, `WithEmbedding`, `WithID`, `WithProvenance`) live in `store/write_options.go` and are re-exported from the root package. Used by generated `WriteOp` functions.
 - Generated `{Entity}WriteOp` returns `*store.WriteEntityOp` so callers can write `{WriteEntity: jobsv1.JobPostingWriteOp(msg, action, opts...)}` directly.
