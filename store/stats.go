@@ -5,7 +5,10 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"google.golang.org/protobuf/proto"
 
+	eventsv1 "github.com/laenen-partners/entitystore/gen/entitystore/events/v1"
 	"github.com/laenen-partners/entitystore/store/internal/dbgen"
 )
 
@@ -134,7 +137,39 @@ func (s *Store) HardDeleteEntity(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("parse entity id: %w", err)
 	}
-	return s.queries.HardDeleteEntity(ctx, uid)
+
+	doHardDelete := func(q *dbgen.Queries) error {
+		// Emit event BEFORE the hard delete (CASCADE would remove related data).
+		// Use GetEntityIncludingDeleted to capture soft-deleted entities too.
+		row, getErr := q.GetEntity(ctx, uid)
+		var entityType string
+		var tags []string
+		if getErr == nil {
+			entityType = row.EntityType
+			tags = row.Tags
+		}
+		evt := &eventsv1.EntityHardDeleted{
+			EntityId:   id,
+			EntityType: entityType,
+		}
+		if err := insertEvents(ctx, q, uid, "", tags, []proto.Message{evt}); err != nil {
+			return fmt.Errorf("insert hard delete event: %w", err)
+		}
+		return q.HardDeleteEntity(ctx, uid)
+	}
+
+	if s.tx != nil {
+		return doHardDelete(s.queries)
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if err := doHardDelete(s.queries.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // unexported helper to check generated types match

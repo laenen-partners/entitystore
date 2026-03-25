@@ -10,11 +10,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 - **`GetEntitiesByTypeFiltered` removed** — merged into `GetEntitiesByType` which now accepts an optional `*QueryFilter` as the last parameter. Pass `nil` for no filtering.
 - **`FindConnectedByType`** takes `*FindConnectedOpts` struct instead of 7 positional parameters.
 - **`Tx()`** returns `*entitystore.TxStore` (root package) instead of `*store.TxStore`. Consumers no longer need to import the `store` package for transactions.
+- **Provenance removed** — `ProvenanceEntry`, `WithProvenance`, `Provenance()`, `GetProvenanceForEntity` all removed. Replaced by the event store (see below).
 
 ### Added
+- **Event store** — proto-first audit trail replaces provenance. Every write operation automatically emits a standard lifecycle event (`EntityCreated`, `EntityUpdated`, `EntityMerged`, `EntityDeleted`, `EntityHardDeleted`, `RelationCreated`, `RelationDeleted`). Callers attach custom domain events via `WithEvents(...proto.Message)` or the `Events` field on write ops. Events are proto messages stored as JSONB with UUIDv7 IDs (time-sortable). Table is partitioned by `occurred_at` with outbox-ready `published_at` column.
+- **`GetEventsForEntity(ctx, entityID, opts)`** — query events with optional filtering by event type, time range, and limit. Added to `EntityStore`, `ScopedStore`, `TxStore`, and `EntityStorer` interface.
+- **`WithEvents(...proto.Message)`** — write option to attach custom domain events to entity/relation writes.
+- **Event type derivation** — `payload_type` keeps the full proto name (e.g. `entitystore.events.v1.EntityCreated`); `event_type` strips the version segment for routing stability (e.g. `entitystore.events.EntityCreated`).
+- **Standard event protos** — `proto/entitystore/events/v1/events.proto` with 8 lifecycle event messages.
+- **Outbox publisher** — `Publisher` polls `entity_events` for unpublished rows and delivers them via a caller-provided `PublishFunc`. TTL-based leader election via `publisher_lock` table ensures only one publisher runs across all instances. Lock auto-expires if holder crashes. Created via `es.NewPublisher(fn, cfg)`. See ADR-008.
+- **Health API** — `es.Health(ctx)` returns `HealthStatus` with DB health (ping latency, pool stats), event activity (last event time, unpublished count), and publisher status (leader state, lock expiry, last publish time). `es.store.HealthError(ctx)` for simple liveness probes.
 - `FindConnectedOpts` struct for cleaner `FindConnectedByType` calls.
-- `TxStore` wrapper in root package with full read + write surface (GetEntity, FindByAnchors, GetRelationsFrom/To, WriteEntity, UpsertRelation, DeleteRelationByKey, UpdateRelationData).
+- `TxStore` wrapper in root package with full read + write surface (GetEntity, FindByAnchors, GetRelationsFrom/To, WriteEntity, UpsertRelation, DeleteRelationByKey, UpdateRelationData, GetEventsForEntity).
 - Expanded godoc package comment with quick-start example and pointers to key types.
+- Migration: `entity_events` (partitioned, replaces `entity_provenance`), `publisher_lock`.
+- ADR-008: Outbox Publisher with TTL-Based Leader Election.
 
 ### Changed
 - ADR-001, ADR-002 status updated to "Implemented". ADR-003 updated to "Partially implemented".

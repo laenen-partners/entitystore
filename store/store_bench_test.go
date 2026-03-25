@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
@@ -31,10 +30,7 @@ func BenchmarkBatchWrite_SingleCreate(b *testing.B) {
 				Data:       testData(&testing.T{}, map[string]any{"name": fmt.Sprintf("bench-%d", i)}),
 				Confidence: 0.9,
 				Anchors:    []matching.AnchorQuery{{Field: "ref", Value: fmt.Sprintf("bench-%d", i)}},
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-				},
-			}},
+				}},
 		})
 		if err != nil {
 			b.Fatal(err)
@@ -56,10 +52,7 @@ func BenchmarkBatchWrite_TenOps(b *testing.B) {
 				Action:     store.WriteActionCreate,
 				Data:       testData(&testing.T{}, map[string]any{"name": fmt.Sprintf("bench-%d-%d", i, j)}),
 				Confidence: 0.9,
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-				},
-			}}
+				}}
 		}
 		results, err := s.BatchWrite(ctx, ops)
 		if err != nil {
@@ -82,9 +75,6 @@ func BenchmarkFindByAnchors(b *testing.B) {
 			Data:       testData(&testing.T{}, map[string]any{"email": "bench@example.com"}),
 			Confidence: 0.9,
 			Anchors:    []matching.AnchorQuery{{Field: "email", Value: "bench@example.com"}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-			},
 		}},
 	})
 	id := results[0].Entity.ID
@@ -110,9 +100,6 @@ func BenchmarkGetEntity(b *testing.B) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(&testing.T{}, map[string]any{"name": "bench-get"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-			},
 		}},
 	})
 	id := results[0].Entity.ID
@@ -137,10 +124,7 @@ func BenchmarkTraverse_Depth2(b *testing.B) {
 			{WriteEntity: &store.WriteEntityOp{
 				Action: store.WriteActionCreate,
 				Data:   testData(&testing.T{}, map[string]any{"name": name}),
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-				},
-			}},
+				}},
 		})
 		return results[0].Entity.ID
 	}
@@ -182,9 +166,6 @@ func BenchmarkConnectedEntities(b *testing.B) {
 		{WriteEntity: &store.WriteEntityOp{
 			Action: store.WriteActionCreate,
 			Data:   testData(&testing.T{}, map[string]any{"name": "hub"}),
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-			},
 		}},
 	})
 	hubID := results[0].Entity.ID
@@ -196,10 +177,7 @@ func BenchmarkConnectedEntities(b *testing.B) {
 			{WriteEntity: &store.WriteEntityOp{
 				Action: store.WriteActionCreate,
 				Data:   testData(&testing.T{}, map[string]any{"name": fmt.Sprintf("spoke-%d", j)}),
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-				},
-			}},
+				}},
 		})
 		spokeID := r[0].Entity.ID
 		ids = append(ids, spokeID)
@@ -233,16 +211,10 @@ func BenchmarkGetRelationsFromEntity(b *testing.B) {
 		{WriteEntity: &store.WriteEntityOp{
 			Action: store.WriteActionCreate,
 			Data:   testData(&testing.T{}, map[string]any{"name": "src"}),
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-			},
 		}},
 		{WriteEntity: &store.WriteEntityOp{
 			Action: store.WriteActionCreate,
 			Data:   testData(&testing.T{}, map[string]any{"name": "tgt"}),
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-			},
 		}},
 	})
 	srcID := results[0].Entity.ID
@@ -290,10 +262,6 @@ func BenchmarkFindByTokens(b *testing.B) {
 			Data:       testData(&testing.T{}, map[string]any{"name": "Alice Johnson"}),
 			Confidence: 0.9,
 			Tokens:     map[string][]string{"name": {"alice", "johnson"}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "bench", ModelID: "bench", MatchMethod: "create",
-				ExtractedAt: time.Now(),
-			},
 		}},
 	})
 	id := results[0].Entity.ID

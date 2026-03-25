@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	eventsv1 "github.com/laenen-partners/entitystore/gen/entitystore/events/v1"
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store/internal/dbgen"
 )
@@ -177,11 +178,59 @@ func (ts *TxStore) DeleteRelationByKey(ctx context.Context, sourceID, targetID, 
 	if err != nil {
 		return fmt.Errorf("parse target id: %w", err)
 	}
-	return ts.queries.DeleteRelationByKey(ctx, dbgen.DeleteRelationByKeyParams{
+	if err := ts.queries.DeleteRelationByKey(ctx, dbgen.DeleteRelationByKeyParams{
 		SourceID:     sourceUID,
 		TargetID:     targetUID,
 		RelationType: relationType,
+	}); err != nil {
+		return fmt.Errorf("delete relation: %w", err)
+	}
+	evt := &eventsv1.RelationDeleted{
+		SourceId:     sourceID,
+		TargetId:     targetID,
+		RelationType: relationType,
+	}
+	rk := relationKeyStr(sourceUID, targetUID, relationType)
+	return insertEvents(ctx, ts.queries, uuid.Nil, rk, nil, []proto.Message{evt})
+}
+
+// GetEventsForEntity returns events for the given entity within the transaction.
+func (ts *TxStore) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {
+	uid, err := uuid.Parse(entityID)
+	if err != nil {
+		return nil, fmt.Errorf("parse entity id: %w", err)
+	}
+	limit := int32(100)
+	var eventTypes []string
+	var since time.Time
+	if opts != nil {
+		if opts.Limit > 0 {
+			limit = int32(opts.Limit)
+		}
+		if len(opts.EventTypes) > 0 {
+			eventTypes = opts.EventTypes
+		}
+		if !opts.Since.IsZero() {
+			since = opts.Since
+		}
+	}
+	if eventTypes == nil {
+		eventTypes = []string{}
+	}
+	rows, err := ts.queries.GetEventsForEntity(ctx, dbgen.GetEventsForEntityParams{
+		EntityID:   pgtype.UUID{Bytes: uid, Valid: true},
+		EventTypes: eventTypes,
+		Since:      since,
+		MaxResults: limit,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("get events: %w", err)
+	}
+	result := make([]Event, len(rows))
+	for i, row := range rows {
+		result[i] = eventFromRow(row)
+	}
+	return result, nil
 }
 
 // UpdateRelationData updates the typed data on an existing relation in the current transaction.

@@ -3,7 +3,6 @@ package store_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -81,13 +80,6 @@ func TestBatchWrite_CreateAndFindByAnchor(t *testing.T) {
 			Anchors: []matching.AnchorQuery{
 				{Field: "email", Value: "alice@example.com"},
 			},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:   "test:anchor",
-				ExtractedAt: time.Now(),
-				ModelID:     "test",
-				Fields:      []string{"email", "name"},
-				MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -126,13 +118,6 @@ func TestBatchWrite_CreateWithTokens(t *testing.T) {
 			Data:       testData(t, map[string]any{"name": "Acme Corp", "industry": "technology"}),
 			Confidence: 0.9,
 			Tokens:     map[string][]string{"name": {"acme", "corp"}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:   "test:tokens",
-				ExtractedAt: time.Now(),
-				ModelID:     "test",
-				Fields:      []string{"name"},
-				MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -162,19 +147,11 @@ func TestBatchWrite_MixedEntitiesAndRelations(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "Alice"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:mixed", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 		{WriteEntity: &store.WriteEntityOp{
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "Acme"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:mixed", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -226,7 +203,7 @@ func TestBatchWrite_MixedEntitiesAndRelations(t *testing.T) {
 	}
 }
 
-func TestBatchWrite_CreateWithProvenance(t *testing.T) {
+func TestBatchWrite_CreateWithTagsAndTokens(t *testing.T) {
 	s := sharedTestStore(t)
 	ctx := context.Background()
 
@@ -241,15 +218,6 @@ func TestBatchWrite_CreateWithProvenance(t *testing.T) {
 			},
 			Tokens: map[string][]string{
 				"description": {"consulting", "services", "q1"},
-			},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:       "doc-002",
-				ExtractedAt:     time.Now(),
-				ModelID:         "gemini-2.5-flash",
-				Confidence:      0.92,
-				Fields:          []string{"invoice_number", "total"},
-				MatchMethod:     "create",
-				MatchConfidence: 0.0,
 			},
 		}},
 	})
@@ -277,10 +245,6 @@ func TestFindByEmbedding(t *testing.T) {
 				Action:     store.WriteActionCreate,
 				Data:       testData(t, map[string]any{"name": name}),
 				Confidence: 0.9,
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "test:embedding", ExtractedAt: time.Now(),
-					ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-				},
 			}},
 		})
 		if err != nil {
@@ -357,10 +321,6 @@ func TestTags(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "Tag Test"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:tags", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {

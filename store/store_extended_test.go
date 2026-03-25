@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	eventsv1 "github.com/laenen-partners/entitystore/gen/entitystore/events/v1"
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
 )
@@ -22,10 +23,6 @@ func createTestEntity(t *testing.T, s *store.Store, data proto.Message) string {
 			Action:     store.WriteActionCreate,
 			Data:       data,
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:helper", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -54,11 +51,6 @@ func TestBatchWrite_Update(t *testing.T) {
 			MatchedEntityID: id,
 			Data:            newData,
 			Confidence:      0.98,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:update", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name", "title", "phone"},
-				MatchMethod: "anchor", MatchConfidence: 1.0,
-			},
 		}},
 	})
 	if err != nil {
@@ -96,11 +88,6 @@ func TestBatchWrite_Merge(t *testing.T) {
 			MatchedEntityID: id,
 			Data:            mergeData,
 			Confidence:      0.95,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:merge", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"title", "phone"},
-				MatchMethod: "token", MatchConfidence: 0.87,
-			},
 		}},
 	})
 	if err != nil {
@@ -142,10 +129,6 @@ func TestBatchWrite_CreateWithClientID(t *testing.T) {
 			ID:         clientID,
 			Data:       testData(t, map[string]any{"number": "INV-099"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:clientid", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"number"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -221,10 +204,6 @@ func TestFindByAnchors_WithTagFilter(t *testing.T) {
 			Confidence: 0.9,
 			Tags:       []string{"source:crm"},
 			Anchors:    []matching.AnchorQuery{{Field: "email", Value: "tagfilter@test.com"}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:tagfilter", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"email"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -255,26 +234,18 @@ func TestFindByAnchors_WithTagFilter(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Provenance
+// Events
 // ---------------------------------------------------------------------------
 
-func TestGetProvenanceForEntity(t *testing.T) {
+func TestGetEventsForEntity(t *testing.T) {
 	s := sharedTestStore(t)
 	ctx := context.Background()
 
 	results, err := s.BatchWrite(ctx, []store.BatchWriteOp{
 		{WriteEntity: &store.WriteEntityOp{
 			Action:     store.WriteActionCreate,
-			Data:       testData(t, map[string]any{"number": "PROV-001"}),
+			Data:       testData(t, map[string]any{"number": "EVT-001"}),
 			Confidence: 0.92,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:   "doc:email-42",
-				ExtractedAt: time.Now().Truncate(time.Millisecond),
-				ModelID:     "gpt-4o",
-				Confidence:  0.92,
-				Fields:      []string{"number"},
-				MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -283,18 +254,38 @@ func TestGetProvenanceForEntity(t *testing.T) {
 	id := results[0].Entity.ID
 	t.Cleanup(func() { _ = s.DeleteEntity(ctx, id) })
 
-	entries, err := s.GetProvenanceForEntity(ctx, id)
+	events, err := s.GetEventsForEntity(ctx, id, nil)
 	if err != nil {
-		t.Fatalf("get provenance: %v", err)
+		t.Fatalf("get events: %v", err)
 	}
-	if len(entries) != 1 {
-		t.Fatalf("expected 1 provenance entry, got %d", len(entries))
+	if len(events) == 0 {
+		t.Fatal("expected at least 1 event")
 	}
-	if entries[0].SourceURN != "doc:email-42" {
-		t.Errorf("SourceURN = %q", entries[0].SourceURN)
+
+	// Find the EntityCreated event.
+	var foundCreated bool
+	for _, evt := range events {
+		if evt.EventType == "entitystore.events.EntityCreated" {
+			foundCreated = true
+			if evt.EntityID != id {
+				t.Errorf("EntityID = %q, want %q", evt.EntityID, id)
+			}
+			if evt.ID == "" {
+				t.Error("Event ID should not be empty")
+			}
+			if evt.OccurredAt.IsZero() {
+				t.Error("OccurredAt should not be zero")
+			}
+			// Type-assert the payload to the proto message.
+			if evt.Payload != nil {
+				if _, ok := evt.Payload.(*eventsv1.EntityCreated); !ok {
+					t.Errorf("Payload type = %T, want *eventsv1.EntityCreated", evt.Payload)
+				}
+			}
+		}
 	}
-	if entries[0].ModelID != "gpt-4o" {
-		t.Errorf("ModelID = %q", entries[0].ModelID)
+	if !foundCreated {
+		t.Error("expected an entitystore.events.EntityCreated event")
 	}
 }
 
@@ -547,10 +538,6 @@ func TestTransaction_CommitAndRollback(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "TxCommit"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:tx", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		})
 		if err != nil {
 			t.Fatalf("write in tx: %v", err)
@@ -580,10 +567,6 @@ func TestTransaction_CommitAndRollback(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "TxRollback"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:tx-rb", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		})
 		if err != nil {
 			t.Fatalf("write in tx: %v", err)
@@ -664,10 +647,6 @@ func TestBatchWrite_UpdateAddsTagsAndAnchors(t *testing.T) {
 			Confidence:      0.95,
 			Tags:            []string{"updated:true"},
 			Anchors:         []matching.AnchorQuery{{Field: "email", Value: "update-anchor@test.com"}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:update-anch", ExtractedAt: time.Now(),
-				ModelID: "test", MatchMethod: "anchor", MatchConfidence: 1.0,
-			},
 		}},
 	})
 	if err != nil {
@@ -744,10 +723,6 @@ func TestBatchWrite_CreateWithEmbedding(t *testing.T) {
 			Data:       testData(t, map[string]any{"name": "Embed Test"}),
 			Confidence: 0.9,
 			Embedding:  vec,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:embed", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -789,10 +764,6 @@ func TestFindByAnchors_AnyTags(t *testing.T) {
 				Confidence: 0.9,
 				Tags:       []string{tag},
 				Anchors:    []matching.AnchorQuery{{Field: "email", Value: email}},
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "test:anytags", ExtractedAt: time.Now(),
-					ModelID: "test", Fields: []string{"email"}, MatchMethod: "create",
-				},
 			}},
 		})
 		if err != nil {
@@ -872,10 +843,6 @@ func TestFindByTokens_AnyTags(t *testing.T) {
 				Confidence: 0.9,
 				Tags:       []string{tag},
 				Tokens:     map[string][]string{"name": {"anytagtoken"}},
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "test:anytags-token", ExtractedAt: time.Now(),
-					ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-				},
 			}},
 		})
 		if err != nil {
@@ -921,10 +888,6 @@ func TestExcludeTagUnlessFilter(t *testing.T) {
 				Confidence: 0.9,
 				Tags:       tags,
 				Anchors:    []matching.AnchorQuery{{Field: "email", Value: email}},
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "test:exclude", ExtractedAt: time.Now(),
-					ModelID: "test", Fields: []string{"email"}, MatchMethod: "create",
-				},
 			}},
 		})
 		if err != nil {
@@ -1165,10 +1128,6 @@ func TestGetEntitiesByTypeFiltered(t *testing.T) {
 				Data:       testData(t, map[string]any{"name": name}),
 				Confidence: 0.9,
 				Tags:       []string{tag},
-				Provenance: matching.ProvenanceEntry{
-					SourceURN: "test:filtered", ExtractedAt: time.Now(),
-					ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-				},
 			}},
 		})
 		if err != nil {
@@ -1229,10 +1188,6 @@ func TestWithTx_Commit(t *testing.T) {
 			Data:       testData(t, map[string]any{"name": "WithTxCommit"}),
 			Confidence: 0.9,
 			Anchors:    []matching.AnchorQuery{{Field: "name", Value: "withtxcommit"}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:withtx", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -1285,10 +1240,6 @@ func TestWithTx_Rollback(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "WithTxRollback"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:withtx-rb", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -1328,10 +1279,6 @@ func TestWithTx_MultipleOperations(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "TxPerson"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:withtx-multi", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
@@ -1345,10 +1292,6 @@ func TestWithTx_MultipleOperations(t *testing.T) {
 			Action:     store.WriteActionCreate,
 			Data:       testData(t, map[string]any{"name": "TxCompany"}),
 			Confidence: 0.9,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN: "test:withtx-multi", ExtractedAt: time.Now(),
-				ModelID: "test", Fields: []string{"name"}, MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {

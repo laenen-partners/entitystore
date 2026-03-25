@@ -3,7 +3,6 @@ package store_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/laenen-partners/entitystore"
 	"github.com/laenen-partners/entitystore/matching"
@@ -20,12 +19,6 @@ func createTraverseEntity(t *testing.T, s *store.Store, name string, tags []stri
 			Data:       testData(t, map[string]any{"name": name}),
 			Confidence: 0.9,
 			Tags:       tags,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:   "test:traverse",
-				ExtractedAt: time.Now(),
-				ModelID:     "test",
-				MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {

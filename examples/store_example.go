@@ -53,7 +53,7 @@ func SetupEntityStore(ctx context.Context, connString string) (*entitystore.Enti
 // ---------------------------------------------------------------------------
 
 // CreateEntityExample shows how to create a new entity with anchors,
-// tokens, tags, and provenance tracking.
+// tokens, and tags.
 func CreateEntityExample(ctx context.Context, es *entitystore.EntityStore) {
 	data, _ := structpb.NewStruct(map[string]any{
 		"email":         "alice@example.com",
@@ -75,14 +75,6 @@ func CreateEntityExample(ctx context.Context, es *entitystore.EntityStore) {
 			Tokens: map[string][]string{
 				"full_name": {"alice", "johnson"},
 				"job_title": {"product", "manager"},
-			},
-			Provenance: entitystore.ProvenanceEntry{
-				SourceURN:   "crm:contacts/alice-001",
-				ExtractedAt: time.Now(),
-				ModelID:     "gpt-4o",
-				Confidence:  0.95,
-				Fields:      []string{"email", "full_name", "phone", "date_of_birth", "job_title"},
-				MatchMethod: "create",
 			},
 		}},
 	})
@@ -113,14 +105,6 @@ func CreateWithClientIDExample(ctx context.Context, es *entitystore.EntityStore)
 			Confidence: 0.90,
 			Anchors: []entitystore.AnchorQuery{
 				{Field: "invoice_number", Value: "inv-2024-001"}, // normalized
-			},
-			Provenance: entitystore.ProvenanceEntry{
-				SourceURN:   "email:inbox/msg-42",
-				ExtractedAt: time.Now(),
-				ModelID:     "claude-sonnet-4-20250514",
-				Confidence:  0.90,
-				Fields:      []string{"invoice_number", "issuer_name", "total_amount"},
-				MatchMethod: "create",
 			},
 		}},
 	})
@@ -154,15 +138,6 @@ func UpdateEntityExample(ctx context.Context, es *entitystore.EntityStore, entit
 			Anchors: []entitystore.AnchorQuery{
 				{Field: "email", Value: "alice.johnson@newcompany.com"},
 			},
-			Provenance: entitystore.ProvenanceEntry{
-				SourceURN:       "linkedin:profile/alice-johnson",
-				ExtractedAt:     time.Now(),
-				ModelID:         "gpt-4o",
-				Confidence:      0.98,
-				Fields:          []string{"email", "full_name", "phone", "job_title"},
-				MatchMethod:     "anchor",
-				MatchConfidence: 1.0,
-			},
 		}},
 	})
 	if err != nil {
@@ -185,15 +160,6 @@ func MergeEntityExample(ctx context.Context, es *entitystore.EntityStore, entity
 			MatchedEntityID: entityID,
 			Data:            partialData,
 			Confidence:      0.92,
-			Provenance: entitystore.ProvenanceEntry{
-				SourceURN:       "email:inbox/msg-99",
-				ExtractedAt:     time.Now(),
-				ModelID:         "claude-sonnet-4-20250514",
-				Confidence:      0.92,
-				Fields:          []string{"job_title", "phone"},
-				MatchMethod:     "composite",
-				MatchConfidence: 0.87,
-			},
 		}},
 	})
 	if err != nil {
@@ -375,10 +341,6 @@ func TransactionExample(ctx context.Context, es *entitystore.EntityStore) {
 		Data:       personData,
 		Confidence: 0.90,
 		Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "bob@example.com"}},
-		Provenance: entitystore.ProvenanceEntry{
-			SourceURN: "test:tx-example", ExtractedAt: time.Now(),
-			ModelID: "manual", MatchMethod: "create",
-		},
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -430,21 +392,65 @@ func PaginationExample(ctx context.Context, es *entitystore.EntityStore) {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Provenance
+// 9. Events — audit trail and custom domain events
 // ---------------------------------------------------------------------------
 
-// ProvenanceExample shows how to query the extraction audit trail.
-func ProvenanceExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
-	entries, err := es.GetProvenanceForEntity(ctx, entityID)
+// EventsExample shows how to query entity events. Standard lifecycle events
+// (EntityCreated, EntityUpdated, etc.) are emitted automatically by the store.
+// Custom domain events can be attached via WithEvents() on write operations.
+func EventsExample(ctx context.Context, es *entitystore.EntityStore, entityID string) {
+	// Query all events for an entity.
+	events, err := es.GetEventsForEntity(ctx, entityID, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	for _, p := range entries {
-		fmt.Printf("  Source: %s, Model: %s, Confidence: %.2f, Method: %s\n",
-			p.SourceURN, p.ModelID, p.Confidence, p.MatchMethod)
-		fmt.Printf("  Fields: %v, Extracted at: %s\n",
-			p.Fields, p.ExtractedAt.Format(time.RFC3339))
+	for _, evt := range events {
+		fmt.Printf("  Event: %s (type: %s, payload: %s)\n",
+			evt.ID, evt.EventType, evt.PayloadType)
+		fmt.Printf("  Entity: %s, occurred at: %s\n",
+			evt.EntityID, evt.OccurredAt.Format(time.RFC3339))
+		if len(evt.Tags) > 0 {
+			fmt.Printf("  Tags: %v\n", evt.Tags)
+		}
+	}
+
+	// Query with filtering options.
+	filtered, err := es.GetEventsForEntity(ctx, entityID, &entitystore.EventQueryOpts{
+		EventTypes: []string{"entitystore.events.v1.EntityCreated"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Found %d creation events\n", len(filtered))
+}
+
+// EventsWithWriteExample shows how to attach custom domain events to a
+// write operation using WithEvents(). Standard lifecycle events are always
+// emitted automatically — WithEvents() is for additional domain-specific events.
+func EventsWithWriteExample(ctx context.Context, es *entitystore.EntityStore) {
+	data, _ := structpb.NewStruct(map[string]any{
+		"email":     "dave@example.com",
+		"full_name": "Dave Wilson",
+	})
+
+	// Attach a custom domain event to the write operation.
+	// Standard events (EntityCreated) are emitted automatically.
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:     entitystore.WriteActionCreate,
+			Data:       data,
+			Confidence: 0.95,
+			Anchors: []entitystore.AnchorQuery{
+				{Field: "email", Value: "dave@example.com"},
+			},
+			// Custom domain events can be attached via WithEvents option.
+			// Standard lifecycle events (EntityCreated, etc.) are emitted
+			// automatically and do not need to be specified here.
+		}},
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -469,10 +475,6 @@ func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
 			Data:       personData,
 			Confidence: 0.93,
 			Anchors:    []entitystore.AnchorQuery{{Field: "email", Value: "carol@startup.io"}},
-			Provenance: entitystore.ProvenanceEntry{
-				SourceURN: "email:inbox/msg-100", ExtractedAt: time.Now(),
-				ModelID: "gpt-4o", MatchMethod: "create",
-			},
 		}},
 		// Op 1: create company
 		{WriteEntity: &entitystore.WriteEntityOp{
@@ -480,10 +482,6 @@ func MixedBatchExample(ctx context.Context, es *entitystore.EntityStore) {
 			Data:       companyData,
 			Confidence: 0.88,
 			Anchors:    []entitystore.AnchorQuery{{Field: "domain", Value: "startup.io"}},
-			Provenance: entitystore.ProvenanceEntry{
-				SourceURN: "email:inbox/msg-100", ExtractedAt: time.Now(),
-				ModelID: "gpt-4o", MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {

@@ -1,0 +1,77 @@
+syntax = "proto3";
+package entitystore.events.v1;
+
+option go_package = "github.com/laenen-partners/entitystore/gen/entitystore/events/v1;eventsv1";
+
+// EntityCreated is emitted when a new entity is created via WriteActionCreate.
+message EntityCreated {
+  string entity_id = 1;
+  string entity_type = 2;
+  double confidence = 3;
+  repeated string tags = 4;
+  string actor = 5;
+  string model_id = 6;
+  repeated string fields = 7;
+}
+
+// EntityUpdated is emitted when an existing entity is updated via WriteActionUpdate.
+message EntityUpdated {
+  string entity_id = 1;
+  string entity_type = 2;
+  double confidence = 3;
+  repeated string tags = 4;
+  string actor = 5;
+  string model_id = 6;
+  repeated string fields = 7;
+}
+
+// EntityMerged is emitted when two entities are merged via WriteActionMerge.
+message EntityMerged {
+  string winner_id = 1;
+  string loser_id = 2;
+  string entity_type = 3;
+  string match_method = 4;
+  double match_confidence = 5;
+  string actor = 6;
+  string model_id = 7;
+}
+
+// EntityDeleted is emitted on soft delete (DeleteEntity).
+message EntityDeleted {
+  string entity_id = 1;
+  string entity_type = 2;
+  string actor = 3;
+}
+
+// EntityHardDeleted is emitted on permanent removal (HardDeleteEntity).
+message EntityHardDeleted {
+  string entity_id = 1;
+  string entity_type = 2;
+  string actor = 3;
+}
+
+// RelationCreated is emitted when a new relation is created via UpsertRelation.
+message RelationCreated {
+  string source_id = 1;
+  string target_id = 2;
+  string relation_type = 3;
+  double confidence = 4;
+  string actor = 5;
+}
+
+// RelationUpdated is emitted when an existing relation is updated via UpsertRelation.
+message RelationUpdated {
+  string source_id = 1;
+  string target_id = 2;
+  string relation_type = 3;
+  double confidence = 4;
+  string actor = 5;
+}
+
+// RelationDeleted is emitted when a relation is removed via DeleteRelationByKey.
+message RelationDeleted {
+  string source_id = 1;
+  string target_id = 2;
+  string relation_type = 3;
+  string actor = 4;
+}

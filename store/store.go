@@ -410,22 +410,6 @@ func (s *Store) GetEntitiesByTypeFiltered(ctx context.Context, entityType string
 	return result, nil
 }
 
-func (s *Store) GetProvenanceForEntity(ctx context.Context, entityID string) ([]matching.ProvenanceEntry, error) {
-	uid, err := uuid.Parse(entityID)
-	if err != nil {
-		return nil, fmt.Errorf("parse entity id: %w", err)
-	}
-	rows, err := s.queries.GetProvenanceForEntity(ctx, uid)
-	if err != nil {
-		return nil, fmt.Errorf("get provenance: %w", err)
-	}
-	result := make([]matching.ProvenanceEntry, len(rows))
-	for i, row := range rows {
-		result[i] = provenanceFromRow(row)
-	}
-	return result, nil
-}
-
 func (s *Store) GetRelationsFromEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error) {
 	uid, err := uuid.Parse(entityID)
 	if err != nil {
@@ -647,20 +631,6 @@ func toStoredEntity(id uuid.UUID, entityType string, data json.RawMessage, confi
 		Tags:       tags,
 		CreatedAt:  createdAt,
 		UpdatedAt:  updatedAt,
-	}
-}
-
-func provenanceFromRow(row dbgen.EntityProvenance) matching.ProvenanceEntry {
-	return matching.ProvenanceEntry{
-		ID:              row.ID.String(),
-		EntityID:        row.EntityID.String(),
-		SourceURN:      row.SourceUrn,
-		ExtractedAt:     row.ExtractedAt,
-		ModelID:         row.ModelID,
-		Confidence:      row.Confidence,
-		Fields:          row.Fields,
-		MatchMethod:     row.MatchMethod,
-		MatchConfidence: row.MatchConfidence,
 	}
 }
 

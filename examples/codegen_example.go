@@ -94,10 +94,6 @@ func WriteOpExample() {
 	//   // Generated WriteOp — anchors, tokens wired automatically.
 	//   op := personv1.PersonWriteOp(person, store.WriteActionCreate,
 	//       store.WithTags("ws:acme", "active"),
-	//       store.WithProvenance(matching.ProvenanceEntry{
-	//           SourceURN: "crm:contacts/alice",
-	//           ModelID:   "gpt-4o",
-	//       }),
 	//   )
 	//
 	//   // Use in BatchWrite:

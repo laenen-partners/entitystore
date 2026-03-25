@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
+	eventsv1 "github.com/laenen-partners/entitystore/gen/entitystore/events/v1"
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store/internal/dbgen"
 )
@@ -38,7 +38,7 @@ type WriteEntityOp struct {
 	Anchors         []matching.AnchorQuery
 	Tokens          map[string][]string
 	Embedding       []float32
-	Provenance      matching.ProvenanceEntry
+	Events          []proto.Message
 }
 
 // UpsertRelationOp describes a single relation upsert within a batch.
@@ -52,6 +52,7 @@ type UpsertRelationOp struct {
 	Implied      bool
 	SourceURN    string
 	Data         proto.Message // Optional: typed relation payload. DataType is derived automatically.
+	Events       []proto.Message
 }
 
 // PreCondition is a check evaluated inside the BatchWrite transaction before
@@ -162,6 +163,21 @@ func (s *Store) executeBatchOps(ctx context.Context, q *dbgen.Queries, ops []Bat
 			if err != nil {
 				return nil, fmt.Errorf("op %d (upsert_relation): %w", i, err)
 			}
+			// Emit standard RelationCreated event + any caller-defined events.
+			relOp := op.UpsertRelation
+			stdEvent := &eventsv1.RelationCreated{
+				SourceId:     rel.SourceID,
+				TargetId:     rel.TargetID,
+				RelationType: rel.RelationType,
+				Confidence:   rel.Confidence,
+			}
+			sourceUID, _ := uuid.Parse(rel.SourceID)
+			targetUID, _ := uuid.Parse(rel.TargetID)
+			rk := relationKeyStr(sourceUID, targetUID, rel.RelationType)
+			allRelEvents := append([]proto.Message{stdEvent}, relOp.Events...)
+			if err := insertEvents(ctx, q, uuid.Nil, rk, nil, allRelEvents); err != nil {
+				return nil, fmt.Errorf("op %d (upsert_relation events): %w", i, err)
+			}
 			results = append(results, BatchWriteResult{Relation: &rel})
 
 		default:
@@ -172,13 +188,41 @@ func (s *Store) executeBatchOps(ctx context.Context, q *dbgen.Queries, ops []Bat
 	return results, nil
 }
 
-// DeleteEntity removes an entity and its associated data.
+// DeleteEntity soft-deletes an entity (sets deleted_at).
 func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 	uid, err := uuid.Parse(id)
 	if err != nil {
 		return fmt.Errorf("parse entity id: %w", err)
 	}
-	return s.queries.DeleteEntity(ctx, uid)
+
+	doDelete := func(q *dbgen.Queries) error {
+		// Fetch entity type for the event before deleting.
+		row, err := q.GetEntity(ctx, uid)
+		if err != nil {
+			return fmt.Errorf("get entity for delete event: %w", err)
+		}
+		if err := q.DeleteEntity(ctx, uid); err != nil {
+			return fmt.Errorf("delete entity: %w", err)
+		}
+		evt := &eventsv1.EntityDeleted{
+			EntityId:   id,
+			EntityType: row.EntityType,
+		}
+		return insertEvents(ctx, q, uid, "", row.Tags, []proto.Message{evt})
+	}
+
+	if s.tx != nil {
+		return doDelete(s.queries)
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if err := doDelete(s.queries.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // DeleteRelationByKey removes a specific relation by source, target, and type.
@@ -194,11 +238,36 @@ func (s *Store) DeleteRelationByKey(ctx context.Context, sourceID, targetID, rel
 	if err != nil {
 		return fmt.Errorf("parse target id: %w", err)
 	}
-	return s.queries.DeleteRelationByKey(ctx, dbgen.DeleteRelationByKeyParams{
-		SourceID:     sourceUID,
-		TargetID:     targetUID,
-		RelationType: relationType,
-	})
+
+	doDelete := func(q *dbgen.Queries) error {
+		if err := q.DeleteRelationByKey(ctx, dbgen.DeleteRelationByKeyParams{
+			SourceID:     sourceUID,
+			TargetID:     targetUID,
+			RelationType: relationType,
+		}); err != nil {
+			return fmt.Errorf("delete relation: %w", err)
+		}
+		evt := &eventsv1.RelationDeleted{
+			SourceId:     sourceID,
+			TargetId:     targetID,
+			RelationType: relationType,
+		}
+		rk := relationKeyStr(sourceUID, targetUID, relationType)
+		return insertEvents(ctx, q, uuid.Nil, rk, nil, []proto.Message{evt})
+	}
+
+	if s.tx != nil {
+		return doDelete(s.queries)
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if err := doDelete(s.queries.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // UpdateRelationData updates the typed data on an existing relation.
@@ -410,10 +479,19 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 	if err := upsertTokens(ctx, q, entityID, entityType, op.Tokens); err != nil {
 		return matching.StoredEntity{}, err
 	}
-	if err := insertProvenance(ctx, q, entityID, op.Provenance); err != nil {
+	if err := updateEmbedding(ctx, q, entityID, op.Embedding); err != nil {
 		return matching.StoredEntity{}, err
 	}
-	if err := updateEmbedding(ctx, q, entityID, op.Embedding); err != nil {
+
+	// Emit standard EntityCreated event + any caller-defined events.
+	stdEvent := &eventsv1.EntityCreated{
+		EntityId:   entityID.String(),
+		EntityType: entityType,
+		Confidence: op.Confidence,
+		Tags:       tags,
+	}
+	allEvents := append([]proto.Message{stdEvent}, op.Events...)
+	if err := insertEvents(ctx, q, entityID, "", tags, allEvents); err != nil {
 		return matching.StoredEntity{}, err
 	}
 
@@ -460,9 +538,6 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 	if err := upsertTokens(ctx, q, uid, entityType, op.Tokens); err != nil {
 		return matching.StoredEntity{}, err
 	}
-	if err := insertProvenance(ctx, q, uid, op.Provenance); err != nil {
-		return matching.StoredEntity{}, err
-	}
 	if err := updateEmbedding(ctx, q, uid, op.Embedding); err != nil {
 		return matching.StoredEntity{}, err
 	}
@@ -471,7 +546,30 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 	if err != nil {
 		return matching.StoredEntity{}, fmt.Errorf("get entity: %w", err)
 	}
-	return entityFromRow(row), nil
+	ent := entityFromRow(row)
+
+	// Emit standard event + any caller-defined events.
+	var stdEvent proto.Message
+	switch op.Action {
+	case WriteActionUpdate:
+		stdEvent = &eventsv1.EntityUpdated{
+			EntityId:   uid.String(),
+			EntityType: entityType,
+			Confidence: op.Confidence,
+			Tags:       ent.Tags,
+		}
+	case WriteActionMerge:
+		stdEvent = &eventsv1.EntityMerged{
+			WinnerId:   uid.String(),
+			EntityType: entityType,
+		}
+	}
+	allEvents := append([]proto.Message{stdEvent}, op.Events...)
+	if err := insertEvents(ctx, q, uid, "", ent.Tags, allEvents); err != nil {
+		return matching.StoredEntity{}, err
+	}
+
+	return ent, nil
 }
 
 func upsertAnchors(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, entityType string, anchors []matching.AnchorQuery) error {
@@ -494,27 +592,6 @@ func upsertTokens(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, ent
 		}); err != nil {
 			return fmt.Errorf("upsert tokens %s: %w", field, err)
 		}
-	}
-	return nil
-}
-
-func insertProvenance(ctx context.Context, q *dbgen.Queries, entityID uuid.UUID, prov matching.ProvenanceEntry) error {
-	if prov.SourceURN == "" {
-		return nil
-	}
-	if prov.ExtractedAt.IsZero() {
-		prov.ExtractedAt = time.Now()
-	}
-	if prov.Fields == nil {
-		prov.Fields = []string{}
-	}
-	if _, err := q.InsertProvenance(ctx, dbgen.InsertProvenanceParams{
-		EntityID: entityID, SourceUrn: prov.SourceURN,
-		ExtractedAt: prov.ExtractedAt, ModelID: prov.ModelID,
-		Confidence: prov.Confidence, Fields: prov.Fields,
-		MatchMethod: prov.MatchMethod, MatchConfidence: prov.MatchConfidence,
-	}); err != nil {
-		return fmt.Errorf("insert provenance: %w", err)
 	}
 	return nil
 }

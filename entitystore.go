@@ -173,12 +173,12 @@ func (es *EntityStore) GetRelationsToEntity(ctx context.Context, entityID string
 }
 
 // ---------------------------------------------------------------------------
-// Provenance
+// Events
 // ---------------------------------------------------------------------------
 
-// GetProvenanceForEntity returns provenance entries for the given entity.
-func (es *EntityStore) GetProvenanceForEntity(ctx context.Context, entityID string) ([]matching.ProvenanceEntry, error) {
-	return es.store.GetProvenanceForEntity(ctx, entityID)
+// GetEventsForEntity returns events for the given entity, newest first.
+func (es *EntityStore) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {
+	return es.store.GetEventsForEntity(ctx, entityID, opts)
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +298,11 @@ func (tx *TxStore) DeleteRelationByKey(ctx context.Context, sourceID, targetID, 
 	return tx.inner.DeleteRelationByKey(ctx, sourceID, targetID, relationType)
 }
 
+// GetEventsForEntity returns events for the given entity within the transaction.
+func (tx *TxStore) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {
+	return tx.inner.GetEventsForEntity(ctx, entityID, opts)
+}
+
 // UpdateRelationData updates typed data on an existing relation within the transaction.
 func (tx *TxStore) UpdateRelationData(ctx context.Context, sourceID, targetID, relationType string, data proto.Message) (matching.StoredRelation, error) {
 	return tx.inner.UpdateRelationData(ctx, sourceID, targetID, relationType, data)
@@ -360,8 +365,11 @@ type StoredEntity = matching.StoredEntity
 // StoredRelation is a directed edge between two entities.
 type StoredRelation = matching.StoredRelation
 
-// ProvenanceEntry records the origin of an entity.
-type ProvenanceEntry = matching.ProvenanceEntry
+// Event is a stored event with its metadata.
+type Event = store.Event
+
+// EventQueryOpts filters event queries.
+type EventQueryOpts = store.EventQueryOpts
 
 // AnchorQuery is a single anchor lookup.
 type AnchorQuery = matching.AnchorQuery
@@ -404,11 +412,8 @@ var (
 	WithTags            = store.WithTags
 	WithEmbedding       = store.WithEmbedding
 	WithID              = store.WithID
-	WithProvenance      = store.WithProvenance
+	WithEvents          = store.WithEvents
 )
-
-// Provenance builds a ProvenanceEntry with sensible defaults.
-var Provenance = store.Provenance
 
 // StoreStats contains aggregate statistics about the store contents.
 type StoreStats = store.StoreStats
@@ -419,5 +424,45 @@ type TypeCount = store.TypeCount
 // Migrate applies all pending database migrations using the given pool.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	return store.Migrate(ctx, pool)
+}
+
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+
+// HealthStatus is the overall health of the entity store.
+type HealthStatus = store.HealthStatus
+
+// DBHealth reports database connection pool status.
+type DBHealth = store.DBHealth
+
+// EventHealth reports event store activity.
+type EventHealth = store.EventHealth
+
+// PublisherHealth reports outbox publisher status.
+type PublisherHealth = store.PublisherHealth
+
+// Health returns the current health status of the store.
+func (es *EntityStore) Health(ctx context.Context) (HealthStatus, error) {
+	return es.store.Health(ctx)
+}
+
+// ---------------------------------------------------------------------------
+// Publisher
+// ---------------------------------------------------------------------------
+
+// PublishFunc is called by the publisher to deliver a batch of events.
+type PublishFunc = store.PublishFunc
+
+// PublisherConfig configures the outbox publisher.
+type PublisherConfig = store.PublisherConfig
+
+// Publisher polls entity_events for unpublished rows and delivers them
+// via a caller-provided PublishFunc. Only one publisher runs at a time.
+type Publisher = store.Publisher
+
+// NewPublisher creates an outbox publisher using the EntityStore's pool.
+func (es *EntityStore) NewPublisher(fn PublishFunc, cfg PublisherConfig) *Publisher {
+	return store.NewPublisher(es.store.Pool(), fn, cfg)
 }
 

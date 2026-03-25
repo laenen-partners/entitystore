@@ -1,6 +1,6 @@
 package store
 
-import "github.com/laenen-partners/entitystore/matching"
+import "google.golang.org/protobuf/proto"
 
 // WriteOpOption configures a WriteEntityOp built by generated code.
 type WriteOpOption func(*WriteEntityOp)
@@ -30,17 +30,8 @@ func WithID(id string) WriteOpOption {
 	return func(op *WriteEntityOp) { op.ID = id }
 }
 
-// WithProvenance sets the full provenance entry.
-func WithProvenance(p matching.ProvenanceEntry) WriteOpOption {
-	return func(op *WriteEntityOp) { op.Provenance = p }
-}
-
-// Provenance builds a ProvenanceEntry with sensible defaults.
-// ExtractedAt is set to the current time. MatchMethod is derived from the
-// write action: "create" for create, "update" for update, "merge" for merge.
-func Provenance(sourceURN, modelID string) matching.ProvenanceEntry {
-	return matching.ProvenanceEntry{
-		SourceURN: sourceURN,
-		ModelID:   modelID,
-	}
+// WithEvents appends caller-defined events to the operation.
+// These are inserted alongside the standard lifecycle events in the same transaction.
+func WithEvents(events ...proto.Message) WriteOpOption {
+	return func(op *WriteEntityOp) { op.Events = append(op.Events, events...) }
 }

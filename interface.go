@@ -31,8 +31,8 @@ type EntityStorer interface {
 	GetRelationsFromEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error)
 	GetRelationsToEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error)
 
-	// Provenance
-	GetProvenanceForEntity(ctx context.Context, entityID string) ([]matching.ProvenanceEntry, error)
+	// Events
+	GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error)
 
 	// Writes
 	BatchWrite(ctx context.Context, ops []store.BatchWriteOp) ([]store.BatchWriteResult, error)

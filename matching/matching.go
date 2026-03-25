@@ -82,19 +82,6 @@ func (e StoredEntity) GetData(msg proto.Message) error {
 	return protojson.Unmarshal(e.Data, msg)
 }
 
-// ProvenanceEntry records the origin of an entity.
-type ProvenanceEntry struct {
-	ID              string    `json:"id"`
-	EntityID        string    `json:"entity_id"`
-	SourceURN      string    `json:"source_urn"`
-	ExtractedAt     time.Time `json:"extracted_at"`
-	ModelID         string    `json:"model_id"`
-	Confidence      float64   `json:"confidence"`
-	Fields          []string  `json:"fields"`
-	MatchMethod     string    `json:"match_method"`
-	MatchConfidence float64   `json:"match_confidence"`
-}
-
 // StoredRelation is a directed edge between two stored entities.
 type StoredRelation struct {
 	ID           string          `json:"id"`

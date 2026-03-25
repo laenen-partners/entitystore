@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/laenen-partners/entitystore"
 	"github.com/laenen-partners/entitystore/matching"
@@ -34,12 +33,6 @@ func createScopedEntity(t *testing.T, es *entitystore.EntityStore, anchor string
 			Confidence: 0.9,
 			Tags:       tags,
 			Anchors:    []matching.AnchorQuery{{Field: "ref", Value: anchor}},
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:   "test:scoped",
-				ExtractedAt: time.Now(),
-				ModelID:     "test",
-				MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {

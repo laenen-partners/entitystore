@@ -19,6 +19,7 @@ scoped.go                    ScopedStore: tag-based multi-tenant filtering wrapp
 options.go                   Options: WithPgStore(), WithLogger()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + write helpers
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
+proto/entitystore/events/v1/ Standard lifecycle event protos (EntityCreated, etc.)
 gen/                         Generated protobuf code (do not edit)
 matching/                    Domain logic: matcher, similarity, anchors, tokens, embeddings, normalizers
 extraction/                  LLM extraction schema types and registry
@@ -92,6 +93,24 @@ results, _ := es.Traverse(ctx, "entity-id", &entitystore.TraverseOpts{
 for _, r := range results {
     fmt.Printf("depth %d: %s (%s)\n", r.Depth, r.Entity.ID, r.Entity.EntityType)
 }
+
+// Events — automatic lifecycle events + custom domain events
+events, _ := es.GetEventsForEntity(ctx, entityID, nil) // all events, newest first
+events, _ = es.GetEventsForEntity(ctx, entityID, &entitystore.EventQueryOpts{
+    EventTypes: []string{"entitystore.events.EntityCreated"},
+    Limit:      10,
+})
+
+// Custom domain events via WithEvents (standard lifecycle events are emitted automatically)
+es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {WriteEntity: &entitystore.WriteEntityOp{
+        Action: entitystore.WriteActionCreate,
+        Data:   &entitiesv1.Person{Email: "alice@example.com"},
+        Events: []proto.Message{
+            &hiringv1.CandidateSourced{Source: "linkedin"},
+        },
+    }},
+})
 
 // Soft deletes — data preserved for audit
 es.DeleteEntity(ctx, id)     // sets deleted_at, filtered from all reads
@@ -233,7 +252,7 @@ import (
 posting := &jobsv1.JobPosting{Reference: "JOB-001", Title: "Senior Engineer"}
 op := jobsv1.JobPostingWriteOp(posting, store.WriteActionCreate,
     store.WithTags("ws:acme", "status:active"),
-    store.WithProvenance(matching.ProvenanceEntry{SourceURN: "crm:job/1", ModelID: "gpt-4o"}),
+    store.WithEvents(&pipelinev1.ExtractionCompleted{Source: "crm:job/1", ModelId: "gpt-4o"}),
 )
 results, _ := es.BatchWrite(ctx, []store.BatchWriteOp{{WriteEntity: op}})
 
@@ -334,5 +353,10 @@ svc := &MyService{es: scoped}  // scoped satisfies EntityStorer
 - `WithLogger(*slog.Logger)` enables structured debug logging for operations.
 - `MaxBatchSize = 1000` caps BatchWrite operations. Input validation enforces tag limits (255 chars, 100 max) and relation type limits (255 chars).
 - `Traverse(ctx, entityID, opts)` performs multi-hop graph traversal using a recursive CTE. Supports direction control, relation/entity type filtering, confidence thresholds, tag filtering, and depth/result caps. Raw SQL (not SQLC) due to recursive CTE complexity. See ADR-007.
-- `WriteOpOption` type and option functions (`WithTags`, `WithConfidence`, `WithMatchedEntityID`, `WithEmbedding`, `WithID`, `WithProvenance`) live in `store/write_options.go` and are re-exported from the root package. Used by generated `WriteOp` functions.
+- `WriteOpOption` type and option functions (`WithTags`, `WithConfidence`, `WithMatchedEntityID`, `WithEmbedding`, `WithID`, `WithEvents`) live in `store/write_options.go` and are re-exported from the root package. Used by generated `WriteOp` functions.
 - Generated `{Entity}WriteOp` returns `*store.WriteEntityOp` so callers can write `{WriteEntity: jobsv1.JobPostingWriteOp(msg, action, opts...)}` directly.
+- Event store replaces provenance. All writes emit standard lifecycle events automatically (`EntityCreated`, `EntityUpdated`, `EntityMerged`, `EntityDeleted`, `EntityHardDeleted`, `RelationCreated`, `RelationDeleted`). Callers attach custom domain events via `WithEvents()` or the `Events` field on write ops. Events are proto messages stored as JSONB with `payload_type` (full proto name) and `event_type` (version-stripped for routing). Event IDs are UUIDv7 (time-sortable). Table is partitioned by `occurred_at` with an outbox-ready `published_at` column.
+- `GetEventsForEntity(ctx, entityID, opts)` returns events for an entity. `EventQueryOpts` supports filtering by event types, time range, and limit. Events carry a tag snapshot from write time. `ScopedStore` checks entity visibility before returning events.
+- Standard event protos live in `proto/entitystore/events/v1/events.proto`, generated to `gen/entitystore/events/v1/`.
+- `Publisher` polls `entity_events` for unpublished rows and delivers them via a caller-provided `PublishFunc`. Uses TTL-based leader election (`publisher_lock` table) — only one publisher runs across all instances. Lock auto-expires if holder crashes. Created via `es.NewPublisher(fn, cfg)`. See ADR-008.
+- `Health(ctx)` returns `HealthStatus` with DB health (ping latency, pool stats), event activity (last event, unpublished count), and publisher status (leader, lock expiry, last publish). `HealthError(ctx)` for simple liveness probes. Wire to HTTP handlers for k8s probes.

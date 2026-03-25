@@ -13,7 +13,7 @@ Pure Go library for entity storage, deduplication, and relationship management w
 - **LLM extraction schemas** — generate structured extraction schemas from proto annotations for use with Genkit or any LLM framework
 - **Relationships** — directed edges between entities with typed proto data, confidence, and evidence
 - **Tag filtering** — filter queries by arbitrary string tags with AND/OR semantics
-- **Provenance tracking** — full audit trail of entity extraction origin
+- **Event store** — proto-first audit trail with automatic lifecycle events and custom domain events
 - **Soft deletes** — `DeleteEntity` preserves data for audit; `HardDeleteEntity` for permanent removal
 - **Scoped stores** — tag-based multi-tenant filtering with auto-tagging on writes
 - **Preconditions** — transactionally safe existence, uniqueness, and tag guards on `BatchWrite`
@@ -486,6 +486,129 @@ Key properties:
 - **Scope-aware** — `ScopedStore.Traverse` stops traversal at scope boundaries
 - **Transitive filtering** — filtered-out entities block the path to entities beyond them
 
+## Events
+
+Every write operation automatically emits a standard lifecycle event. Callers can attach custom domain events on top.
+
+### Automatic lifecycle events
+
+| Operation | Event emitted |
+|-----------|--------------|
+| `WriteActionCreate` | `entitystore.events.EntityCreated` |
+| `WriteActionUpdate` | `entitystore.events.EntityUpdated` |
+| `WriteActionMerge` | `entitystore.events.EntityMerged` |
+| `DeleteEntity` | `entitystore.events.EntityDeleted` |
+| `HardDeleteEntity` | `entitystore.events.EntityHardDeleted` |
+| `UpsertRelation` | `entitystore.events.RelationCreated` |
+| `DeleteRelationByKey` | `entitystore.events.RelationDeleted` |
+
+### Custom domain events
+
+```go
+results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {WriteEntity: &entitystore.WriteEntityOp{
+        Action: entitystore.WriteActionCreate,
+        Data:   &personv1.Person{Email: "alice@example.com"},
+        Events: []proto.Message{
+            &hiringv1.CandidateSourced{Source: "linkedin", Recruiter: "bob@acme.com"},
+        },
+    }},
+})
+// entity_events now contains:
+//   1. entitystore.events.EntityCreated  (automatic)
+//   2. hiring.CandidateSourced           (custom)
+```
+
+Or via the option function with generated WriteOps:
+
+```go
+op := jobsv1.JobPostingWriteOp(posting, entitystore.WriteActionCreate,
+    entitystore.WithTags("ws:acme"),
+    entitystore.WithEvents(&pipelinev1.ExtractionCompleted{Source: "email:msg-42"}),
+)
+```
+
+### Querying events
+
+```go
+// All events for an entity (newest first)
+events, _ := es.GetEventsForEntity(ctx, entityID, nil)
+
+// Filtered by event type and time
+events, _ = es.GetEventsForEntity(ctx, entityID, &entitystore.EventQueryOpts{
+    EventTypes: []string{"entitystore.events.EntityCreated", "entitystore.events.EntityUpdated"},
+    Since:      time.Now().Add(-24 * time.Hour),
+    Limit:      50,
+})
+
+for _, e := range events {
+    fmt.Printf("%s at %s\n", e.EventType, e.OccurredAt)
+    switch evt := e.Payload.(type) {
+    case *eventsv1.EntityCreated:
+        fmt.Printf("  Created: %s (confidence %.2f)\n", evt.EntityType, evt.Confidence)
+    }
+}
+```
+
+### Design
+
+- Events are proto messages stored as JSONB — schema-checked, auto-marshaled
+- `payload_type` is the full proto name (e.g. `entitystore.events.v1.EntityCreated`) for deserialization
+- `event_type` strips the version segment (e.g. `entitystore.events.EntityCreated`) for routing stability
+- Event IDs are UUIDv7 (time-sortable) — `ORDER BY id` = `ORDER BY occurred_at`
+- Table is partitioned by `occurred_at` with an outbox-ready `published_at` column
+- Events carry a tag snapshot from write time (enables scoped queries without joins)
+
+## Outbox Publisher
+
+The publisher polls `entity_events` for unpublished rows and delivers them via a caller-provided function. TTL-based leader election ensures only one publisher runs across all instances.
+
+```go
+pub := es.NewPublisher(
+    func(ctx context.Context, events []entitystore.Event) error {
+        // Deliver to Kafka, SQS, webhook, etc.
+        for _, evt := range events {
+            fmt.Printf("publishing %s: %s\n", evt.EventType, evt.ID)
+        }
+        return nil // Return error to retry the batch.
+    },
+    entitystore.PublisherConfig{
+        BatchSize:    100,
+        PollInterval: 5 * time.Second,
+        LockTTL:      30 * time.Second,
+    },
+)
+
+// Blocks until ctx is cancelled. Run in a goroutine.
+go pub.Run(ctx)
+```
+
+Key properties:
+- **Single leader** — `publisher_lock` table with TTL-based lease; auto-expires if holder crashes
+- **At-least-once delivery** — events stay unpublished until `PublishFunc` returns nil
+- **FOR UPDATE SKIP LOCKED** — doesn't block on events still being written by concurrent `BatchWrite`
+- **Graceful shutdown** — lock released on context cancellation
+
+## Health
+
+```go
+status, _ := es.Health(ctx)
+fmt.Printf("DB OK: %v (latency %v)\n", status.DB.OK, status.DB.Latency)
+fmt.Printf("Pool: %d/%d connections\n", status.DB.TotalConns, status.DB.MaxConns)
+fmt.Printf("Unpublished events: %d\n", status.Events.UnpublishedCount)
+if status.Publisher != nil {
+    fmt.Printf("Publisher leader: %s (expires %v)\n",
+        status.Publisher.HolderID, status.Publisher.LockExpiresAt)
+}
+
+// Wire to HTTP for k8s probes:
+http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+    s, _ := es.Health(r.Context())
+    if !s.Healthy() { w.WriteHeader(503) }
+    json.NewEncoder(w).Encode(s)
+})
+```
+
 ## Soft deletes
 
 `DeleteEntity` sets `deleted_at` instead of removing the row — data is preserved for audit. All read queries automatically filter deleted entities. Use `HardDeleteEntity` for permanent cleanup.
@@ -539,6 +662,7 @@ interface.go                 EntityStorer interface (EntityStore + ScopedStore)
 options.go                   Options: WithPgStore(), WithLogger()
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + extraction schemas
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
+proto/entitystore/events/v1/ Standard lifecycle event protos
 gen/                         Generated protobuf code (do not edit)
 matching/                    Domain logic: matcher, similarity, anchors, tokens, embeddings, normalizers
 extraction/                  LLM extraction schema types and registry

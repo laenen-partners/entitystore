@@ -199,12 +199,21 @@ func (s *ScopedStore) GetRelationsToEntity(ctx context.Context, entityID string,
 }
 
 // ---------------------------------------------------------------------------
-// Provenance
+// Events
 // ---------------------------------------------------------------------------
 
-// GetProvenanceForEntity returns provenance entries for the given entity.
-func (s *ScopedStore) GetProvenanceForEntity(ctx context.Context, entityID string) ([]matching.ProvenanceEntry, error) {
-	return s.inner.GetProvenanceForEntity(ctx, entityID)
+// GetEventsForEntity returns events for the given entity.
+// The entity must be visible in the current scope.
+func (s *ScopedStore) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {
+	// Verify entity visibility before returning events.
+	ent, err := s.inner.GetEntity(ctx, entityID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.entityVisible(ent) {
+		return nil, ErrAccessDenied
+	}
+	return s.inner.GetEventsForEntity(ctx, entityID, opts)
 }
 
 // ---------------------------------------------------------------------------

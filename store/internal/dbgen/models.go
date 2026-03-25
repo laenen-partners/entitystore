@@ -32,16 +32,28 @@ type EntityAnchor struct {
 	NormalizedValue string    `json:"normalized_value"`
 }
 
-type EntityProvenance struct {
-	ID              uuid.UUID `json:"id"`
-	EntityID        uuid.UUID `json:"entity_id"`
-	SourceUrn       string    `json:"source_urn"`
-	ExtractedAt     time.Time `json:"extracted_at"`
-	ModelID         string    `json:"model_id"`
-	Confidence      float64   `json:"confidence"`
-	Fields          []string  `json:"fields"`
-	MatchMethod     string    `json:"match_method"`
-	MatchConfidence float64   `json:"match_confidence"`
+type EntityEvent struct {
+	ID          uuid.UUID          `json:"id"`
+	EventType   string             `json:"event_type"`
+	PayloadType string             `json:"payload_type"`
+	Payload     json.RawMessage    `json:"payload"`
+	EntityID    pgtype.UUID        `json:"entity_id"`
+	RelationKey pgtype.Text        `json:"relation_key"`
+	Tags        []string           `json:"tags"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+}
+
+type EntityEventsDefault struct {
+	ID          uuid.UUID          `json:"id"`
+	EventType   string             `json:"event_type"`
+	PayloadType string             `json:"payload_type"`
+	Payload     json.RawMessage    `json:"payload"`
+	EntityID    pgtype.UUID        `json:"entity_id"`
+	RelationKey pgtype.Text        `json:"relation_key"`
+	Tags        []string           `json:"tags"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
 type EntityRelation struct {
@@ -63,4 +75,12 @@ type EntityToken struct {
 	EntityType string    `json:"entity_type"`
 	TokenField string    `json:"token_field"`
 	Tokens     []string  `json:"tokens"`
+}
+
+type PublisherLock struct {
+	ID         string    `json:"id"`
+	HolderID   string    `json:"holder_id"`
+	AcquiredAt time.Time `json:"acquired_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	RenewedAt  time.Time `json:"renewed_at"`
 }

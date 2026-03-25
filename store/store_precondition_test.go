@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
@@ -23,13 +22,6 @@ func createEntityWithAnchorsAndTags(t *testing.T, s *store.Store, anchors []matc
 			Confidence: 0.9,
 			Anchors:    anchors,
 			Tags:       tags,
-			Provenance: matching.ProvenanceEntry{
-				SourceURN:   "test:precondition",
-				ExtractedAt: time.Now(),
-				ModelID:     "test",
-				Fields:      []string{"name"},
-				MatchMethod: "create",
-			},
 		}},
 	})
 	if err != nil {
