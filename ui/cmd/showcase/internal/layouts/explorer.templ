@@ -1,9 +1,34 @@
 package layouts
 
-import "github.com/laenen-partners/dsx/showcase"
+import "github.com/laenen-partners/dsx/layouts"
+import "github.com/laenen-partners/dsx/ui/icon"
 
-templ Explorer(title string) {
-	@showcase.Page(title) {
-		{ children... }
+var explorerNav = []layouts.NavGroup{
+	{Title: "Overview", Items: []layouts.NavItem{
+		{Label: "Home", Href: "/", Icon: icon.Icon("home")},
+		{Label: "Search", Href: "/search", Icon: icon.Icon("search")},
+		{Label: "Stats", Href: "/stats", Icon: icon.Icon("chart-bar")},
+	}},
+	{Title: "Browse", Items: []layouts.NavItem{
+		{Label: "Entities", Href: "/entities", Icon: icon.Icon("database")},
+	}},
+}
+
+type ExplorerProps struct {
+	Title string
+	Path  string
+}
+
+templ Explorer(props ExplorerProps) {
+	@layouts.Dashboard(layouts.DashboardProps{
+		App: layouts.AppBranding{
+			Name: "EntityStore Explorer",
+		},
+		Nav:         explorerNav,
+		CurrentPath: props.Path,
+	}) {
+		<div class="p-6">
+			{ children... }
+		</div>
 	}
 }

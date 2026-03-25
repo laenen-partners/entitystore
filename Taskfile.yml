@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 tasks:
   generate:
@@ -65,3 +65,8 @@ tasks:
     desc: Remove build artifacts and local data
     cmds:
       - rm -rf bin/ coverage.out
+
+  showcase:
+    desc: Run the entity store showcase
+    cmds:
+      - go run ./ui/cmd/showcase

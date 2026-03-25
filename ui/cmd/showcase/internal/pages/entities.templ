@@ -3,7 +3,7 @@ package pages
 import "github.com/laenen-partners/entitystore/ui/cmd/showcase/internal/layouts"
 
 templ Entities() {
-	@layouts.Explorer("Entities") {
+	@layouts.Explorer(layouts.ExplorerProps{Title: "Entities", Path: "/entities"}) {
 		<div class="space-y-6">
 			<h2 class="text-2xl font-bold">Browse Entities</h2>
 
@@ -15,7 +15,7 @@ templ Entities() {
 			/>
 
 			<div id="search-results">
-				<p class="text-base-content/50">Enter a search term or browse entity types on the Home page.</p>
+				<p class="text-base-content/50">Enter a search term to browse entities.</p>
 			</div>
 		</div>
 	}

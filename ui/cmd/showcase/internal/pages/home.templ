@@ -4,7 +4,7 @@ import "github.com/laenen-partners/entitystore/ui/cmd/showcase/internal/layouts"
 import "github.com/laenen-partners/dsx/showcase"
 
 templ Home() {
-	@layouts.Explorer("EntityStore Explorer") {
+	@layouts.Explorer(layouts.ExplorerProps{Title: "Home", Path: "/"}) {
 		<div class="space-y-6">
 			<div>
 				<h2 class="text-2xl font-bold">EntityStore Explorer</h2>
@@ -15,9 +15,7 @@ templ Home() {
 
 			@showcase.Fragment("stats-overview", "/fragments/stats")
 
-			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-				@showcase.Fragment("entity-types", "/fragments/entity-types")
-			</div>
+			@showcase.Fragment("entity-types", "/fragments/entity-types")
 		</div>
 	}
 }

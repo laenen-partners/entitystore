@@ -43,13 +43,13 @@ func Entities() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-6\"><h2 class=\"text-2xl font-bold\">Browse Entities</h2><input type=\"text\" class=\"input input-bordered w-full\" placeholder=\"Search entities...\" data-on-keyup__debounce_300ms=\"@get('/fragments/search?q=' + evt.target.value)\"><div id=\"search-results\"><p class=\"text-base-content/50\">Enter a search term or browse entity types on the Home page.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-6\"><h2 class=\"text-2xl font-bold\">Browse Entities</h2><input type=\"text\" class=\"input input-bordered w-full\" placeholder=\"Search entities...\" data-on-keyup__debounce_300ms=\"@get('/fragments/search?q=' + evt.target.value)\"><div id=\"search-results\"><p class=\"text-base-content/50\">Enter a search term to browse entities.</p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = layouts.Explorer("Entities").Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layouts.Explorer(layouts.ExplorerProps{Title: "Entities", Path: "/entities"}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

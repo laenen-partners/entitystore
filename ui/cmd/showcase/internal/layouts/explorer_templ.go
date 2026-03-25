@@ -8,9 +8,26 @@ package layouts
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/laenen-partners/dsx/showcase"
+import "github.com/laenen-partners/dsx/layouts"
+import "github.com/laenen-partners/dsx/ui/icon"
 
-func Explorer(title string) templ.Component {
+var explorerNav = []layouts.NavGroup{
+	{Title: "Overview", Items: []layouts.NavItem{
+		{Label: "Home", Href: "/", Icon: icon.Icon("home")},
+		{Label: "Search", Href: "/search", Icon: icon.Icon("search")},
+		{Label: "Stats", Href: "/stats", Icon: icon.Icon("chart-bar")},
+	}},
+	{Title: "Browse", Items: []layouts.NavItem{
+		{Label: "Entities", Href: "/entities", Icon: icon.Icon("database")},
+	}},
+}
+
+type ExplorerProps struct {
+	Title string
+	Path  string
+}
+
+func Explorer(props ExplorerProps) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -43,13 +60,27 @@ func Explorer(title string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"p-6\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = templ_7745c5c3_Var1.Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = showcase.Page(title).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = layouts.Dashboard(layouts.DashboardProps{
+			App: layouts.AppBranding{
+				Name: "EntityStore Explorer",
+			},
+			Nav:         explorerNav,
+			CurrentPath: props.Path,
+		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
