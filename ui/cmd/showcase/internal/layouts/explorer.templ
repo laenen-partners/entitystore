@@ -3,18 +3,6 @@ package layouts
 import "github.com/laenen-partners/dsx"
 import "github.com/laenen-partners/dsx/layouts"
 import "github.com/laenen-partners/dsx/showcase"
-import "github.com/laenen-partners/dsx/ui/icon"
-
-var explorerNav = []layouts.NavGroup{
-	{Title: "Overview", Items: []layouts.NavItem{
-		{Label: "Home", Href: "/", Icon: icon.Icon("home")},
-		{Label: "Search", Href: "/search", Icon: icon.Icon("search")},
-		{Label: "Stats", Href: "/stats", Icon: icon.Icon("chart-bar")},
-	}},
-	{Title: "Browse", Items: []layouts.NavItem{
-		{Label: "Entities", Href: "/entities", Icon: icon.Icon("database")},
-	}},
-}
 
 type ExplorerProps struct {
 	Title string
@@ -23,26 +11,25 @@ type ExplorerProps struct {
 
 templ Explorer(props ExplorerProps) {
 	{{ wxctx := dsx.FromContext(ctx) }}
-	@layouts.Dashboard(layouts.DashboardProps{
-		BaseProps: layouts.BaseProps{
-			Title:     props.Title + " — EntityStore Explorer",
-			CSRFToken: wxctx.CSRFToken,
-			Theme:     wxctx.Theme,
-			Head:      showcase.Head(),
-		},
-		App: layouts.AppBranding{
-			Name: "EntityStore Explorer",
-			Href: "/",
-		},
-		Nav:         explorerNav,
-		CurrentPath: props.Path,
-		ThemeToggle: &layouts.ThemeToggleConfig{
-			DarkTheme:  "dark",
-			LightTheme: "silk",
-		},
+	@layouts.Base(layouts.BaseProps{
+		Title:     props.Title + " — EntityStore Explorer",
+		CSRFToken: wxctx.CSRFToken,
+		Theme:     wxctx.Theme,
+		Head:      showcase.Head(),
 	}) {
-		<div class="p-6">
-			{ children... }
+		<div class="flex min-h-screen">
+			<aside class="w-64 bg-base-200 p-4">
+				<h2 class="font-bold text-lg mb-4">Explorer</h2>
+				<ul class="menu">
+					<li><a href="/" class={ templ.KV("active", props.Path == "/") }>Home</a></li>
+					<li><a href="/search" class={ templ.KV("active", props.Path == "/search") }>Search</a></li>
+					<li><a href="/stats" class={ templ.KV("active", props.Path == "/stats") }>Stats</a></li>
+					<li><a href="/entities" class={ templ.KV("active", props.Path == "/entities") }>Entities</a></li>
+				</ul>
+			</aside>
+			<main class="flex-1 p-6">
+				{ children... }
+			</main>
 		</div>
 	}
 }
