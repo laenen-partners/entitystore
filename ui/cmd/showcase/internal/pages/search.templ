@@ -1,0 +1,27 @@
+package pages
+
+import "github.com/laenen-partners/entitystore/ui/cmd/showcase/internal/layouts"
+
+templ Search() {
+	@layouts.Explorer("Search") {
+		<div class="space-y-6">
+			<div>
+				<h2 class="text-2xl font-bold">Search Entities</h2>
+				<p class="text-base-content/70 mt-1">
+					Search by anchor (email, domain, invoice number) or keywords.
+				</p>
+			</div>
+
+			<input
+				type="text"
+				class="input input-bordered input-lg w-full"
+				placeholder="Search by email, domain, name..."
+				data-on-keyup__debounce_300ms="@get('/fragments/search?q=' + evt.target.value)"
+			/>
+
+			<div id="search-results">
+				<p class="text-base-content/50">Enter a search term above.</p>
+			</div>
+		</div>
+	}
+}

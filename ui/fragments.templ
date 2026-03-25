@@ -1,0 +1,352 @@
+package ui
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/ui/badge"
+	"github.com/laenen-partners/dsx/ui/card"
+	"github.com/laenen-partners/dsx/ui/table"
+	"github.com/laenen-partners/entitystore/matching"
+	"github.com/laenen-partners/entitystore/store"
+)
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+templ statsFragment(stats store.StoreStats) {
+	<div id="stats-overview" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+		@statCard("Entities", fmt.Sprintf("%d", stats.TotalEntities), "primary")
+		@statCard("Relations", fmt.Sprintf("%d", stats.TotalRelations), "secondary")
+		@statCard("Soft Deleted", fmt.Sprintf("%d", stats.SoftDeleted), "warning")
+		@statCard("Entity Types", fmt.Sprintf("%d", len(stats.EntityTypes)), "accent")
+	</div>
+}
+
+templ statCard(label, value, color string) {
+	@card.Card(card.Props{Class: "bg-base-200"}) {
+		@card.Body() {
+			<div class="stat-title text-xs uppercase tracking-wide">{ label }</div>
+			<div class={ "stat-value text-2xl font-bold text-" + color }>{ value }</div>
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Entity Types List
+// ---------------------------------------------------------------------------
+
+templ entityTypesList(entityTypes []store.TypeCount, relationTypes []store.TypeCount) {
+	<div id="entity-types" class="space-y-4">
+		if len(entityTypes) > 0 {
+			<h3 class="font-semibold">Entity Types</h3>
+			@table.Table(table.Props{Class: "table-sm"}) {
+				<thead>
+					<tr><th>Type</th><th class="text-right">Count</th></tr>
+				</thead>
+				<tbody>
+					for _, tc := range entityTypes {
+						<tr>
+							<td class="font-mono text-sm">{ tc.Type }</td>
+							<td class="text-right">{ fmt.Sprintf("%d", tc.Count) }</td>
+						</tr>
+					}
+				</tbody>
+			}
+		}
+		if len(relationTypes) > 0 {
+			<h3 class="font-semibold mt-4">Relation Types</h3>
+			@table.Table(table.Props{Class: "table-sm"}) {
+				<thead>
+					<tr><th>Type</th><th class="text-right">Count</th></tr>
+				</thead>
+				<tbody>
+					for _, tc := range relationTypes {
+						<tr>
+							<td class="font-mono text-sm">{ tc.Type }</td>
+							<td class="text-right">{ fmt.Sprintf("%d", tc.Count) }</td>
+						</tr>
+					}
+				</tbody>
+			}
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+templ searchEmpty() {
+	<div id="search-results">
+		<p class="text-base-content/50">Enter a search term above.</p>
+	</div>
+}
+
+templ searchResults(query string, entities []matching.StoredEntity) {
+	<div id="search-results" class="space-y-2">
+		<p class="text-sm text-base-content/60">
+			{ fmt.Sprintf("%d results for %q", len(entities), query) }
+		</p>
+		if len(entities) == 0 {
+			<p class="text-base-content/50">No entities found.</p>
+		}
+		for _, e := range entities {
+			@entityCard(e)
+		}
+	</div>
+}
+
+templ entityCard(e matching.StoredEntity) {
+	<div
+		class="card bg-base-200 cursor-pointer hover:bg-base-300 transition-colors"
+		{ ds.On("click", fmt.Sprintf("window.location.href='#entity-%s'; @get('/fragments/entities/%s')", e.ID, e.ID))... }
+	>
+		@card.Body() {
+			<div class="flex items-center justify-between">
+				<div>
+					<span class="font-mono text-xs text-base-content/50">{ e.ID[:8] }...</span>
+					<span class="ml-2 font-semibold">{ shortType(e.EntityType) }</span>
+				</div>
+				<div class="flex gap-1">
+					for _, tag := range e.Tags {
+						@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+							{ tag }
+						}
+					}
+				</div>
+			</div>
+			<div class="text-sm text-base-content/70 mt-1">
+				Confidence: { fmt.Sprintf("%.0f%%", e.Confidence*100) }
+				· Created: { e.CreatedAt.Format("2006-01-02 15:04") }
+			</div>
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Entity Detail
+// ---------------------------------------------------------------------------
+
+templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64) {
+	<div id={ "entity-" + e.ID } class="space-y-4">
+		@card.Card() {
+			@card.Body() {
+				@card.Title() {
+					{ shortType(e.EntityType) }
+					@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+						{ fmt.Sprintf("%.0f%% confidence", e.Confidence*100) }
+					}
+				}
+				<div class="grid grid-cols-2 gap-2 text-sm">
+					<div><span class="text-base-content/50">ID:</span> <span class="font-mono">{ e.ID }</span></div>
+					<div><span class="text-base-content/50">Type:</span> <span class="font-mono">{ e.EntityType }</span></div>
+					<div><span class="text-base-content/50">Created:</span> { e.CreatedAt.Format("2006-01-02 15:04:05") }</div>
+					<div><span class="text-base-content/50">Updated:</span> { e.UpdatedAt.Format("2006-01-02 15:04:05") }</div>
+					<div><span class="text-base-content/50">Relations:</span> { fmt.Sprintf("%d", relCount) }</div>
+				</div>
+				<div class="flex gap-1 mt-2">
+					for _, tag := range e.Tags {
+						@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+							{ tag }
+						}
+					}
+				</div>
+			}
+		}
+
+		@card.Card() {
+			@card.Body() {
+				@card.Title() {
+					Data
+				}
+				<pre class="bg-base-200 rounded-lg p-4 text-sm overflow-x-auto font-mono">{ prettyData }</pre>
+			}
+		}
+
+		<div class="flex gap-2">
+			<button
+				class="btn btn-sm btn-outline"
+				{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s/relations')", e.ID))... }
+			>
+				Relations
+			</button>
+			<button
+				class="btn btn-sm btn-outline"
+				{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s/events')", e.ID))... }
+			>
+				Events
+			</button>
+			<button
+				class="btn btn-sm btn-outline"
+				{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s/graph')", e.ID))... }
+			>
+				Graph
+			</button>
+		</div>
+
+		<div id="entity-detail-panel"></div>
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Relations
+// ---------------------------------------------------------------------------
+
+templ entityRelations(entityID string, outbound []matching.StoredRelation, inbound []matching.StoredRelation) {
+	<div id="entity-detail-panel" class="space-y-4">
+		if len(outbound) > 0 {
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						{ fmt.Sprintf("Outbound (%d)", len(outbound)) }
+					}
+					@table.Table(table.Props{Class: "table-sm"}) {
+						<thead>
+							<tr><th>Type</th><th>Target</th><th>Confidence</th><th>Evidence</th></tr>
+						</thead>
+						<tbody>
+							for _, rel := range outbound {
+								<tr
+									class="cursor-pointer hover:bg-base-200"
+									{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s')", rel.TargetID))... }
+								>
+									<td>@badge.Badge() { { rel.RelationType } }</td>
+									<td class="font-mono text-xs">{ rel.TargetID[:8] }...</td>
+									<td>{ fmt.Sprintf("%.0f%%", rel.Confidence*100) }</td>
+									<td class="text-xs text-base-content/60">{ rel.Evidence }</td>
+								</tr>
+							}
+						</tbody>
+					}
+				}
+			}
+		}
+		if len(inbound) > 0 {
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						{ fmt.Sprintf("Inbound (%d)", len(inbound)) }
+					}
+					@table.Table(table.Props{Class: "table-sm"}) {
+						<thead>
+							<tr><th>Type</th><th>Source</th><th>Confidence</th><th>Evidence</th></tr>
+						</thead>
+						<tbody>
+							for _, rel := range inbound {
+								<tr
+									class="cursor-pointer hover:bg-base-200"
+									{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s')", rel.SourceID))... }
+								>
+									<td>@badge.Badge() { { rel.RelationType } }</td>
+									<td class="font-mono text-xs">{ rel.SourceID[:8] }...</td>
+									<td>{ fmt.Sprintf("%.0f%%", rel.Confidence*100) }</td>
+									<td class="text-xs text-base-content/60">{ rel.Evidence }</td>
+								</tr>
+							}
+						</tbody>
+					}
+				}
+			}
+		}
+		if len(outbound) == 0 && len(inbound) == 0 {
+			<p class="text-base-content/50">No relations found.</p>
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+templ entityEvents(events []store.Event) {
+	<div id="entity-detail-panel" class="space-y-2">
+		@card.Card() {
+			@card.Body() {
+				@card.Title() {
+					{ fmt.Sprintf("Events (%d)", len(events)) }
+				}
+				if len(events) == 0 {
+					<p class="text-base-content/50">No events found.</p>
+				} else {
+					@table.Table(table.Props{Class: "table-sm"}) {
+						<thead>
+							<tr><th>Time</th><th>Event</th><th>ID</th></tr>
+						</thead>
+						<tbody>
+							for _, evt := range events {
+								<tr>
+									<td class="text-xs">{ evt.OccurredAt.Format("15:04:05") }</td>
+									<td>@badge.Badge(badge.Props{Style: badge.StyleGhost}) { { evt.EventType } }</td>
+									<td class="font-mono text-xs text-base-content/50">{ evt.ID[:8] }...</td>
+								</tr>
+							}
+						</tbody>
+					}
+				}
+			}
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Graph
+// ---------------------------------------------------------------------------
+
+templ entityGraph(center matching.StoredEntity, neighbors []store.TraverseResult) {
+	<div id="entity-detail-panel" class="space-y-2">
+		@card.Card() {
+			@card.Body() {
+				@card.Title() {
+					{ fmt.Sprintf("Graph (%d neighbors)", len(neighbors)) }
+				}
+				<div class="bg-base-200 rounded-lg p-4">
+					<div class="text-center">
+						<div class="inline-block bg-primary text-primary-content rounded-lg px-4 py-2 font-semibold">
+							{ shortType(center.EntityType) }
+							<br/>
+							<span class="text-xs font-mono">{ center.ID[:8] }...</span>
+						</div>
+					</div>
+					if len(neighbors) > 0 {
+						<div class="flex flex-wrap justify-center gap-4 mt-4">
+							for _, n := range neighbors {
+								<div
+									class="bg-base-300 rounded-lg px-3 py-2 text-center cursor-pointer hover:bg-base-100 transition-colors"
+									{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s')", n.Entity.ID))... }
+								>
+									<div class="text-xs text-base-content/50">depth { fmt.Sprintf("%d", n.Depth) }</div>
+									<div class="font-semibold text-sm">{ shortType(n.Entity.EntityType) }</div>
+									<div class="font-mono text-xs">{ n.Entity.ID[:8] }...</div>
+									if len(n.Path) > 0 {
+										<div class="text-xs mt-1">
+											@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+												{ n.Path[len(n.Path)-1].RelationType }
+											}
+										</div>
+									}
+								</div>
+							}
+						</div>
+					} else {
+						<p class="text-center text-base-content/50 mt-4">No connected entities.</p>
+					}
+				</div>
+			}
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+func shortType(entityType string) string {
+	parts := strings.Split(entityType, ".")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return entityType
+}

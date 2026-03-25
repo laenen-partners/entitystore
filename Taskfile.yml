@@ -28,6 +28,18 @@ tasks:
       - buf lint
       - buf push
 
+  explorer:
+    desc: Run the EntityStore Explorer showcase (requires docker compose up -d)
+    deps: [explorer:db]
+    cmds:
+      - templ generate -path ui
+      - go run ./ui/cmd/showcase
+
+  explorer:db:
+    desc: Start the showcase database
+    cmds:
+      - docker compose up -d --wait
+
   lint:
     desc: Run go vet
     cmds:
