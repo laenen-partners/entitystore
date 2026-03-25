@@ -76,6 +76,24 @@ templ entityTypesList(entityTypes []store.TypeCount, relationTypes []store.TypeC
 }
 
 // ---------------------------------------------------------------------------
+// Entity List
+// ---------------------------------------------------------------------------
+
+templ entityList(entities []matching.StoredEntity) {
+	<div id="entity-list" class="space-y-2">
+		<p class="text-sm text-base-content/60">
+			{ fmt.Sprintf("%d entities", len(entities)) }
+		</p>
+		for _, e := range entities {
+			@entityCard(e)
+		}
+		if len(entities) == 0 {
+			<p class="text-base-content/50">No entities in the store.</p>
+		}
+	</div>
+}
+
+// ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
 
@@ -261,31 +279,14 @@ templ entityRelations(entityID string, outbound []matching.StoredRelation, inbou
 // Events
 // ---------------------------------------------------------------------------
 
-templ entityEvents(events []store.Event) {
+templ entityEventsPlaceholder() {
 	<div id="entity-detail-panel" class="space-y-2">
 		@card.Card() {
 			@card.Body() {
 				@card.Title() {
-					{ fmt.Sprintf("Events (%d)", len(events)) }
+					Events
 				}
-				if len(events) == 0 {
-					<p class="text-base-content/50">No events found.</p>
-				} else {
-					@table.Table(table.Props{Class: "table-sm"}) {
-						<thead>
-							<tr><th>Time</th><th>Event</th><th>ID</th></tr>
-						</thead>
-						<tbody>
-							for _, evt := range events {
-								<tr>
-									<td class="text-xs">{ evt.OccurredAt.Format("15:04:05") }</td>
-									<td>@badge.Badge(badge.Props{Style: badge.StyleGhost}) { { evt.EventType } }</td>
-									<td class="font-mono text-xs text-base-content/50">{ evt.ID[:8] }...</td>
-								</tr>
-							}
-						</tbody>
-					}
-				}
+				<p class="text-base-content/50">Event timeline coming soon.</p>
 			}
 		}
 	</div>

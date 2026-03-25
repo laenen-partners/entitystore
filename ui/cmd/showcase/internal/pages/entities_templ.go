@@ -9,6 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import "github.com/laenen-partners/entitystore/ui/cmd/showcase/internal/layouts"
+import "github.com/laenen-partners/dsx/showcase"
 
 func Entities() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -43,7 +44,15 @@ func Entities() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-6\"><h2 class=\"text-2xl font-bold\">Browse Entities</h2><input type=\"text\" class=\"input input-bordered w-full\" placeholder=\"Search entities...\" data-on-keyup__debounce_300ms=\"@get('/fragments/search?q=' + evt.target.value)\"><div id=\"search-results\"><p class=\"text-base-content/50\">Enter a search term to browse entities.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"space-y-6\"><h2 class=\"text-2xl font-bold\">Entities</h2>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = showcase.Fragment("entity-list", "/fragments/entities").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

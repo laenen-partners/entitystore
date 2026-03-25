@@ -1,22 +1,13 @@
 package pages
 
 import "github.com/laenen-partners/entitystore/ui/cmd/showcase/internal/layouts"
+import "github.com/laenen-partners/dsx/showcase"
 
 templ Entities() {
 	@layouts.Explorer(layouts.ExplorerProps{Title: "Entities", Path: "/entities"}) {
 		<div class="space-y-6">
-			<h2 class="text-2xl font-bold">Browse Entities</h2>
-
-			<input
-				type="text"
-				class="input input-bordered w-full"
-				placeholder="Search entities..."
-				data-on-keyup__debounce_300ms="@get('/fragments/search?q=' + evt.target.value)"
-			/>
-
-			<div id="search-results">
-				<p class="text-base-content/50">Enter a search term to browse entities.</p>
-			</div>
+			<h2 class="text-2xl font-bold">Entities</h2>
+			@showcase.Fragment("entity-list", "/fragments/entities")
 		</div>
 	}
 }

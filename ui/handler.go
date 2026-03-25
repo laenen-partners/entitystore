@@ -27,6 +27,7 @@ func NewHandlers(es entitystore.EntityStorer) *Handlers {
 func (h *Handlers) RegisterRoutes(r chi.Router) {
 	r.Get("/fragments/stats", h.StatsFragment)
 	r.Get("/fragments/search", h.SearchFragment)
+	r.Get("/fragments/entities", h.EntityListFragment)
 	r.Get("/fragments/entities/{id}", h.EntityDetailFragment)
 	r.Get("/fragments/entities/{id}/relations", h.EntityRelationsFragment)
 	r.Get("/fragments/entities/{id}/events", h.EntityEventsFragment)
@@ -45,11 +46,20 @@ func (h *Handlers) StatsFragment(w http.ResponseWriter, r *http.Request) {
 	ds.Send.Patch(sse, statsFragment(stats))
 }
 
+// SearchSignals holds the client-side search state.
+type SearchSignals struct {
+	Query string `json:"query"`
+}
+
 // SearchFragment searches entities by anchor value or token overlap.
 func (h *Handlers) SearchFragment(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
+	sse := datastar.NewSSE(w, r)
+
+	var signals SearchSignals
+	_ = ds.ReadSignals("search", r, &signals)
+
+	q := signals.Query
 	if q == "" {
-		sse := datastar.NewSSE(w, r)
 		ds.Send.Patch(sse, searchEmpty())
 		return
 	}
@@ -69,8 +79,22 @@ func (h *Handlers) SearchFragment(w http.ResponseWriter, r *http.Request) {
 		results, _ = h.es.FindByTokens(ctx, entityType, tokens, 20, nil)
 	}
 
-	sse := datastar.NewSSE(w, r)
 	ds.Send.Patch(sse, searchResults(q, results))
+}
+
+// EntityListFragment returns all entities sorted by last updated.
+func (h *Handlers) EntityListFragment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	stats, _ := h.es.Stats(ctx)
+
+	var all []matching.StoredEntity
+	for _, tc := range stats.EntityTypes {
+		entities, _ := h.es.GetEntitiesByType(ctx, tc.Type, 100, nil, nil)
+		all = append(all, entities...)
+	}
+
+	sse := datastar.NewSSE(w, r)
+	ds.Send.Patch(sse, entityList(all))
 }
 
 // EntityDetailFragment returns entity data, tags, and metadata.
@@ -109,11 +133,8 @@ func (h *Handlers) EntityRelationsFragment(w http.ResponseWriter, r *http.Reques
 
 // EntityEventsFragment returns events for an entity.
 func (h *Handlers) EntityEventsFragment(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	events, _ := h.es.GetEventsForEntity(r.Context(), id, &entitystore.EventQueryOpts{Limit: 50})
-
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Patch(sse, entityEvents(events))
+	ds.Send.Patch(sse, entityEventsPlaceholder())
 }
 
 // EntityGraphFragment returns a traversal graph for an entity.
