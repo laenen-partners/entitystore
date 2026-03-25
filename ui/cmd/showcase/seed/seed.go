@@ -20,10 +20,10 @@ const scope = "explorer-seed"
 // Run applies all pending seed migrations.
 func Run(ctx context.Context, pool *pgxpool.Pool, es *entitystore.EntityStore) error {
 	migrations := []migrate.GoMigration{
-		{Version: "001", Name: "people_and_companies", Up: func(_ context.Context) error {
+		{Version: "20260325000001", Name: "people_and_companies", Up: func(_ context.Context) error {
 			return seedPeopleAndCompanies(ctx, es)
 		}},
-		{Version: "002", Name: "invoices_and_relations", Up: func(_ context.Context) error {
+		{Version: "20260325000002", Name: "invoices_and_relations", Up: func(_ context.Context) error {
 			return seedInvoicesAndRelations(ctx, es)
 		}},
 	}
