@@ -8,7 +8,9 @@ package layouts
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "github.com/laenen-partners/dsx"
 import "github.com/laenen-partners/dsx/layouts"
+import "github.com/laenen-partners/dsx/showcase"
 import "github.com/laenen-partners/dsx/ui/icon"
 
 var explorerNav = []layouts.NavGroup{
@@ -48,6 +50,7 @@ func Explorer(props ExplorerProps) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
+		wxctx := dsx.FromContext(ctx)
 		templ_7745c5c3_Var2 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
@@ -75,11 +78,22 @@ func Explorer(props ExplorerProps) templ.Component {
 			return nil
 		})
 		templ_7745c5c3_Err = layouts.Dashboard(layouts.DashboardProps{
+			BaseProps: layouts.BaseProps{
+				Title:     props.Title + " — EntityStore Explorer",
+				CSRFToken: wxctx.CSRFToken,
+				Theme:     wxctx.Theme,
+				Head:      showcase.Head(),
+			},
 			App: layouts.AppBranding{
 				Name: "EntityStore Explorer",
+				Href: "/",
 			},
 			Nav:         explorerNav,
 			CurrentPath: props.Path,
+			ThemeToggle: &layouts.ThemeToggleConfig{
+				DarkTheme:  "dark",
+				LightTheme: "silk",
+			},
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

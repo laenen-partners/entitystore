@@ -1,6 +1,8 @@
 package layouts
 
+import "github.com/laenen-partners/dsx"
 import "github.com/laenen-partners/dsx/layouts"
+import "github.com/laenen-partners/dsx/showcase"
 import "github.com/laenen-partners/dsx/ui/icon"
 
 var explorerNav = []layouts.NavGroup{
@@ -20,12 +22,24 @@ type ExplorerProps struct {
 }
 
 templ Explorer(props ExplorerProps) {
+	{{ wxctx := dsx.FromContext(ctx) }}
 	@layouts.Dashboard(layouts.DashboardProps{
+		BaseProps: layouts.BaseProps{
+			Title:     props.Title + " — EntityStore Explorer",
+			CSRFToken: wxctx.CSRFToken,
+			Theme:     wxctx.Theme,
+			Head:      showcase.Head(),
+		},
 		App: layouts.AppBranding{
 			Name: "EntityStore Explorer",
+			Href: "/",
 		},
 		Nav:         explorerNav,
 		CurrentPath: props.Path,
+		ThemeToggle: &layouts.ThemeToggleConfig{
+			DarkTheme:  "dark",
+			LightTheme: "silk",
+		},
 	}) {
 		<div class="p-6">
 			{ children... }
