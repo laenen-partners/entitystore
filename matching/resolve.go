@@ -6,10 +6,10 @@ import (
 	"unicode"
 )
 
-// BuildAnchors extracts anchor field values from entity data using the
+// buildAnchors extracts anchor field values from entity data using the
 // EntityMatchConfig and returns normalized AnchorQuery values ready for
-// store lookups or upserts.
-func BuildAnchors(data json.RawMessage, config EntityMatchConfig) []AnchorQuery {
+// store lookups or upserts. Used internally by the Matcher.
+func buildAnchors(data json.RawMessage, config EntityMatchConfig) []AnchorQuery {
 	fields := extractFields(data)
 	var anchors []AnchorQuery
 
@@ -61,8 +61,9 @@ func BuildAnchors(data json.RawMessage, config EntityMatchConfig) []AnchorQuery 
 	return anchors
 }
 
-// BuildTokens extracts and tokenizes field values for token-based blocking.
-func BuildTokens(data json.RawMessage, config EntityMatchConfig) map[string][]string {
+// buildTokens extracts and tokenizes field values for token-based blocking.
+// Used internally by the Matcher.
+func buildTokens(data json.RawMessage, config EntityMatchConfig) map[string][]string {
 	if len(config.TokenFields) == 0 {
 		return nil
 	}

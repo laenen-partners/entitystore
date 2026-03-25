@@ -1,11 +1,10 @@
 // This file demonstrates the matching package's pure domain logic:
-// normalizers, similarity functions, embedding helpers, and match
-// config inspection. These functions have no database dependency.
+// normalizers, similarity functions, tokenization, embedding computation,
+// and match config inspection. These functions have no database dependency.
 package examples
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/laenen-partners/entitystore/matching"
@@ -48,31 +47,7 @@ func TokenizationExample() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Embedding text extraction
-// ---------------------------------------------------------------------------
-
-// EmbeddingExtractionExample shows how embed fields are concatenated.
-func EmbeddingExtractionExample() {
-	data := json.RawMessage(`{
-		"email": "alice@example.com",
-		"full_name": "Alice Johnson",
-		"job_title": "Product Manager",
-		"phone": "+1-555-123-4567"
-	}`)
-
-	// Only fields listed as embed fields are included.
-	text := matching.TextToEmbed(data, []string{"full_name", "job_title"})
-	fmt.Println(text)
-	// Output: "Alice Johnson Product Manager"
-
-	// All embed fields.
-	text = matching.TextToEmbed(data, []string{"email", "full_name", "job_title"})
-	fmt.Println(text)
-	// Output: "alice@example.com Alice Johnson Product Manager"
-}
-
-// ---------------------------------------------------------------------------
-// 4. Computing embeddings
+// 3. Computing embeddings
 // ---------------------------------------------------------------------------
 
 // simpleEmbedder is a mock Embedder for examples.
@@ -87,129 +62,68 @@ func (e *simpleEmbedder) Embed(_ context.Context, texts []string) ([][]float32, 
 	return vecs, nil
 }
 
-// ComputeEmbeddingExample shows the full embed pipeline: extract text,
-// call embedder, get vector.
+// ComputeEmbeddingExample shows the full embed pipeline using ComputeEmbedding.
+// In practice, use the generated {Entity}EmbedText(msg) for the text extraction
+// step and call your embedder directly.
 func ComputeEmbeddingExample(ctx context.Context) {
 	cfg := matching.EntityMatchConfig{
 		EntityType:  "examples.v1.Person",
 		EmbedFields: []string{"full_name", "job_title"},
 	}
 
-	data := json.RawMessage(`{
-		"full_name": "Alice Johnson",
-		"job_title": "Product Manager"
-	}`)
-
-	// In practice, use github.com/laenen-partners/embedder which
-	// satisfies the matching.Embedder interface.
+	// ComputeEmbedding extracts text from embed fields and calls the embedder.
+	// Prefer using the generated PersonEmbedText(msg) + embedder.Embed() directly
+	// for typed access without JSON round-trip.
 	embedder := &simpleEmbedder{}
 
+	data := []byte(`{"full_name": "Alice Johnson", "job_title": "Product Manager"}`)
 	vec, err := matching.ComputeEmbedding(ctx, data, cfg, embedder)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 	fmt.Printf("Got %d-dimensional vector\n", len(vec))
-	// Output:
-	//   Embedding text: "Alice Johnson Product Manager"
-	//   Got 1536-dimensional vector
 }
 
 // ---------------------------------------------------------------------------
-// 5. Building anchors from entity data
+// 4. Match config inspection
 // ---------------------------------------------------------------------------
 
-// BuildAnchorsExample shows how anchors are extracted and normalized
-// from raw entity data using the match config.
-func BuildAnchorsExample() {
+// MatchConfigInspectionExample shows how to inspect a match config to
+// understand an entity type's matching behaviour.
+func MatchConfigInspectionExample() {
+	// In a real project: cfg := personv1.PersonMatchConfig()
 	cfg := matching.EntityMatchConfig{
 		EntityType: "examples.v1.Person",
 		Anchors: matching.AnchorConfig{
 			SingleAnchors: []matching.AnchorField{
 				{ProtoFieldName: "email", Normalizer: matching.NormalizeLowercaseTrim},
 			},
+			CompositeAnchors: [][]matching.AnchorField{
+				{
+					{ProtoFieldName: "full_name", Normalizer: matching.NormalizeLowercaseTrim},
+					{ProtoFieldName: "date_of_birth"},
+				},
+			},
 		},
-		Normalizers: map[string]func(string) string{
-			"email": matching.NormalizeLowercaseTrim,
+		FieldWeights: []matching.FieldWeight{
+			{ProtoFieldName: "email", Weight: 0.30, Similarity: matching.SimilarityExact},
+			{ProtoFieldName: "full_name", Weight: 0.35, Similarity: matching.SimilarityJaroWinkler},
 		},
-	}
-
-	data := json.RawMessage(`{"email": "  ALICE@Example.COM  ", "full_name": "Alice"}`)
-
-	anchors := matching.BuildAnchors(data, cfg)
-	for _, a := range anchors {
-		fmt.Printf("Anchor: %s = %q\n", a.Field, a.Value)
-	}
-	// Output: Anchor: email = "alice@example.com"
-}
-
-// ---------------------------------------------------------------------------
-// 6. Building tokens from entity data
-// ---------------------------------------------------------------------------
-
-// BuildTokensExample shows how token fields are extracted and tokenized.
-func BuildTokensExample() {
-	cfg := matching.EntityMatchConfig{
-		EntityType:  "examples.v1.Person",
-		TokenFields: []string{"full_name", "job_title"},
-	}
-
-	data := json.RawMessage(`{
-		"full_name": "Alice Marie Johnson",
-		"job_title": "Senior Product Manager",
-		"email": "alice@example.com"
-	}`)
-
-	tokens := matching.BuildTokens(data, cfg)
-	for field, toks := range tokens {
-		fmt.Printf("  %s: %v\n", field, toks)
-	}
-	// Output:
-	//   full_name: [alice marie johnson]
-	//   job_title: [senior product manager]
-}
-
-// ---------------------------------------------------------------------------
-// 7. Match config inspection
-// ---------------------------------------------------------------------------
-
-// MatchConfigInspectionExample shows how to inspect a registered config
-// to understand an entity type's matching behaviour.
-func MatchConfigInspectionExample() {
-	mcr := SetupMatchConfigRegistry() // from codegen_example.go
-
-	cfg, ok := mcr.Get("examples.v1.Person")
-	if !ok {
-		fmt.Println("Config not found")
-		return
+		Thresholds:  matching.MatchThresholds{AutoMatch: 0.85, ReviewZone: 0.60},
+		EmbedFields: []string{"email", "full_name"},
+		TokenFields: []string{"full_name"},
 	}
 
 	fmt.Printf("Entity type: %s\n", cfg.EntityType)
-
-	fmt.Println("Single anchors:")
-	for _, a := range cfg.Anchors.SingleAnchors {
-		fmt.Printf("  - %s\n", a.ProtoFieldName)
-	}
-
-	fmt.Println("Composite anchors:")
-	for _, ca := range cfg.Anchors.CompositeAnchors {
-		names := make([]string, len(ca))
-		for i, a := range ca {
-			names[i] = a.ProtoFieldName
-		}
-		fmt.Printf("  - %v\n", names)
-	}
-
-	fmt.Println("Field weights:")
-	for _, fw := range cfg.FieldWeights {
-		fmt.Printf("  - %s: weight=%.2f, similarity=%s\n",
-			fw.ProtoFieldName, fw.Weight, fw.Similarity)
-	}
-
-	fmt.Printf("Thresholds: auto_match=%.2f, review_zone=%.2f\n",
-		cfg.Thresholds.AutoMatch, cfg.Thresholds.ReviewZone)
-
+	fmt.Printf("Thresholds: auto=%.2f, review=%.2f\n", cfg.Thresholds.AutoMatch, cfg.Thresholds.ReviewZone)
 	fmt.Printf("Embed fields: %v\n", cfg.EmbedFields)
 	fmt.Printf("Token fields: %v\n", cfg.TokenFields)
-	fmt.Printf("Allowed relations: %v\n", cfg.AllowedRelations)
+
+	for _, a := range cfg.Anchors.SingleAnchors {
+		fmt.Printf("Anchor: %s\n", a.ProtoFieldName)
+	}
+	for _, fw := range cfg.FieldWeights {
+		fmt.Printf("Weight: %s = %.2f (%s)\n", fw.ProtoFieldName, fw.Weight, fw.Similarity)
+	}
 }

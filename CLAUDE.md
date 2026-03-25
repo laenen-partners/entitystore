@@ -283,6 +283,35 @@ task proto:push   # lint + push to buf.build/laenen-partners/entitystore
 - Release notes should summarize key changes, breaking changes, new types, and usage examples.
 - Push the updated proto to BSR with `task proto:push` if `options.proto` changed.
 
+## Import conventions
+
+Consumer code should import the root `entitystore` package for all types. The `matching` and `store` packages are internal implementation details. Import `matching` only if building a custom `Matcher` or `Embedder`. Import `store` only if calling `store.New()` directly (rare).
+
+```go
+// Correct — one import for consumer code:
+import "github.com/laenen-partners/entitystore"
+
+es.BatchWrite(ctx, []entitystore.BatchWriteOp{...})
+entitystore.WriteActionCreate
+entitystore.WithTags("active")
+
+// Only for custom Matcher or Embedder:
+import "github.com/laenen-partners/entitystore/matching"
+```
+
+## Scoping pattern
+
+`ScopedStore` is created from an `EntityStore`, not from the `EntityStorer` interface. Scoping must happen at construction time, before dependency injection:
+
+```go
+// Correct — scope at construction, inject the scoped store:
+scoped := es.Scoped(entitystore.ScopeConfig{RequireTags: []string{"ws:acme"}})
+svc := &MyService{es: scoped}  // scoped satisfies EntityStorer
+
+// Not possible — EntityStorer has no Scoped() method:
+// svc.es.Scoped(cfg) // won't compile
+```
+
 ## Code conventions
 
 - No `init()` functions; wire dependencies explicitly.

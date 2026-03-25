@@ -103,7 +103,8 @@ WHERE e.entity_type = @entity_type
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
-  AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
+  AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[])
+LIMIT @page_size;
 
 -- name: FindEntitiesByRelationTarget :many
 SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
@@ -114,4 +115,5 @@ WHERE e.entity_type = @entity_type
   AND r.relation_type = @relation_type
   AND (cardinality(@tags::text[]) = 0 OR e.tags @> @tags::text[])
   AND (cardinality(@any_tags::text[]) = 0 OR e.tags && @any_tags::text[])
-  AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[]);
+  AND (@exclude_tag::text = '' OR NOT (@exclude_tag::text = ANY(e.tags)) OR e.tags && @unless_tags::text[])
+LIMIT @page_size;

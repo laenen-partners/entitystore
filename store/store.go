@@ -560,6 +560,7 @@ func (s *Store) FindEntitiesByRelation(ctx context.Context, entityType string, r
 		AnyTags:      anyTagsParam(filter),
 		ExcludeTag:   excludeTagParam(filter),
 		UnlessTags:   unlessTagsParam(filter),
+		PageSize:     1000,
 	}
 	srcRows, err := s.queries.FindEntitiesByRelationSource(ctx, params)
 	if err != nil {

@@ -73,7 +73,7 @@ func (m *Matcher) Match(ctx context.Context, data json.RawMessage) (*MatchDecisi
 	entityType := m.config.EntityType
 
 	// --- Anchor short-circuit ---
-	anchors := BuildAnchors(data, m.config)
+	anchors := buildAnchors(data, m.config)
 	if len(anchors) > 0 {
 		anchorMatches, err := m.store.FindByAnchors(ctx, entityType, anchors, nil)
 		if err != nil {
@@ -212,7 +212,7 @@ func (m *Matcher) retrieveFuzzyCandidates(ctx context.Context, entityType string
 	}
 
 	// Token-based retrieval.
-	tokens := BuildTokens(data, m.config)
+	tokens := buildTokens(data, m.config)
 	if tokens != nil {
 		flat := flattenTokens(tokens)
 		if len(flat) > 0 {

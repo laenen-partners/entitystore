@@ -72,10 +72,10 @@ func TestNormalizeField(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// BuildAnchors
+// buildAnchors
 // ---------------------------------------------------------------------------
 
-func TestBuildAnchors_SingleAnchors(t *testing.T) {
+func Test_buildAnchors_SingleAnchors(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			SingleAnchors: []AnchorField{
@@ -86,7 +86,7 @@ func TestBuildAnchors_SingleAnchors(t *testing.T) {
 	}
 
 	data := json.RawMessage(`{"email":"  ALICE@Example.COM  ","crm_id":"CRM-001"}`)
-	anchors := BuildAnchors(data, cfg)
+	anchors := buildAnchors(data, cfg)
 
 	if len(anchors) != 2 {
 		t.Fatalf("expected 2 anchors, got %d", len(anchors))
@@ -99,7 +99,7 @@ func TestBuildAnchors_SingleAnchors(t *testing.T) {
 	}
 }
 
-func TestBuildAnchors_MissingField(t *testing.T) {
+func Test_buildAnchors_MissingField(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			SingleAnchors: []AnchorField{
@@ -109,13 +109,13 @@ func TestBuildAnchors_MissingField(t *testing.T) {
 	}
 
 	data := json.RawMessage(`{"name":"Alice"}`)
-	anchors := BuildAnchors(data, cfg)
+	anchors := buildAnchors(data, cfg)
 	if len(anchors) != 0 {
 		t.Errorf("expected 0 anchors for missing field, got %d", len(anchors))
 	}
 }
 
-func TestBuildAnchors_EmptyValue(t *testing.T) {
+func Test_buildAnchors_EmptyValue(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			SingleAnchors: []AnchorField{
@@ -125,13 +125,13 @@ func TestBuildAnchors_EmptyValue(t *testing.T) {
 	}
 
 	data := json.RawMessage(`{"email":""}`)
-	anchors := BuildAnchors(data, cfg)
+	anchors := buildAnchors(data, cfg)
 	if len(anchors) != 0 {
 		t.Errorf("expected 0 anchors for empty field, got %d", len(anchors))
 	}
 }
 
-func TestBuildAnchors_CompositeAnchors(t *testing.T) {
+func Test_buildAnchors_CompositeAnchors(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			CompositeAnchors: [][]AnchorField{
@@ -144,7 +144,7 @@ func TestBuildAnchors_CompositeAnchors(t *testing.T) {
 	}
 
 	data := json.RawMessage(`{"full_name":"Alice Johnson","date_of_birth":"1990-05-15"}`)
-	anchors := BuildAnchors(data, cfg)
+	anchors := buildAnchors(data, cfg)
 
 	if len(anchors) != 1 {
 		t.Fatalf("expected 1 composite anchor, got %d", len(anchors))
@@ -157,7 +157,7 @@ func TestBuildAnchors_CompositeAnchors(t *testing.T) {
 	}
 }
 
-func TestBuildAnchors_CompositeAnchor_PartialMissing(t *testing.T) {
+func Test_buildAnchors_CompositeAnchor_PartialMissing(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			CompositeAnchors: [][]AnchorField{
@@ -171,13 +171,13 @@ func TestBuildAnchors_CompositeAnchor_PartialMissing(t *testing.T) {
 
 	// Missing date_of_birth — composite anchor should not fire.
 	data := json.RawMessage(`{"full_name":"Alice"}`)
-	anchors := BuildAnchors(data, cfg)
+	anchors := buildAnchors(data, cfg)
 	if len(anchors) != 0 {
 		t.Errorf("expected 0 anchors for partial composite, got %d", len(anchors))
 	}
 }
 
-func TestBuildAnchors_InvalidJSON(t *testing.T) {
+func Test_buildAnchors_InvalidJSON(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			SingleAnchors: []AnchorField{
@@ -185,17 +185,17 @@ func TestBuildAnchors_InvalidJSON(t *testing.T) {
 			},
 		},
 	}
-	anchors := BuildAnchors(json.RawMessage(`not json`), cfg)
+	anchors := buildAnchors(json.RawMessage(`not json`), cfg)
 	if len(anchors) != 0 {
 		t.Errorf("expected 0 anchors for invalid JSON, got %d", len(anchors))
 	}
 }
 
 // ---------------------------------------------------------------------------
-// BuildTokens
+// buildTokens
 // ---------------------------------------------------------------------------
 
-func TestBuildTokens(t *testing.T) {
+func Test_buildTokens(t *testing.T) {
 	cfg := EntityMatchConfig{
 		TokenFields: []string{"full_name", "job_title"},
 	}
@@ -206,7 +206,7 @@ func TestBuildTokens(t *testing.T) {
 		"email": "alice@example.com"
 	}`)
 
-	tokens := BuildTokens(data, cfg)
+	tokens := buildTokens(data, cfg)
 	if len(tokens) != 2 {
 		t.Fatalf("expected 2 token fields, got %d", len(tokens))
 	}
@@ -226,32 +226,32 @@ func TestBuildTokens(t *testing.T) {
 	}
 }
 
-func TestBuildTokens_NoTokenFields(t *testing.T) {
+func Test_buildTokens_NoTokenFields(t *testing.T) {
 	cfg := EntityMatchConfig{}
 	data := json.RawMessage(`{"name":"Alice"}`)
-	tokens := BuildTokens(data, cfg)
+	tokens := buildTokens(data, cfg)
 	if tokens != nil {
 		t.Errorf("expected nil for no token fields, got %v", tokens)
 	}
 }
 
-func TestBuildTokens_MissingField(t *testing.T) {
+func Test_buildTokens_MissingField(t *testing.T) {
 	cfg := EntityMatchConfig{
 		TokenFields: []string{"missing_field"},
 	}
 	data := json.RawMessage(`{"name":"Alice"}`)
-	tokens := BuildTokens(data, cfg)
+	tokens := buildTokens(data, cfg)
 	if tokens != nil {
 		t.Errorf("expected nil for missing field, got %v", tokens)
 	}
 }
 
-func TestBuildTokens_EmptyField(t *testing.T) {
+func Test_buildTokens_EmptyField(t *testing.T) {
 	cfg := EntityMatchConfig{
 		TokenFields: []string{"name"},
 	}
 	data := json.RawMessage(`{"name":""}`)
-	tokens := BuildTokens(data, cfg)
+	tokens := buildTokens(data, cfg)
 	if tokens != nil {
 		t.Errorf("expected nil for empty field, got %v", tokens)
 	}
@@ -281,7 +281,7 @@ func TestSnakeToCamel(t *testing.T) {
 }
 
 // Test that camelCase JSON keys are resolved via fieldValue fallback.
-func TestBuildAnchors_CamelCaseJSON(t *testing.T) {
+func Test_buildAnchors_CamelCaseJSON(t *testing.T) {
 	cfg := EntityMatchConfig{
 		Anchors: AnchorConfig{
 			SingleAnchors: []AnchorField{
@@ -290,7 +290,7 @@ func TestBuildAnchors_CamelCaseJSON(t *testing.T) {
 		},
 	}
 	data := json.RawMessage(`{"fullName":"Alice"}`)
-	anchors := BuildAnchors(data, cfg)
+	anchors := buildAnchors(data, cfg)
 	if len(anchors) != 1 {
 		t.Fatalf("expected 1 anchor from camelCase key, got %d", len(anchors))
 	}

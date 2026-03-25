@@ -1,16 +1,19 @@
-// Package examples demonstrates entitystore features through runnable examples.
+// This file demonstrates how to use protoc-gen-entitystore generated code.
 //
-// This file shows how to use the protoc-gen-entitystore code generator output:
-// registering match configs, building anchors/tokens from extracted data,
-// and using the extraction schema for LLM-based entity extraction.
+// The generated functions shown in comments below are produced by running
+// `buf generate` on annotated proto messages. See proto/ for examples.
 //
-// The generated functions (PersonMatchConfig, PersonExtractionSchema, etc.)
-// are produced by running `buf generate` on annotated proto messages.
-// See the proto/ directory for the annotated proto definitions.
+// In a real project you would import the generated package directly:
+//
+//	import personv1 "example.com/gen/persons/v1"
+//
+//	cfg := personv1.PersonMatchConfig()
+//	tokens := personv1.PersonTokens(person)
+//	text := personv1.PersonEmbedText(person)
+//	op := personv1.PersonWriteOp(person, store.WriteActionCreate, ...)
 package examples
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/laenen-partners/entitystore/extraction"
@@ -18,213 +21,131 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// 1. Match Config Registry — registering generated configs
+// 1. Registering generated configs
 // ---------------------------------------------------------------------------
 
-// SetupMatchConfigRegistry shows how to register generated match configs
-// from multiple entity types into a single registry.
-func SetupMatchConfigRegistry() *matching.MatchConfigRegistry {
+// RegisterConfigsExample shows how generated match configs and extraction
+// schemas are registered into their respective registries.
+func RegisterConfigsExample() {
+	// Match configs — used by the Matcher for entity resolution.
 	mcr := matching.NewMatchConfigRegistry()
 
-	// In a real project, these come from generated code:
-	//   mcr.Register(examplesv1.PersonMatchConfig())
-	//   mcr.Register(examplesv1.InvoiceMatchConfig())
-	//   mcr.Register(examplesv1.JobPostingMatchConfig())
+	// In a real project, these are one-liners from generated code:
+	//   mcr.Register(personv1.PersonMatchConfig())
+	//   mcr.Register(invoicev1.InvoiceMatchConfig())
+	//   mcr.Register(jobsv1.JobPostingMatchConfig())
+	_ = mcr
 
-	// For this example, we register a manually-constructed config
-	// that mirrors what the generator produces.
-	mcr.Register(matching.EntityMatchConfig{
-		EntityType: "examples.v1.Person",
-		Anchors: matching.AnchorConfig{
-			SingleAnchors: []matching.AnchorField{
-				{ProtoFieldName: "email", Normalizer: matching.NormalizeLowercaseTrim},
-				{ProtoFieldName: "crm_id", Normalizer: nil},
-			},
-			CompositeAnchors: [][]matching.AnchorField{
-				{
-					{ProtoFieldName: "full_name", Normalizer: matching.NormalizeLowercaseTrim},
-					{ProtoFieldName: "date_of_birth", Normalizer: nil},
-				},
-			},
-		},
-		FieldWeights: []matching.FieldWeight{
-			{ProtoFieldName: "email", Weight: 0.30, Similarity: matching.SimilarityExact},
-			{ProtoFieldName: "full_name", Weight: 0.35, Similarity: matching.SimilarityJaroWinkler},
-			{ProtoFieldName: "phone", Weight: 0.15, Similarity: matching.SimilarityExact},
-			{ProtoFieldName: "date_of_birth", Weight: 0.20, Similarity: matching.SimilarityExact},
-		},
-		ConflictStrategies: map[string]matching.ConflictStrategy{
-			"email":         matching.ConflictFlagForReview,
-			"full_name":     matching.ConflictLatestWins,
-			"phone":         matching.ConflictLatestWins,
-			"date_of_birth": matching.ConflictHighestConf,
-		},
-		Thresholds: matching.MatchThresholds{
-			AutoMatch:  0.85,
-			ReviewZone: 0.60,
-		},
-		EmbedFields: []string{"email", "full_name", "job_title"},
-		TokenFields: []string{"full_name", "job_title"},
-		AllowedRelations: []string{"works_at", "knows", "same_as"},
-		Normalizers: map[string]func(string) string{
-			"email":     matching.NormalizeLowercaseTrim,
-			"full_name": matching.NormalizeLowercaseTrim,
-			"phone":     matching.NormalizePhone,
-		},
-	})
-
-	return mcr
-}
-
-// ---------------------------------------------------------------------------
-// 2. Building anchors and tokens from extracted data
-// ---------------------------------------------------------------------------
-
-// BuildAnchorsAndTokensExample shows how to use the matching package to
-// prepare entity data for storage after extraction.
-func BuildAnchorsAndTokensExample() {
-	mcr := SetupMatchConfigRegistry()
-	cfg, _ := mcr.Get("examples.v1.Person")
-
-	// Simulated extracted entity data (e.g., from an LLM or form submission).
-	data := json.RawMessage(`{
-		"email": "  John.Doe@Example.COM  ",
-		"full_name": "John Michael Doe",
-		"phone": "(555) 867-5309",
-		"date_of_birth": "1990-05-15",
-		"job_title": "Senior Software Engineer"
-	}`)
-
-	// BuildAnchors applies normalizers and returns anchor queries for dedup lookup.
-	anchors := matching.BuildAnchors(data, cfg)
-	fmt.Println("Anchors for dedup lookup:")
-	for _, a := range anchors {
-		fmt.Printf("  %s = %q\n", a.Field, a.Value)
-	}
-	// Output:
-	//   email = "john.doe@example.com"      (lowercased + trimmed)
-	//   full_name+date_of_birth = composite  (composite anchor)
-
-	// BuildTokens tokenizes fields for blocking/candidate retrieval.
-	tokens := matching.BuildTokens(data, cfg)
-	fmt.Println("Tokens for blocking:")
-	for field, toks := range tokens {
-		fmt.Printf("  %s: %v\n", field, toks)
-	}
-	// Output:
-	//   full_name: [john michael doe]
-	//   job_title: [senior software engineer]
-
-	// ExtractEmbedText concatenates embed fields for embedding input.
-	embedText := matching.TextToEmbed(data, cfg.EmbedFields)
-	fmt.Printf("Embed input text: %q\n", embedText)
-	// Output: "john.doe@example.com John Michael Doe Senior Software Engineer"
-
-	// NormalizeField applies the configured normalizer for a specific field.
-	normalizedPhone := matching.NormalizeField("(555) 867-5309", "phone", cfg)
-	fmt.Printf("Normalized phone: %q\n", normalizedPhone)
-	// Output: "5558675309"
-}
-
-// ---------------------------------------------------------------------------
-// 3. Extraction Schema Registry — registering generated schemas
-// ---------------------------------------------------------------------------
-
-// SetupExtractionSchemaRegistry shows how to register generated extraction
-// schemas for use with an LLM extraction framework (e.g., Genkit).
-func SetupExtractionSchemaRegistry() *extraction.ExtractionSchemaRegistry {
+	// Extraction schemas — used for LLM entity extraction prompts.
 	esr := extraction.NewExtractionSchemaRegistry()
 
-	// In a real project, these come from generated code:
-	//   esr.Register(examplesv1.PersonExtractionSchema())
-	//   esr.Register(examplesv1.InvoiceExtractionSchema())
-	//   esr.Register(examplesv1.JobPostingExtractionSchema())
+	// Same pattern:
+	//   esr.Register(personv1.PersonExtractionSchema())
+	//   esr.Register(invoicev1.InvoiceExtractionSchema())
+	_ = esr
+}
 
-	// For this example, we register a manually-constructed schema
-	// that mirrors what the generator produces.
+// ---------------------------------------------------------------------------
+// 2. Using generated token and embed extractors
+// ---------------------------------------------------------------------------
+
+// TokensAndEmbedExample shows the generated typed extractors that replace
+// the old reflection-based matching.BuildAnchors/BuildTokens/TextToEmbed.
+func TokensAndEmbedExample() {
+	// In a real project with generated code:
+	//
+	//   person := &personv1.Person{
+	//       Email:    "alice@example.com",
+	//       FullName: "Alice Johnson",
+	//       JobTitle: "VP of Product",
+	//   }
+	//
+	//   // Typed token extraction — no reflection, no config lookup.
+	//   tokens := personv1.PersonTokens(person)
+	//   // tokens = map[string][]string{
+	//   //   "full_name": ["alice", "johnson"],
+	//   //   "job_title": ["vp", "of", "product"],
+	//   // }
+	//
+	//   // Typed embed text — deterministic field ordering from proto numbers.
+	//   text := personv1.PersonEmbedText(person)
+	//   // text = "alice@example.com Alice Johnson VP of Product"
+	//
+	//   // Pass to embedder:
+	//   vecs, _ := embedder.Embed(ctx, []string{text})
+
+	fmt.Println("See generated code for PersonTokens, PersonEmbedText usage")
+}
+
+// ---------------------------------------------------------------------------
+// 3. Using generated WriteOp
+// ---------------------------------------------------------------------------
+
+// WriteOpExample shows how the generated WriteOp function replaces manual
+// WriteEntityOp construction.
+func WriteOpExample() {
+	// In a real project with generated code:
+	//
+	//   person := &personv1.Person{
+	//       Email:    "alice@example.com",
+	//       FullName: "Alice Johnson",
+	//   }
+	//
+	//   // Generated WriteOp — anchors, tokens wired automatically.
+	//   op := personv1.PersonWriteOp(person, store.WriteActionCreate,
+	//       store.WithTags("ws:acme", "active"),
+	//       store.WithProvenance(matching.ProvenanceEntry{
+	//           SourceURN: "crm:contacts/alice",
+	//           ModelID:   "gpt-4o",
+	//       }),
+	//   )
+	//
+	//   // Use in BatchWrite:
+	//   results, _ := es.BatchWrite(ctx, []store.BatchWriteOp{
+	//       {WriteEntity: op},
+	//   })
+	//
+	//   // For updates, add the matched entity ID:
+	//   op := personv1.PersonWriteOp(updated, store.WriteActionUpdate,
+	//       store.WithMatchedEntityID(existingID),
+	//       store.WithTags("active"),
+	//   )
+
+	fmt.Println("See generated code for PersonWriteOp usage")
+}
+
+// ---------------------------------------------------------------------------
+// 4. Using extraction schemas for LLM prompts
+// ---------------------------------------------------------------------------
+
+// ExtractionSchemaExample shows how to use the generated extraction schema
+// to build structured prompts for LLM entity extraction.
+func ExtractionSchemaExample() {
+	esr := extraction.NewExtractionSchemaRegistry()
+
+	// In a real project:
+	//   esr.Register(personv1.PersonExtractionSchema())
+	//
+	// For this example, register a manual schema:
 	esr.Register(extraction.ExtractionSchema{
-		EntityType:   "examples.v1.Person",
-		DisplayName:  "Person",
-		Prompt:       "Extract person details from the provided text.",
-		Instructions: "If multiple people are mentioned, extract only the primary subject. Ignore quoted or referenced individuals.",
+		EntityType:  "examples.v1.Person",
+		DisplayName: "Person",
+		Prompt:      "Extract person details from the provided text.",
 		Fields: []extraction.ExtractionField{
-			{
-				Name:        "email",
-				Description: "Primary email address",
-				Hint:        "Extract the primary email, not CC or forwarded addresses",
-				Type:        extraction.ExtractionFieldTypeString,
-				Required:    true, // anchor field
-				Examples:    []string{"john.doe@example.com", "jane@company.org"},
-			},
-			{
-				Name:        "full_name",
-				Description: "Full legal name of the person",
-				Hint:        "Use the full name as written, including middle names if present",
-				Type:        extraction.ExtractionFieldTypeString,
-				Examples:    []string{"John Michael Doe", "Jane Smith-Williams"},
-			},
-			{
-				Name:        "phone",
-				Description: "Phone number in E.164 format",
-				Hint:        "Include country code if available, e.g. +1 for US numbers",
-				Type:        extraction.ExtractionFieldTypeString,
-				Examples:    []string{"+1-555-867-5309", "+44 20 7946 0958"},
-			},
-			{
-				Name:        "date_of_birth",
-				Description: "Date of birth in ISO 8601 format (YYYY-MM-DD)",
-				Hint:        "Format as YYYY-MM-DD",
-				Type:        extraction.ExtractionFieldTypeString,
-				Examples:    []string{"1990-05-15", "1985-12-01"},
-			},
-			{
-				Name:        "job_title",
-				Description: "Current job title or role",
-				Type:        extraction.ExtractionFieldTypeString,
-			},
-			// Note: crm_id has extract: false, so it's excluded.
-			{
-				Name:        "notes",
-				Description: "notes", // humanized from field name (no comment, no annotation)
-				Type:        extraction.ExtractionFieldTypeString,
-			},
+			{Name: "email", Description: "Primary email address", Type: extraction.ExtractionFieldTypeString, Required: true},
+			{Name: "full_name", Description: "Full legal name", Type: extraction.ExtractionFieldTypeString},
+			{Name: "phone", Description: "Phone number", Type: extraction.ExtractionFieldTypeString},
 		},
 	})
 
-	return esr
-}
-
-// UseExtractionSchemaExample shows how to use the extraction schema
-// to build a prompt or structured schema for an LLM extraction call.
-func UseExtractionSchemaExample() {
-	esr := SetupExtractionSchemaRegistry()
 	schema, ok := esr.Get("examples.v1.Person")
 	if !ok {
 		return
 	}
 
-	// The schema contains everything needed for an LLM extraction call:
 	fmt.Printf("Entity: %s (%s)\n", schema.DisplayName, schema.EntityType)
 	fmt.Printf("Prompt: %s\n", schema.Prompt)
-	fmt.Printf("Instructions: %s\n", schema.Instructions)
-	fmt.Printf("Fields (%d):\n", len(schema.Fields))
 	for _, f := range schema.Fields {
-		required := ""
-		if f.Required {
-			required = " [REQUIRED]"
-		}
-		fmt.Printf("  - %s (%s)%s: %s\n", f.Name, f.Type, required, f.Description)
-		if f.Hint != "" {
-			fmt.Printf("    Hint: %s\n", f.Hint)
-		}
-		if len(f.Examples) > 0 {
-			fmt.Printf("    Examples: %v\n", f.Examples)
-		}
+		fmt.Printf("  - %s (%s): %s\n", f.Name, f.Type, f.Description)
 	}
-
-	// In a real project, you'd convert this to your LLM framework's format.
-	// For example, with Genkit (out of scope for this library):
-	//
-	//   req := toGenkitSchema(schema)
-	//   resp, _ := genkit.Generate(ctx, req, document)
 }

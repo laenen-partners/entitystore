@@ -22,7 +22,7 @@ func ComputeEmbedding(ctx context.Context, data json.RawMessage, config EntityMa
 	if len(config.EmbedFields) == 0 || embedder == nil {
 		return nil, nil
 	}
-	text := TextToEmbed(data, config.EmbedFields)
+	text := textToEmbed(data, config.EmbedFields)
 	if text == "" {
 		return nil, nil
 	}
@@ -36,11 +36,9 @@ func ComputeEmbedding(ctx context.Context, data json.RawMessage, config EntityMa
 	return vecs[0], nil
 }
 
-// TextToEmbed extracts and concatenates field values from entity data for
-// embedding. Fields are determined by the EmbedFields in the EntityMatchConfig
-// (driven by the `embed: true` proto annotation). Returns a single string
-// suitable for passing to an Embedder.
-func TextToEmbed(data json.RawMessage, fields []string) string {
+// textToEmbed extracts and concatenates field values from entity data for
+// embedding. Used internally by ComputeEmbedding.
+func textToEmbed(data json.RawMessage, fields []string) string {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return ""
@@ -68,9 +66,3 @@ func TextToEmbed(data json.RawMessage, fields []string) string {
 	return strings.Join(parts, " ")
 }
 
-// ExtractEmbedText is an alias for TextToEmbed for backward compatibility.
-//
-// Deprecated: Use TextToEmbed instead.
-func ExtractEmbedText(data json.RawMessage, fields []string) string {
-	return TextToEmbed(data, fields)
-}

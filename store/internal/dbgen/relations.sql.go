@@ -267,6 +267,7 @@ WHERE e.entity_type = $1
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
   AND ($5::text = '' OR NOT ($5::text = ANY(e.tags)) OR e.tags && $6::text[])
+LIMIT $7
 `
 
 type FindEntitiesByRelationSourceParams struct {
@@ -276,6 +277,7 @@ type FindEntitiesByRelationSourceParams struct {
 	AnyTags      []string `json:"any_tags"`
 	ExcludeTag   string   `json:"exclude_tag"`
 	UnlessTags   []string `json:"unless_tags"`
+	PageSize     int32    `json:"page_size"`
 }
 
 type FindEntitiesByRelationSourceRow struct {
@@ -296,6 +298,7 @@ func (q *Queries) FindEntitiesByRelationSource(ctx context.Context, arg FindEnti
 		arg.AnyTags,
 		arg.ExcludeTag,
 		arg.UnlessTags,
+		arg.PageSize,
 	)
 	if err != nil {
 		return nil, err
@@ -333,6 +336,7 @@ WHERE e.entity_type = $1
   AND (cardinality($3::text[]) = 0 OR e.tags @> $3::text[])
   AND (cardinality($4::text[]) = 0 OR e.tags && $4::text[])
   AND ($5::text = '' OR NOT ($5::text = ANY(e.tags)) OR e.tags && $6::text[])
+LIMIT $7
 `
 
 type FindEntitiesByRelationTargetParams struct {
@@ -342,6 +346,7 @@ type FindEntitiesByRelationTargetParams struct {
 	AnyTags      []string `json:"any_tags"`
 	ExcludeTag   string   `json:"exclude_tag"`
 	UnlessTags   []string `json:"unless_tags"`
+	PageSize     int32    `json:"page_size"`
 }
 
 type FindEntitiesByRelationTargetRow struct {
@@ -362,6 +367,7 @@ func (q *Queries) FindEntitiesByRelationTarget(ctx context.Context, arg FindEnti
 		arg.AnyTags,
 		arg.ExcludeTag,
 		arg.UnlessTags,
+		arg.PageSize,
 	)
 	if err != nil {
 		return nil, err
