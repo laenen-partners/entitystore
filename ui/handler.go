@@ -3,6 +3,7 @@ package ui
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -56,7 +57,10 @@ func (h *Handlers) SearchFragment(w http.ResponseWriter, r *http.Request) {
 	sse := datastar.NewSSE(w, r)
 
 	var signals SearchSignals
-	_ = ds.ReadSignals("search", r, &signals)
+	if err := ds.ReadSignals("search", r, &signals); err != nil {
+		slog.Error("read signals", "error", err)
+	}
+	slog.Debug("search", "query", signals.Query, "raw_datastar", r.URL.Query().Get("datastar"), "url", r.URL.String())
 
 	q := signals.Query
 	if q == "" {
