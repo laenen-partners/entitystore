@@ -74,14 +74,14 @@ func (o *TraverseOpts) defaults() {
 
 const traverseSQL = `
 WITH RECURSIVE traverse AS (
-    SELECT e.id, e.entity_type, e.data, e.confidence, e.tags,
+    SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name,
            e.created_at, e.updated_at,
            0 AS depth, ARRAY[e.id] AS visited, '[]'::jsonb AS path
     FROM entities e WHERE e.id = $1 AND e.deleted_at IS NULL
 
     UNION ALL
 
-    SELECT next_e.id, next_e.entity_type, next_e.data, next_e.confidence, next_e.tags,
+    SELECT next_e.id, next_e.entity_type, next_e.data, next_e.confidence, next_e.tags, next_e.display_name,
            next_e.created_at, next_e.updated_at,
            t.depth + 1, t.visited || next_e.id,
            t.path || jsonb_build_object(
@@ -102,7 +102,7 @@ WITH RECURSIVE traverse AS (
       AND (cardinality($9::text[]) = 0 OR next_e.tags && $9::text[])
       AND ($10::text = '' OR NOT ($10::text = ANY(next_e.tags)) OR next_e.tags && $11::text[])
 )
-SELECT id, entity_type, data, confidence, tags, created_at, updated_at, depth, path
+SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at, depth, path
 FROM traverse WHERE depth > 0
 ORDER BY depth, created_at
 LIMIT $12;
@@ -162,17 +162,18 @@ func (s *Store) Traverse(ctx context.Context, entityID string, opts *TraverseOpt
 
 	for rows.Next() {
 		var (
-			id         uuid.UUID
-			entityType string
-			data       json.RawMessage
-			confidence float64
-			rowTags    []string
-			createdAt  time.Time
-			updatedAt  time.Time
-			depth      int
-			pathJSON   json.RawMessage
+			id          uuid.UUID
+			entityType  string
+			data        json.RawMessage
+			confidence  float64
+			rowTags     []string
+			displayName string
+			createdAt   time.Time
+			updatedAt   time.Time
+			depth       int
+			pathJSON    json.RawMessage
 		)
-		if err := rows.Scan(&id, &entityType, &data, &confidence, &rowTags, &createdAt, &updatedAt, &depth, &pathJSON); err != nil {
+		if err := rows.Scan(&id, &entityType, &data, &confidence, &rowTags, &displayName, &createdAt, &updatedAt, &depth, &pathJSON); err != nil {
 			return nil, fmt.Errorf("traverse scan: %w", err)
 		}
 
@@ -192,11 +193,12 @@ func (s *Store) Traverse(ctx context.Context, entityID string, opts *TraverseOpt
 
 		results = append(results, TraverseResult{
 			Entity: matching.StoredEntity{
-				ID:         id.String(),
-				EntityType: entityType,
-				Data:       data,
-				Confidence: confidence,
-				Tags:       rowTags,
+				ID:          id.String(),
+				EntityType:  entityType,
+				Data:        data,
+				Confidence:  confidence,
+				Tags:        rowTags,
+				DisplayName: displayName,
 				CreatedAt:  createdAt,
 				UpdatedAt:  updatedAt,
 			},

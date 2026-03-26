@@ -236,6 +236,11 @@ message MessageOptions {
   // Display name for the entity type in prompts (e.g., "Job Posting" instead of "JobPosting").
   // If omitted, the message name is used as-is.
   string extraction_display_name = 12;
+
+  // Proto field names used to derive the display name for an entity instance.
+  // The generated {Entity}DisplayName(msg) function returns the first non-empty
+  // field value. Example: display_fields: ["full_name", "email"] for a Person.
+  repeated string display_fields = 20;
 }
 
 // Per-field matching configuration.

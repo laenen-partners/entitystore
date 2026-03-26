@@ -1,5 +1,5 @@
 -- name: FindByAnchors :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
 FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3
@@ -13,6 +13,12 @@ INSERT INTO entity_anchors (entity_id, entity_type, anchor_field, normalized_val
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (entity_type, anchor_field, normalized_value) DO UPDATE
 SET entity_id = EXCLUDED.entity_id;
+
+-- name: GetAnchorsForEntity :many
+SELECT anchor_field, normalized_value
+FROM entity_anchors
+WHERE entity_id = $1
+ORDER BY anchor_field;
 
 -- name: DeleteAnchorsForEntity :exec
 DELETE FROM entity_anchors WHERE entity_id = $1;

@@ -30,6 +30,11 @@ func WithID(id string) WriteOpOption {
 	return func(op *WriteEntityOp) { op.ID = id }
 }
 
+// WithDisplayName sets the display name for the entity.
+func WithDisplayName(name string) WriteOpOption {
+	return func(op *WriteEntityOp) { op.DisplayName = name }
+}
+
 // WithEvents appends caller-defined events to the operation.
 // These are inserted alongside the standard lifecycle events in the same transaction.
 func WithEvents(events ...proto.Message) WriteOpOption {

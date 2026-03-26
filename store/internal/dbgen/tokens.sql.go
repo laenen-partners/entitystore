@@ -23,7 +23,7 @@ func (q *Queries) DeleteTokensForEntity(ctx context.Context, entityID uuid.UUID)
 }
 
 const findByTokenOverlap = `-- name: FindByTokenOverlap :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
 FROM entity_tokens t
 JOIN entities e ON e.id = t.entity_id
 WHERE ($1::text = '' OR t.entity_type = $1::text) AND t.tokens && $2::text[]
@@ -49,13 +49,14 @@ type FindByTokenOverlapParams struct {
 }
 
 type FindByTokenOverlapRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) FindByTokenOverlap(ctx context.Context, arg FindByTokenOverlapParams) ([]FindByTokenOverlapRow, error) {
@@ -81,6 +82,7 @@ func (q *Queries) FindByTokenOverlap(ctx context.Context, arg FindByTokenOverlap
 			&i.Data,
 			&i.Confidence,
 			&i.Tags,
+			&i.DisplayName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

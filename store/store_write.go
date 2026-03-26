@@ -38,6 +38,7 @@ type WriteEntityOp struct {
 	Anchors         []matching.AnchorQuery
 	Tokens          map[string][]string
 	Embedding       []float32
+	DisplayName     string
 	Events          []proto.Message
 }
 
@@ -452,7 +453,7 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 		}
 		row, err := q.InsertEntityWithID(ctx, dbgen.InsertEntityWithIDParams{
 			ID: uid, EntityType: entityType,
-			Data: data, Confidence: op.Confidence, Tags: tags,
+			Data: data, Confidence: op.Confidence, Tags: tags, DisplayName: op.DisplayName,
 		})
 		if err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("insert entity with id: %w", err)
@@ -461,10 +462,11 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 		ent = entityFromRow(row)
 	} else {
 		row, err := q.InsertEntity(ctx, dbgen.InsertEntityParams{
-			EntityType: entityType,
-			Data:       data,
-			Confidence: op.Confidence,
-			Tags:       tags,
+			EntityType:  entityType,
+			Data:        data,
+			Confidence:  op.Confidence,
+			Tags:        tags,
+			DisplayName: op.DisplayName,
 		})
 		if err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("insert entity: %w", err)
@@ -512,13 +514,13 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 	switch op.Action {
 	case WriteActionUpdate:
 		if err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
-			ID: uid, Data: data, Confidence: op.Confidence,
+			ID: uid, Data: data, Confidence: op.Confidence, DisplayName: op.DisplayName,
 		}); err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("update entity: %w", err)
 		}
 	case WriteActionMerge:
 		if err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
-			ID: uid, Data: data, Confidence: op.Confidence,
+			ID: uid, Data: data, Confidence: op.Confidence, DisplayName: op.DisplayName,
 		}); err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("merge entity: %w", err)
 		}

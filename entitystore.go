@@ -105,6 +105,11 @@ func (es *EntityStore) GetByAnchor(ctx context.Context, entityType, field, value
 	return es.store.GetByAnchor(ctx, entityType, field, value, filter)
 }
 
+// GetAnchorsForEntity returns the anchors stored for the given entity.
+func (es *EntityStore) GetAnchorsForEntity(ctx context.Context, entityID string) ([]store.StoredAnchor, error) {
+	return es.store.GetAnchorsForEntity(ctx, entityID)
+}
+
 // FindByAnchors searches for entities matching the given anchor values.
 func (es *EntityStore) FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	return es.store.FindByAnchors(ctx, entityType, anchors, filter)
@@ -412,6 +417,7 @@ var (
 	WithTags            = store.WithTags
 	WithEmbedding       = store.WithEmbedding
 	WithID              = store.WithID
+	WithDisplayName     = store.WithDisplayName
 	WithEvents          = store.WithEvents
 )
 
@@ -420,6 +426,9 @@ type StoreStats = store.StoreStats
 
 // TypeCount represents the count of entities or relations for a given type.
 type TypeCount = store.TypeCount
+
+// StoredAnchor represents a single anchor field+value pair for an entity.
+type StoredAnchor = store.StoredAnchor
 
 // Migrate applies all pending database migrations using the given pool.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {

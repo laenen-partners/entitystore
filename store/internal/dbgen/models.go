@@ -14,15 +14,16 @@ import (
 )
 
 type Entity struct {
-	ID         uuid.UUID          `json:"id"`
-	EntityType string             `json:"entity_type"`
-	Data       json.RawMessage    `json:"data"`
-	Confidence float64            `json:"confidence"`
-	Tags       []string           `json:"tags"`
-	Embedding  pgvector_go.Vector `json:"embedding"`
-	CreatedAt  time.Time          `json:"created_at"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	DeletedAt  pgtype.Timestamptz `json:"deleted_at"`
+	ID          uuid.UUID          `json:"id"`
+	EntityType  string             `json:"entity_type"`
+	Data        json.RawMessage    `json:"data"`
+	Confidence  float64            `json:"confidence"`
+	Tags        []string           `json:"tags"`
+	Embedding   pgvector_go.Vector `json:"embedding"`
+	CreatedAt   time.Time          `json:"created_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	DisplayName string             `json:"display_name"`
 }
 
 type EntityAnchor struct {

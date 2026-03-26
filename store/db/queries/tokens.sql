@@ -1,5 +1,5 @@
 -- name: FindByTokenOverlap :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
 FROM entity_tokens t
 JOIN entities e ON e.id = t.entity_id
 WHERE (@entity_type::text = '' OR t.entity_type = @entity_type::text) AND t.tokens && @tokens::text[]

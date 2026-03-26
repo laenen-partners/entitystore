@@ -17,6 +17,7 @@ message Person {
     extraction_prompt: "Extract person details from the provided text."
     extraction_instructions: "If multiple people are mentioned, extract only the primary subject. Ignore quoted or referenced individuals."
     extraction_display_name: "Person"
+    display_fields: ["full_name", "email"]
   };
 
   // Primary email address.

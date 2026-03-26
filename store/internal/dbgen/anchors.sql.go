@@ -23,7 +23,7 @@ func (q *Queries) DeleteAnchorsForEntity(ctx context.Context, entityID uuid.UUID
 }
 
 const findByAnchors = `-- name: FindByAnchors :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
 FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3
@@ -44,13 +44,14 @@ type FindByAnchorsParams struct {
 }
 
 type FindByAnchorsRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) FindByAnchors(ctx context.Context, arg FindByAnchorsParams) ([]FindByAnchorsRow, error) {
@@ -76,9 +77,42 @@ func (q *Queries) FindByAnchors(ctx context.Context, arg FindByAnchorsParams) ([
 			&i.Data,
 			&i.Confidence,
 			&i.Tags,
+			&i.DisplayName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAnchorsForEntity = `-- name: GetAnchorsForEntity :many
+SELECT anchor_field, normalized_value
+FROM entity_anchors
+WHERE entity_id = $1
+ORDER BY anchor_field
+`
+
+type GetAnchorsForEntityRow struct {
+	AnchorField     string `json:"anchor_field"`
+	NormalizedValue string `json:"normalized_value"`
+}
+
+func (q *Queries) GetAnchorsForEntity(ctx context.Context, entityID uuid.UUID) ([]GetAnchorsForEntityRow, error) {
+	rows, err := q.db.Query(ctx, getAnchorsForEntity, entityID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAnchorsForEntityRow
+	for rows.Next() {
+		var i GetAnchorsForEntityRow
+		if err := rows.Scan(&i.AnchorField, &i.NormalizedValue); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

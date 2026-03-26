@@ -114,9 +114,10 @@ func (h *Handlers) EntityDetailFragment(w http.ResponseWriter, r *http.Request) 
 	}
 
 	relCount, _ := h.es.CountRelationsForEntity(r.Context(), id)
+	anchors, _ := h.es.GetAnchorsForEntity(r.Context(), id)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Patch(sse, entityDetail(entity, string(prettyJSON), relCount))
+	ds.Send.Patch(sse, entityDetail(entity, string(prettyJSON), relCount, anchors))
 }
 
 // EntityRelationsFragment returns relations for an entity.

@@ -125,8 +125,13 @@ templ entityCard(e matching.StoredEntity) {
 		@card.Body() {
 			<div class="flex items-center justify-between">
 				<div>
-					<span class="font-mono text-xs text-base-content/50">{ e.ID[:8] }...</span>
-					<span class="ml-2 font-semibold">{ shortType(e.EntityType) }</span>
+					if e.DisplayName != "" {
+						<span class="font-semibold">{ e.DisplayName }</span>
+						<span class="ml-2 text-xs text-base-content/50">{ shortType(e.EntityType) }</span>
+					} else {
+						<span class="font-mono text-xs text-base-content/50">{ e.ID[:8] }...</span>
+						<span class="ml-2 font-semibold">{ shortType(e.EntityType) }</span>
+					}
 				</div>
 				<div class="flex gap-1">
 					for _, tag := range e.Tags {
@@ -148,23 +153,39 @@ templ entityCard(e matching.StoredEntity) {
 // Entity Detail
 // ---------------------------------------------------------------------------
 
-templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64) {
+templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64, anchors []store.StoredAnchor) {
 	<div id={ "entity-" + e.ID } class="space-y-4">
 		@card.Card() {
 			@card.Body() {
 				@card.Title() {
-					{ shortType(e.EntityType) }
+					if e.DisplayName != "" {
+						{ e.DisplayName }
+					} else {
+						{ shortType(e.EntityType) }
+					}
 					@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
 						{ fmt.Sprintf("%.0f%% confidence", e.Confidence*100) }
 					}
 				}
 				<div class="grid grid-cols-2 gap-2 text-sm">
-					<div><span class="text-base-content/50">ID:</span> <span class="font-mono">{ e.ID }</span></div>
-					<div><span class="text-base-content/50">Type:</span> <span class="font-mono">{ e.EntityType }</span></div>
+					<div><span class="text-base-content/50">ID:</span> <span class="font-mono text-xs">{ e.ID }</span></div>
+					<div><span class="text-base-content/50">Type:</span> <span class="font-mono text-xs">{ e.EntityType }</span></div>
 					<div><span class="text-base-content/50">Created:</span> { e.CreatedAt.Format("2006-01-02 15:04:05") }</div>
 					<div><span class="text-base-content/50">Updated:</span> { e.UpdatedAt.Format("2006-01-02 15:04:05") }</div>
 					<div><span class="text-base-content/50">Relations:</span> { fmt.Sprintf("%d", relCount) }</div>
 				</div>
+				if len(anchors) > 0 {
+					<div class="mt-2">
+						<span class="text-xs text-base-content/50 uppercase tracking-wide">Anchors</span>
+						<div class="flex flex-wrap gap-2 mt-1">
+							for _, a := range anchors {
+								@badge.Badge(badge.Props{Style: badge.StyleOutline}) {
+									{ a.Field }: { a.Value }
+								}
+							}
+						</div>
+					</div>
+				}
 				<div class="flex gap-1 mt-2">
 					for _, tag := range e.Tags {
 						@badge.Badge(badge.Props{Style: badge.StyleGhost}) {

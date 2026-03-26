@@ -68,13 +68,14 @@ type EmbeddingStore interface {
 
 // StoredEntity is a persisted entity record returned by the store.
 type StoredEntity struct {
-	ID         string          `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          string          `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 // GetData unmarshals the entity's JSON data into a proto message.

@@ -1,5 +1,5 @@
 -- name: FindByEmbedding :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
 FROM entities e
 WHERE (cardinality(@entity_types::text[]) = 0 OR e.entity_type = ANY(@entity_types))
   AND e.deleted_at IS NULL

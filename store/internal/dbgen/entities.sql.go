@@ -137,7 +137,7 @@ func (q *Queries) DeleteEntity(ctx context.Context, id uuid.UUID) error {
 }
 
 const getEntitiesByType = `-- name: GetEntitiesByType :many
-SELECT id, entity_type, data, confidence, tags, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
 FROM entities
 WHERE entity_type = $1
   AND deleted_at IS NULL
@@ -153,13 +153,14 @@ type GetEntitiesByTypeParams struct {
 }
 
 type GetEntitiesByTypeRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) GetEntitiesByType(ctx context.Context, arg GetEntitiesByTypeParams) ([]GetEntitiesByTypeRow, error) {
@@ -177,6 +178,7 @@ func (q *Queries) GetEntitiesByType(ctx context.Context, arg GetEntitiesByTypePa
 			&i.Data,
 			&i.Confidence,
 			&i.Tags,
+			&i.DisplayName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -191,7 +193,7 @@ func (q *Queries) GetEntitiesByType(ctx context.Context, arg GetEntitiesByTypePa
 }
 
 const getEntitiesByTypeFiltered = `-- name: GetEntitiesByTypeFiltered :many
-SELECT id, entity_type, data, confidence, tags, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
 FROM entities
 WHERE entity_type = $1
   AND deleted_at IS NULL
@@ -214,13 +216,14 @@ type GetEntitiesByTypeFilteredParams struct {
 }
 
 type GetEntitiesByTypeFilteredRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntitiesByTypeFilteredParams) ([]GetEntitiesByTypeFilteredRow, error) {
@@ -246,6 +249,7 @@ func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntities
 			&i.Data,
 			&i.Confidence,
 			&i.Tags,
+			&i.DisplayName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -260,19 +264,20 @@ func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntities
 }
 
 const getEntity = `-- name: GetEntity :one
-SELECT id, entity_type, data, confidence, tags, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
 FROM entities
 WHERE id = $1 AND deleted_at IS NULL
 `
 
 type GetEntityRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) GetEntity(ctx context.Context, id uuid.UUID) (GetEntityRow, error) {
@@ -284,6 +289,7 @@ func (q *Queries) GetEntity(ctx context.Context, id uuid.UUID) (GetEntityRow, er
 		&i.Data,
 		&i.Confidence,
 		&i.Tags,
+		&i.DisplayName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -300,26 +306,28 @@ func (q *Queries) HardDeleteEntity(ctx context.Context, id uuid.UUID) error {
 }
 
 const insertEntity = `-- name: InsertEntity :one
-INSERT INTO entities (entity_type, data, confidence, tags)
-VALUES ($1, $2, $3, $4)
-RETURNING id, entity_type, data, confidence, tags, created_at, updated_at
+INSERT INTO entities (entity_type, data, confidence, tags, display_name)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, entity_type, data, confidence, tags, display_name, created_at, updated_at
 `
 
 type InsertEntityParams struct {
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
 }
 
 type InsertEntityRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (InsertEntityRow, error) {
@@ -328,6 +336,7 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (Ins
 		arg.Data,
 		arg.Confidence,
 		arg.Tags,
+		arg.DisplayName,
 	)
 	var i InsertEntityRow
 	err := row.Scan(
@@ -336,6 +345,7 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (Ins
 		&i.Data,
 		&i.Confidence,
 		&i.Tags,
+		&i.DisplayName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -343,27 +353,29 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (Ins
 }
 
 const insertEntityWithID = `-- name: InsertEntityWithID :one
-INSERT INTO entities (id, entity_type, data, confidence, tags)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, entity_type, data, confidence, tags, created_at, updated_at
+INSERT INTO entities (id, entity_type, data, confidence, tags, display_name)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, entity_type, data, confidence, tags, display_name, created_at, updated_at
 `
 
 type InsertEntityWithIDParams struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
 }
 
 type InsertEntityWithIDRow struct {
-	ID         uuid.UUID       `json:"id"`
-	EntityType string          `json:"entity_type"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
-	Tags       []string        `json:"tags"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
 func (q *Queries) InsertEntityWithID(ctx context.Context, arg InsertEntityWithIDParams) (InsertEntityWithIDRow, error) {
@@ -373,6 +385,7 @@ func (q *Queries) InsertEntityWithID(ctx context.Context, arg InsertEntityWithID
 		arg.Data,
 		arg.Confidence,
 		arg.Tags,
+		arg.DisplayName,
 	)
 	var i InsertEntityWithIDRow
 	err := row.Scan(
@@ -381,6 +394,7 @@ func (q *Queries) InsertEntityWithID(ctx context.Context, arg InsertEntityWithID
 		&i.Data,
 		&i.Confidence,
 		&i.Tags,
+		&i.DisplayName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -389,34 +403,46 @@ func (q *Queries) InsertEntityWithID(ctx context.Context, arg InsertEntityWithID
 
 const mergeEntityData = `-- name: MergeEntityData :exec
 UPDATE entities
-SET data = data || $2, confidence = $3, updated_at = now()
+SET data = data || $2, confidence = $3, display_name = $4, updated_at = now()
 WHERE id = $1
 `
 
 type MergeEntityDataParams struct {
-	ID         uuid.UUID       `json:"id"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
+	ID          uuid.UUID       `json:"id"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	DisplayName string          `json:"display_name"`
 }
 
 func (q *Queries) MergeEntityData(ctx context.Context, arg MergeEntityDataParams) error {
-	_, err := q.db.Exec(ctx, mergeEntityData, arg.ID, arg.Data, arg.Confidence)
+	_, err := q.db.Exec(ctx, mergeEntityData,
+		arg.ID,
+		arg.Data,
+		arg.Confidence,
+		arg.DisplayName,
+	)
 	return err
 }
 
 const updateEntityData = `-- name: UpdateEntityData :exec
 UPDATE entities
-SET data = $2, confidence = $3, updated_at = now()
+SET data = $2, confidence = $3, display_name = $4, updated_at = now()
 WHERE id = $1
 `
 
 type UpdateEntityDataParams struct {
-	ID         uuid.UUID       `json:"id"`
-	Data       json.RawMessage `json:"data"`
-	Confidence float64         `json:"confidence"`
+	ID          uuid.UUID       `json:"id"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	DisplayName string          `json:"display_name"`
 }
 
 func (q *Queries) UpdateEntityData(ctx context.Context, arg UpdateEntityDataParams) error {
-	_, err := q.db.Exec(ctx, updateEntityData, arg.ID, arg.Data, arg.Confidence)
+	_, err := q.db.Exec(ctx, updateEntityData,
+		arg.ID,
+		arg.Data,
+		arg.Confidence,
+		arg.DisplayName,
+	)
 	return err
 }

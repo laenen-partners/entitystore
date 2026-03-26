@@ -564,8 +564,12 @@ type MessageOptions struct {
 	// Display name for the entity type in prompts (e.g., "Job Posting" instead of "JobPosting").
 	// If omitted, the message name is used as-is.
 	ExtractionDisplayName string `protobuf:"bytes,12,opt,name=extraction_display_name,json=extractionDisplayName,proto3" json:"extraction_display_name,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Proto field names used to derive the display name for an entity instance.
+	// The generated {Entity}DisplayName(msg) function returns the first non-empty
+	// field value. Example: display_fields: ["full_name", "email"] for a Person.
+	DisplayFields []string `protobuf:"bytes,20,rep,name=display_fields,json=displayFields,proto3" json:"display_fields,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MessageOptions) Reset() {
@@ -640,6 +644,13 @@ func (x *MessageOptions) GetExtractionDisplayName() string {
 	return ""
 }
 
+func (x *MessageOptions) GetDisplayFields() []string {
+	if x != nil {
+		return x.DisplayFields
+	}
+	return nil
+}
+
 var file_entitystore_v1_options_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.FieldOptions)(nil),
@@ -702,7 +713,7 @@ const file_entitystore_v1_options_proto_rawDesc = "" +
 	"\n" +
 	"auto_match\x18\x01 \x01(\x02R\tautoMatch\x12\x1f\n" +
 	"\vreview_zone\x18\x02 \x01(\x02R\n" +
-	"reviewZone\"\xfa\x02\n" +
+	"reviewZone\"\xa1\x03\n" +
 	"\x0eMessageOptions\x12O\n" +
 	"\x10match_thresholds\x18\x01 \x01(\v2$.entitystore.v1.MatchThresholdsProtoR\x0fmatchThresholds\x12L\n" +
 	"\x11composite_anchors\x18\x02 \x03(\v2\x1f.entitystore.v1.CompositeAnchorR\x10compositeAnchors\x12+\n" +
@@ -710,7 +721,8 @@ const file_entitystore_v1_options_proto_rawDesc = "" +
 	"\x11extraction_prompt\x18\n" +
 	" \x01(\tR\x10extractionPrompt\x127\n" +
 	"\x17extraction_instructions\x18\v \x01(\tR\x16extractionInstructions\x126\n" +
-	"\x17extraction_display_name\x18\f \x01(\tR\x15extractionDisplayName*\xca\x01\n" +
+	"\x17extraction_display_name\x18\f \x01(\tR\x15extractionDisplayName\x12%\n" +
+	"\x0edisplay_fields\x18\x14 \x03(\tR\rdisplayFields*\xca\x01\n" +
 	"\x12SimilarityFunction\x12#\n" +
 	"\x1fSIMILARITY_FUNCTION_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19SIMILARITY_FUNCTION_EXACT\x10\x01\x12$\n" +

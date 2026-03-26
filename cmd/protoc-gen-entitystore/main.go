@@ -79,6 +79,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File) error {
 		generateTokens(g, msg)
 		generateEmbedText(g, msg)
 		generateAnchors(g, msg)
+		generateDisplayName(g, msg)
 		generateWriteOp(g, msg)
 	}
 
@@ -645,6 +646,52 @@ func generateAnchors(g *protogen.GeneratedFile, msg *protogen.Message) {
 // ---------------------------------------------------------------------------
 // WriteOp generation
 // ---------------------------------------------------------------------------
+// Display name generation
+// ---------------------------------------------------------------------------
+
+func generateDisplayName(g *protogen.GeneratedFile, msg *protogen.Message) {
+	msgOpts := getMessageOptions(msg)
+	if msgOpts == nil || len(msgOpts.DisplayFields) == 0 {
+		return
+	}
+
+	fields := annotatedFieldsEx(msg)
+	fieldMap := make(map[string]fieldInfoEx)
+	for _, fi := range fields {
+		fieldMap[fi.name] = fi
+	}
+	// Also include unannotated fields for display_fields.
+	for _, f := range msg.Fields {
+		name := string(f.Desc.Name())
+		if _, ok := fieldMap[name]; !ok {
+			fieldMap[name] = fieldInfoEx{
+				fieldInfo: fieldInfo{name: name},
+				field:     f,
+			}
+		}
+	}
+
+	msgName := msg.GoIdent.GoName
+
+	g.P("// ", msgName, "DisplayName returns a human-readable display name from the message.")
+	g.P("// Uses the first non-empty field from display_fields annotation.")
+	g.P("func ", msgName, "DisplayName(msg *", msg.GoIdent, ") string {")
+	for _, fieldName := range msgOpts.DisplayFields {
+		if fi, ok := fieldMap[fieldName]; ok {
+			getter := "Get" + fi.field.GoName
+			g.P("if v := msg.", getter, "(); v != \"\" {")
+			g.P("return v")
+			g.P("}")
+		}
+	}
+	g.P("return \"\"")
+	g.P("}")
+	g.P()
+}
+
+// ---------------------------------------------------------------------------
+// WriteOp generation
+// ---------------------------------------------------------------------------
 
 func generateWriteOp(g *protogen.GeneratedFile, msg *protogen.Message) {
 	fields := annotatedFieldsEx(msg)
@@ -682,6 +729,11 @@ func generateWriteOp(g *protogen.GeneratedFile, msg *protogen.Message) {
 	}
 	if hasTokens {
 		g.P("Tokens: ", msgName, "Tokens(msg),")
+	}
+
+	hasDisplayFields := msgOpts != nil && len(msgOpts.DisplayFields) > 0
+	if hasDisplayFields {
+		g.P("DisplayName: ", msgName, "DisplayName(msg),")
 	}
 
 	g.P("}")

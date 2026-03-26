@@ -16,6 +16,7 @@ type EntityStorer interface {
 	// Entity reads
 	GetEntity(ctx context.Context, id string) (matching.StoredEntity, error)
 	GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error)
+	GetAnchorsForEntity(ctx context.Context, entityID string) ([]store.StoredAnchor, error)
 	GetEntitiesByType(ctx context.Context, entityType string, pageSize int32, cursor *time.Time, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
 	FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
 	FindByTokens(ctx context.Context, entityType string, tokens []string, limit int, filter *matching.QueryFilter) ([]matching.StoredEntity, error)

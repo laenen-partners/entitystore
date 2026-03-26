@@ -55,12 +55,13 @@ func seedPeopleAndCompanies(ctx context.Context, es *entitystore.EntityStore) er
 		name := p["full_name"].(string)
 		_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 			{WriteEntity: &entitystore.WriteEntityOp{
-				Action:     entitystore.WriteActionCreate,
-				Data:       data,
-				Confidence: 0.95,
-				Tags:       []string{"ws:showcase", "type:person"},
-				Anchors:    []matching.AnchorQuery{{Field: "email", Value: matching.NormalizeLowercaseTrim(email)}},
-				Tokens:     map[string][]string{"full_name": matching.Tokenize(name)},
+				Action:      entitystore.WriteActionCreate,
+				Data:        data,
+				Confidence:  0.95,
+				Tags:        []string{"ws:showcase", "type:person"},
+				DisplayName: name,
+				Anchors:     []matching.AnchorQuery{{Field: "email", Value: matching.NormalizeLowercaseTrim(email)}},
+				Tokens:      map[string][]string{"full_name": matching.Tokenize(name)},
 			}},
 		})
 		if err != nil {
@@ -74,12 +75,13 @@ func seedPeopleAndCompanies(ctx context.Context, es *entitystore.EntityStore) er
 		name := c["name"].(string)
 		_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 			{WriteEntity: &entitystore.WriteEntityOp{
-				Action:     entitystore.WriteActionCreate,
-				Data:       data,
-				Confidence: 0.90,
-				Tags:       []string{"ws:showcase", "type:company"},
-				Anchors:    []matching.AnchorQuery{{Field: "domain", Value: matching.NormalizeLowercaseTrim(domain)}},
-				Tokens:     map[string][]string{"name": matching.Tokenize(name)},
+				Action:      entitystore.WriteActionCreate,
+				Data:        data,
+				Confidence:  0.90,
+				Tags:        []string{"ws:showcase", "type:company"},
+				DisplayName: name,
+				Anchors:     []matching.AnchorQuery{{Field: "domain", Value: matching.NormalizeLowercaseTrim(domain)}},
+				Tokens:      map[string][]string{"name": matching.Tokenize(name)},
 			}},
 		})
 		if err != nil {
@@ -163,11 +165,12 @@ func seedInvoicesAndRelations(ctx context.Context, es *entitystore.EntityStore) 
 		})
 		_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 			{WriteEntity: &entitystore.WriteEntityOp{
-				Action:     entitystore.WriteActionCreate,
-				Data:       data,
-				Confidence: 0.92,
-				Tags:       []string{"ws:showcase", "type:invoice"},
-				Anchors:    []matching.AnchorQuery{{Field: "invoice_number", Value: matching.NormalizeLowercaseTrim(inv.number)}},
+				Action:      entitystore.WriteActionCreate,
+				Data:        data,
+				Confidence:  0.92,
+				Tags:        []string{"ws:showcase", "type:invoice"},
+				DisplayName: inv.number + " — " + inv.issuer,
+				Anchors:     []matching.AnchorQuery{{Field: "invoice_number", Value: matching.NormalizeLowercaseTrim(inv.number)}},
 			}},
 		})
 		if err != nil {

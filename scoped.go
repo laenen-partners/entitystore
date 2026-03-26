@@ -128,6 +128,11 @@ func (s *ScopedStore) GetByAnchor(ctx context.Context, entityType, field, value 
 	return ent, nil
 }
 
+// GetAnchorsForEntity returns the anchors stored for the given entity.
+func (s *ScopedStore) GetAnchorsForEntity(ctx context.Context, entityID string) ([]store.StoredAnchor, error) {
+	return s.inner.GetAnchorsForEntity(ctx, entityID)
+}
+
 // FindByAnchors searches for entities matching the given anchor values.
 func (s *ScopedStore) FindByAnchors(ctx context.Context, entityType string, anchors []matching.AnchorQuery, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
 	return s.inner.FindByAnchors(ctx, entityType, anchors, s.mergeFilter(filter))
