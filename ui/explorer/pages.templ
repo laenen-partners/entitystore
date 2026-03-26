@@ -6,6 +6,7 @@ import (
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/badge"
 	"github.com/laenen-partners/dsx/ui/card"
+	"github.com/laenen-partners/dsx/ui/stat"
 	"github.com/laenen-partners/dsx/ui/table"
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
@@ -51,12 +52,12 @@ templ StatsPage(stats store.StoreStats) {
 		<div class="space-y-6">
 			<h2 class="text-2xl font-bold">Store Statistics</h2>
 
-			<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-				@statCard("Entities", fmt.Sprintf("%d", stats.TotalEntities), "primary")
-				@statCard("Relations", fmt.Sprintf("%d", stats.TotalRelations), "secondary")
-				@statCard("Soft Deleted", fmt.Sprintf("%d", stats.SoftDeleted), "warning")
-				@statCard("Entity Types", fmt.Sprintf("%d", len(stats.EntityTypes)), "accent")
-			</div>
+			@stat.Stats(stat.Props{Class: "w-full shadow"}) {
+				@statItem("Entities", fmt.Sprintf("%d", stats.TotalEntities), "text-primary")
+				@statItem("Relations", fmt.Sprintf("%d", stats.TotalRelations), "text-secondary")
+				@statItem("Soft Deleted", fmt.Sprintf("%d", stats.SoftDeleted), "text-warning")
+				@statItem("Entity Types", fmt.Sprintf("%d", len(stats.EntityTypes)), "text-accent")
+			}
 
 			if len(stats.EntityTypes) > 0 {
 				@card.Card() {
@@ -99,11 +100,13 @@ templ StatsPage(stats store.StoreStats) {
 	}
 }
 
-templ statCard(label, value, color string) {
-	@card.Card(card.Props{Class: "bg-base-200"}) {
-		@card.Body() {
-			<div class="stat-title text-xs uppercase tracking-wide">{ label }</div>
-			<div class={ "stat-value text-2xl font-bold text-" + color }>{ value }</div>
+templ statItem(label, value, colorClass string) {
+	@stat.Stat() {
+		@stat.Title() {
+			{ label }
+		}
+		@stat.Value(stat.ValueProps{Class: colorClass}) {
+			{ value }
 		}
 	}
 }
