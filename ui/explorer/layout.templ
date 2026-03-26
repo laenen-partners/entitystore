@@ -1,15 +1,15 @@
-package layouts
+package explorer
 
 import "github.com/laenen-partners/dsx"
 import "github.com/laenen-partners/dsx/layouts"
 import "github.com/laenen-partners/dsx/showcase"
 
-type ExplorerProps struct {
+type explorerProps struct {
 	Title string
 	Path  string
 }
 
-templ Explorer(props ExplorerProps) {
+templ explorerLayout(props explorerProps) {
 	{{ wxctx := dsx.FromContext(ctx) }}
 	@layouts.Base(layouts.BaseProps{
 		Title:     props.Title + " — EntityStore Explorer",
@@ -18,8 +18,10 @@ templ Explorer(props ExplorerProps) {
 		Head:      showcase.Head(),
 	}) {
 		<div class="flex min-h-screen">
-			<aside class="w-64 bg-base-200 p-4">
-				<h2 class="font-bold text-lg mb-4">Explorer</h2>
+			<aside class="w-64 bg-base-200 p-4 shrink-0">
+				<h2 class="font-bold text-lg mb-4">
+					<a href="/" class="hover:text-primary">Explorer</a>
+				</h2>
 				<ul class="menu">
 					<li><a href="/" class={ templ.KV("active", props.Path == "/") }>Home</a></li>
 					<li><a href="/search" class={ templ.KV("active", props.Path == "/search") }>Search</a></li>
@@ -27,7 +29,7 @@ templ Explorer(props ExplorerProps) {
 					<li><a href="/entities" class={ templ.KV("active", props.Path == "/entities") }>Entities</a></li>
 				</ul>
 			</aside>
-			<main class="flex-1 p-6">
+			<main class="flex-1 p-6 overflow-auto">
 				{ children... }
 			</main>
 		</div>

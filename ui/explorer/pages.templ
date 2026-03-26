@@ -1,0 +1,77 @@
+package explorer
+
+import "github.com/laenen-partners/dsx/showcase"
+import "github.com/laenen-partners/dsx/ds"
+import "github.com/laenen-partners/dsx/ui/card"
+
+templ Home() {
+	@explorerLayout(explorerProps{Title: "Home", Path: "/"}) {
+		<div class="space-y-6">
+			<div>
+				<h2 class="text-2xl font-bold">EntityStore Explorer</h2>
+				<p class="text-base-content/70 mt-1">
+					Browse entities, relations, events, and graph traversals.
+				</p>
+			</div>
+			@showcase.Fragment("stats-overview", "/fragments/stats")
+			@showcase.Fragment("entity-types", "/fragments/entity-types")
+		</div>
+	}
+}
+
+templ Search() {
+	@explorerLayout(explorerProps{Title: "Search", Path: "/search"}) {
+		<div class="space-y-6">
+			<div>
+				<h2 class="text-2xl font-bold">Search Entities</h2>
+				<p class="text-base-content/70 mt-1">
+					Search by anchor (email, domain, invoice number) or keywords.
+				</p>
+			</div>
+			<div { ds.RawSignals(`{"search":{"query":""}}`)... }>
+				@card.Card() {
+					@card.Body() {
+						<div class="flex gap-2">
+							<input
+								type="text"
+								placeholder="Search by email, domain, name..."
+								class="input input-bordered input-lg w-full"
+								{ ds.Bind("search", "query")... }
+							/>
+							<button
+								class="btn btn-primary btn-lg"
+								{ ds.OnClick(ds.Get("/fragments/search"))... }
+							>
+								Search
+							</button>
+						</div>
+						<div class="mt-4">
+							<div id="search-results">
+								<p class="text-base-content/50">Enter a search term and click Search.</p>
+							</div>
+						</div>
+					}
+				}
+			</div>
+		</div>
+	}
+}
+
+templ Stats() {
+	@explorerLayout(explorerProps{Title: "Stats", Path: "/stats"}) {
+		<div class="space-y-6">
+			<h2 class="text-2xl font-bold">Store Statistics</h2>
+			@showcase.Fragment("stats-full", "/fragments/stats")
+			@showcase.Fragment("entity-types-full", "/fragments/entity-types")
+		</div>
+	}
+}
+
+templ Entities() {
+	@explorerLayout(explorerProps{Title: "Entities", Path: "/entities"}) {
+		<div class="space-y-6">
+			<h2 class="text-2xl font-bold">Entities</h2>
+			@showcase.Fragment("entity-list", "/fragments/entities")
+		</div>
+	}
+}

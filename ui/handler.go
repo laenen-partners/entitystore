@@ -113,11 +113,12 @@ func (h *Handlers) EntityDetailFragment(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	relCount, _ := h.es.CountRelationsForEntity(r.Context(), id)
 	anchors, _ := h.es.GetAnchorsForEntity(r.Context(), id)
+	outbound, _ := h.es.GetRelationsFromEntity(r.Context(), id, 20, nil)
+	inbound, _ := h.es.GetRelationsToEntity(r.Context(), id, 20, nil)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), relCount, anchors), ds.WithDrawerMaxWidth("max-w-2xl"))
+	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityRelationsFragment returns relations for an entity.

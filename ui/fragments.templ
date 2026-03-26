@@ -154,7 +154,7 @@ templ entityCard(e matching.StoredEntity) {
 // Entity Detail
 // ---------------------------------------------------------------------------
 
-templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64, anchors []store.StoredAnchor) {
+templ entityDetail(e matching.StoredEntity, prettyData string, anchors []store.StoredAnchor, outbound []matching.StoredRelation, inbound []matching.StoredRelation) {
 	<div class="space-y-4">
 		@card.Card() {
 			@card.Body() {
@@ -173,7 +173,7 @@ templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64, a
 					<div><span class="text-base-content/50">Type:</span> <span class="font-mono text-xs">{ e.EntityType }</span></div>
 					<div><span class="text-base-content/50">Created:</span> { e.CreatedAt.Format("2006-01-02 15:04:05") }</div>
 					<div><span class="text-base-content/50">Updated:</span> { e.UpdatedAt.Format("2006-01-02 15:04:05") }</div>
-					<div><span class="text-base-content/50">Relations:</span> { fmt.Sprintf("%d", relCount) }</div>
+					<div><span class="text-base-content/50">Relations:</span> { fmt.Sprintf("%d", len(outbound)+len(inbound)) }</div>
 				</div>
 				if len(anchors) > 0 {
 					<div class="mt-2">
@@ -206,24 +206,62 @@ templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64, a
 			}
 		}
 
+		if len(outbound) > 0 || len(inbound) > 0 {
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						{ fmt.Sprintf("Relations (%d)", len(outbound)+len(inbound)) }
+					}
+					if len(outbound) > 0 {
+						<div class="mb-2">
+							<span class="text-xs text-base-content/50 uppercase tracking-wide">Outbound</span>
+							<div class="space-y-1 mt-1">
+								for _, rel := range outbound {
+									<div
+										class="flex items-center gap-2 p-2 rounded hover:bg-base-200 cursor-pointer"
+										{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", rel.TargetID)))... }
+									>
+										@badge.Badge(badge.Props{Style: badge.StyleOutline}) { { rel.RelationType } }
+										<span class="font-mono text-xs">{ rel.TargetID[:8] }...</span>
+										<span class="text-xs text-base-content/50">{ fmt.Sprintf("%.0f%%", rel.Confidence*100) }</span>
+										if rel.Evidence != "" {
+											<span class="text-xs text-base-content/40 truncate max-w-48">{ rel.Evidence }</span>
+										}
+									</div>
+								}
+							</div>
+						</div>
+					}
+					if len(inbound) > 0 {
+						<div>
+							<span class="text-xs text-base-content/50 uppercase tracking-wide">Inbound</span>
+							<div class="space-y-1 mt-1">
+								for _, rel := range inbound {
+									<div
+										class="flex items-center gap-2 p-2 rounded hover:bg-base-200 cursor-pointer"
+										{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", rel.SourceID)))... }
+									>
+										@badge.Badge(badge.Props{Style: badge.StyleOutline}) { { rel.RelationType } }
+										<span class="font-mono text-xs">{ rel.SourceID[:8] }...</span>
+										<span class="text-xs text-base-content/50">{ fmt.Sprintf("%.0f%%", rel.Confidence*100) }</span>
+										if rel.Evidence != "" {
+											<span class="text-xs text-base-content/40 truncate max-w-48">{ rel.Evidence }</span>
+										}
+									</div>
+								}
+							</div>
+						</div>
+					}
+				}
+			}
+		}
+
 		<div class="flex gap-2">
-			<button
-				class="btn btn-sm btn-outline"
-				{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s/relations", e.ID)))... }
-			>
-				Relations
-			</button>
-			<button
-				class="btn btn-sm btn-outline"
-				{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s/events", e.ID)))... }
-			>
-				Events
-			</button>
 			<button
 				class="btn btn-sm btn-outline"
 				{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s/graph", e.ID)))... }
 			>
-				Graph
+				Graph View
 			</button>
 		</div>
 
