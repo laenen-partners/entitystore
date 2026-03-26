@@ -9,15 +9,12 @@
 //	    Store: es,       // your EntityStorer (EntityStore or ScopedStore)
 //	    Port:  3336,     // optional, default 3336
 //	})
-//
-// Or embed into an existing chi router:
-//
-//	explorer.Mount(r, es)  // mounts at /explorer/
 package explorer
 
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 
 	"github.com/a-h/templ"
@@ -39,7 +36,6 @@ type Config struct {
 }
 
 // Run starts a standalone explorer server and blocks until interrupted.
-// This is the simplest way to add an explorer to any service.
 func Run(cfg Config) error {
 	if cfg.Port == 0 {
 		cfg.Port = 3336
@@ -53,32 +49,52 @@ func Run(cfg Config) error {
 		Setup: func(ctx context.Context, r chi.Router, bus *pubsub.Bus, relay *stream.Relay) error {
 			h := explorerui.NewHandlers(cfg.Store)
 			h.RegisterRoutes(r)
+
+			// Server-side rendered pages (fetch data, render full page).
+			r.Get("/stats", pageHandler(cfg.Store, "stats"))
+			r.Get("/entities", pageHandler(cfg.Store, "entities"))
+
 			return nil
 		},
 		Pages: map[string]templ.Component{
-			"/":         Home(),
-			"/search":   Search(),
-			"/stats":    Stats(),
-			"/entities": Entities(),
+			"/":       Search(),
+			"/search": Search(),
 		},
 	})
 }
 
+// pageHandler returns an HTTP handler that fetches data and renders a page.
+func pageHandler(es entitystore.EntityStorer, page string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		switch page {
+		case "home", "stats":
+			stats, _ := es.Stats(ctx)
+			templ.Handler(StatsPage(stats)).ServeHTTP(w, r)
+		case "entities":
+			var all []entitystore.StoredEntity
+			stats, _ := es.Stats(ctx)
+			for _, tc := range stats.EntityTypes {
+				entities, _ := es.GetEntitiesByType(ctx, tc.Type, 100, nil, nil)
+				all = append(all, entities...)
+			}
+			templ.Handler(EntitiesPage(all)).ServeHTTP(w, r)
+		}
+	}
+}
+
 // Mount registers the explorer fragment handlers on an existing chi router.
-// Pages are not mounted — use this when you only need the API endpoints
-// (e.g., for embedding in a larger application with its own layout).
 func Mount(r chi.Router, es entitystore.EntityStorer) {
 	h := explorerui.NewHandlers(es)
 	h.RegisterRoutes(r)
 }
 
 // RunInBackground starts the explorer server in a goroutine.
-// Returns immediately. The server stops when ctx is cancelled.
 func RunInBackground(ctx context.Context, cfg Config) {
 	go func() {
 		if err := Run(cfg); err != nil {
 			slog.ErrorContext(ctx, "explorer stopped", "error", err)
 		}
 	}()
-	_ = os.Stderr // ensure os imported
+	_ = os.Stderr
 }

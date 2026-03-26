@@ -1,23 +1,19 @@
 package explorer
 
-import "github.com/laenen-partners/dsx/showcase"
-import "github.com/laenen-partners/dsx/ds"
-import "github.com/laenen-partners/dsx/ui/card"
+import (
+	"fmt"
 
-templ Home() {
-	@explorerLayout(explorerProps{Title: "Home", Path: "/"}) {
-		<div class="space-y-6">
-			<div>
-				<h2 class="text-2xl font-bold">EntityStore Explorer</h2>
-				<p class="text-base-content/70 mt-1">
-					Browse entities, relations, events, and graph traversals.
-				</p>
-			</div>
-			@showcase.Fragment("stats-overview", "/fragments/stats")
-			@showcase.Fragment("entity-types", "/fragments/entity-types")
-		</div>
-	}
-}
+	"github.com/laenen-partners/dsx/ds"
+	"github.com/laenen-partners/dsx/ui/badge"
+	"github.com/laenen-partners/dsx/ui/card"
+	"github.com/laenen-partners/dsx/ui/table"
+	"github.com/laenen-partners/entitystore/matching"
+	"github.com/laenen-partners/entitystore/store"
+)
+
+// ---------------------------------------------------------------------------
+// Search (stateless — data loaded via fragment on button click)
+// ---------------------------------------------------------------------------
 
 templ Search() {
 	@explorerLayout(explorerProps{Title: "Search", Path: "/search"}) {
@@ -57,21 +53,116 @@ templ Search() {
 	}
 }
 
-templ Stats() {
+// ---------------------------------------------------------------------------
+// Stats (server-side rendered with data)
+// ---------------------------------------------------------------------------
+
+templ StatsPage(stats store.StoreStats) {
 	@explorerLayout(explorerProps{Title: "Stats", Path: "/stats"}) {
 		<div class="space-y-6">
 			<h2 class="text-2xl font-bold">Store Statistics</h2>
-			@showcase.Fragment("stats-full", "/fragments/stats")
-			@showcase.Fragment("entity-types-full", "/fragments/entity-types")
+
+			<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+				@statCard("Entities", fmt.Sprintf("%d", stats.TotalEntities), "primary")
+				@statCard("Relations", fmt.Sprintf("%d", stats.TotalRelations), "secondary")
+				@statCard("Soft Deleted", fmt.Sprintf("%d", stats.SoftDeleted), "warning")
+				@statCard("Entity Types", fmt.Sprintf("%d", len(stats.EntityTypes)), "accent")
+			</div>
+
+			if len(stats.EntityTypes) > 0 {
+				@card.Card() {
+					@card.Body() {
+						@card.Title() { Entity Types }
+						@table.Table(table.Props{Class: "table-sm"}) {
+							<thead><tr><th>Type</th><th class="text-right">Count</th></tr></thead>
+							<tbody>
+								for _, tc := range stats.EntityTypes {
+									<tr>
+										<td class="font-mono text-sm">{ tc.Type }</td>
+										<td class="text-right">{ fmt.Sprintf("%d", tc.Count) }</td>
+									</tr>
+								}
+							</tbody>
+						}
+					}
+				}
+			}
+
+			if len(stats.RelationTypes) > 0 {
+				@card.Card() {
+					@card.Body() {
+						@card.Title() { Relation Types }
+						@table.Table(table.Props{Class: "table-sm"}) {
+							<thead><tr><th>Type</th><th class="text-right">Count</th></tr></thead>
+							<tbody>
+								for _, tc := range stats.RelationTypes {
+									<tr>
+										<td class="font-mono text-sm">{ tc.Type }</td>
+										<td class="text-right">{ fmt.Sprintf("%d", tc.Count) }</td>
+									</tr>
+								}
+							</tbody>
+						}
+					}
+				}
+			}
 		</div>
 	}
 }
 
-templ Entities() {
+templ statCard(label, value, color string) {
+	@card.Card(card.Props{Class: "bg-base-200"}) {
+		@card.Body() {
+			<div class="stat-title text-xs uppercase tracking-wide">{ label }</div>
+			<div class={ "stat-value text-2xl font-bold text-" + color }>{ value }</div>
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Entities list (server-side rendered with data)
+// ---------------------------------------------------------------------------
+
+templ EntitiesPage(entities []matching.StoredEntity) {
 	@explorerLayout(explorerProps{Title: "Entities", Path: "/entities"}) {
 		<div class="space-y-6">
-			<h2 class="text-2xl font-bold">Entities</h2>
-			@showcase.Fragment("entity-list", "/fragments/entities")
+			<h2 class="text-2xl font-bold">
+				{ fmt.Sprintf("Entities (%d)", len(entities)) }
+			</h2>
+			for _, e := range entities {
+				<div
+					class="card bg-base-200 cursor-pointer hover:bg-base-300 transition-colors"
+					{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", e.ID)))... }
+				>
+					@card.Body() {
+						<div class="flex items-center justify-between">
+							<div>
+								if e.DisplayName != "" {
+									<span class="font-semibold">{ e.DisplayName }</span>
+									<span class="ml-2 text-xs text-base-content/50">{ e.EntityType }</span>
+								} else {
+									<span class="font-mono text-xs text-base-content/50">{ e.ID[:8] }...</span>
+									<span class="ml-2 font-semibold">{ e.EntityType }</span>
+								}
+							</div>
+							<div class="flex gap-1">
+								for _, tag := range e.Tags {
+									@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+										{ tag }
+									}
+								}
+							</div>
+						</div>
+						<div class="text-sm text-base-content/70 mt-1">
+							{ fmt.Sprintf("%.0f%% confidence", e.Confidence*100) }
+							· { e.UpdatedAt.Format("2006-01-02 15:04") }
+						</div>
+					}
+				</div>
+			}
+			if len(entities) == 0 {
+				<p class="text-base-content/50">No entities in the store.</p>
+			}
 		</div>
 	}
 }
