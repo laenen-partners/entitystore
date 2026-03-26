@@ -7,6 +7,7 @@ import (
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/badge"
 	"github.com/laenen-partners/dsx/ui/card"
+	"github.com/laenen-partners/dsx/ui/jsonview"
 	"github.com/laenen-partners/dsx/ui/table"
 	"github.com/laenen-partners/entitystore/matching"
 	"github.com/laenen-partners/entitystore/store"
@@ -120,7 +121,7 @@ templ searchResults(query string, entities []matching.StoredEntity) {
 templ entityCard(e matching.StoredEntity) {
 	<div
 		class="card bg-base-200 cursor-pointer hover:bg-base-300 transition-colors"
-		{ ds.On("click", fmt.Sprintf("window.location.href='#entity-%s'; @get('/fragments/entities/%s')", e.ID, e.ID))... }
+		{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", e.ID)))... }
 	>
 		@card.Body() {
 			<div class="flex items-center justify-between">
@@ -154,7 +155,7 @@ templ entityCard(e matching.StoredEntity) {
 // ---------------------------------------------------------------------------
 
 templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64, anchors []store.StoredAnchor) {
-	<div id={ "entity-" + e.ID } class="space-y-4">
+	<div class="space-y-4">
 		@card.Card() {
 			@card.Body() {
 				@card.Title() {
@@ -201,26 +202,26 @@ templ entityDetail(e matching.StoredEntity, prettyData string, relCount int64, a
 				@card.Title() {
 					Data
 				}
-				<pre class="bg-base-200 rounded-lg p-4 text-sm overflow-x-auto font-mono">{ prettyData }</pre>
+				@jsonview.JSONView(jsonview.Props{Value: prettyData, Copyable: true})
 			}
 		}
 
 		<div class="flex gap-2">
 			<button
 				class="btn btn-sm btn-outline"
-				{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s/relations')", e.ID))... }
+				{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s/relations", e.ID)))... }
 			>
 				Relations
 			</button>
 			<button
 				class="btn btn-sm btn-outline"
-				{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s/events')", e.ID))... }
+				{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s/events", e.ID)))... }
 			>
 				Events
 			</button>
 			<button
 				class="btn btn-sm btn-outline"
-				{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s/graph')", e.ID))... }
+				{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s/graph", e.ID)))... }
 			>
 				Graph
 			</button>
@@ -250,7 +251,7 @@ templ entityRelations(entityID string, outbound []matching.StoredRelation, inbou
 							for _, rel := range outbound {
 								<tr
 									class="cursor-pointer hover:bg-base-200"
-									{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s')", rel.TargetID))... }
+									{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", rel.TargetID)))... }
 								>
 									<td>@badge.Badge() { { rel.RelationType } }</td>
 									<td class="font-mono text-xs">{ rel.TargetID[:8] }...</td>
@@ -277,7 +278,7 @@ templ entityRelations(entityID string, outbound []matching.StoredRelation, inbou
 							for _, rel := range inbound {
 								<tr
 									class="cursor-pointer hover:bg-base-200"
-									{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s')", rel.SourceID))... }
+									{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", rel.SourceID)))... }
 								>
 									<td>@badge.Badge() { { rel.RelationType } }</td>
 									<td class="font-mono text-xs">{ rel.SourceID[:8] }...</td>
@@ -337,7 +338,7 @@ templ entityGraph(center matching.StoredEntity, neighbors []store.TraverseResult
 							for _, n := range neighbors {
 								<div
 									class="bg-base-300 rounded-lg px-3 py-2 text-center cursor-pointer hover:bg-base-100 transition-colors"
-									{ ds.On("click", fmt.Sprintf("@get('/fragments/entities/%s')", n.Entity.ID))... }
+									{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", n.Entity.ID)))... }
 								>
 									<div class="text-xs text-base-content/50">depth { fmt.Sprintf("%d", n.Depth) }</div>
 									<div class="font-semibold text-sm">{ shortType(n.Entity.EntityType) }</div>

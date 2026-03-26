@@ -117,7 +117,7 @@ func (h *Handlers) EntityDetailFragment(w http.ResponseWriter, r *http.Request) 
 	anchors, _ := h.es.GetAnchorsForEntity(r.Context(), id)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Patch(sse, entityDetail(entity, string(prettyJSON), relCount, anchors))
+	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), relCount, anchors), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityRelationsFragment returns relations for an entity.
@@ -129,7 +129,7 @@ func (h *Handlers) EntityRelationsFragment(w http.ResponseWriter, r *http.Reques
 	inbound, _ := h.es.GetRelationsToEntity(ctx, id, 50, nil)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Patch(sse, entityRelations(id, outbound, inbound))
+	ds.Send.Drawer(sse, entityRelations(id, outbound, inbound), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityEventsFragment returns events for an entity.
