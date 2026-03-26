@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 
 ## [Unreleased]
 
+## [v0.25.0] - 2026-03-26
+
 ### Breaking
 - **`GetEntitiesByTypeFiltered` removed** — merged into `GetEntitiesByType` which now accepts an optional `*QueryFilter` as the last parameter. Pass `nil` for no filtering.
 - **`FindConnectedByType`** takes `*FindConnectedOpts` struct instead of 7 positional parameters.
