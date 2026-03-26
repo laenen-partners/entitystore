@@ -25,29 +25,18 @@ templ Search() {
 				</p>
 			</div>
 			<div { ds.RawSignals(`{"search":{"query":""}}`)... }>
-				@card.Card() {
-					@card.Body() {
-						<div class="flex gap-2">
-							<input
-								type="text"
-								placeholder="Search by email, domain, name..."
-								class="input input-bordered input-lg w-full"
-								{ ds.Bind("search", "query")... }
-							/>
-							<button
-								class="btn btn-primary btn-lg"
-								{ ds.OnClick(ds.Get("/fragments/search"))... }
-							>
-								Search
-							</button>
-						</div>
-						<div class="mt-4">
-							<div id="search-results">
-								<p class="text-base-content/50">Enter a search term and click Search.</p>
-							</div>
-						</div>
-					}
-				}
+				<input
+					type="text"
+					placeholder="Search by email, domain, name..."
+					class="input input-bordered input-lg w-full"
+					{ ds.Bind("search", "query")... }
+					{ ds.On("input__debounce.300ms", ds.Get("/fragments/search"))... }
+				/>
+				<div class="mt-4">
+					<div id="search-results">
+						<p class="text-base-content/50">Start typing to search.</p>
+					</div>
+				</div>
 			</div>
 		</div>
 	}
