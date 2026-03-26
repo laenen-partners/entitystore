@@ -642,6 +642,50 @@ count, _ := es.CountEntitiesByType(ctx, "persons.v1.Person")
 relCount, _ := es.CountRelationsForEntity(ctx, entityID)
 ```
 
+## Explorer UI
+
+A visual debug tool for browsing entities, relations, and graph traversals. Embed it in any service:
+
+```go
+import "github.com/laenen-partners/entitystore/ui/explorer"
+
+// Standalone server (blocks until interrupted):
+explorer.Run(explorer.Config{
+    Store: es,    // any EntityStorer (EntityStore or ScopedStore)
+    Port:  3336,  // default 3336
+})
+
+// Or run in background:
+explorer.RunInBackground(ctx, explorer.Config{Store: es})
+
+// Or mount fragment handlers on an existing router:
+explorer.Mount(r, es)
+```
+
+Features:
+- **Search** — fuzzy trigram search on display names with 300ms debounce, falls back to token search
+- **Entity detail** — opens in a drawer with JSON viewer, anchors, tags, and clickable relations
+- **Relations** — display names resolved via single Traverse call, click to navigate
+- **Stats** — entity/relation type counts, soft-deleted count
+
+The standalone showcase includes seed data for demo purposes:
+
+```sh
+docker compose up -d    # start pgvector
+task showcase           # run explorer at http://localhost:3336
+```
+
+## Search
+
+`Search()` performs fuzzy matching on entity display names using PostgreSQL trigram similarity (`pg_trgm`), falling back to token search:
+
+```go
+results, _ := es.Search(ctx, "ali", 20, nil)  // finds "Alice Dupont"
+results, _ := es.Search(ctx, "tech", 20, nil) // finds "TechCorp"
+```
+
+Partial matches, case-insensitive, ranked by similarity. Requires the `pg_trgm` extension (auto-migrated).
+
 ## EntityStorer interface
 
 Both `EntityStore` and `ScopedStore` satisfy `EntityStorer` — use it for dependency injection and testing:
@@ -660,6 +704,9 @@ type MyService struct {
 entitystore.go               Library entry point: New(), EntityStore, re-exported types
 interface.go                 EntityStorer interface (EntityStore + ScopedStore)
 options.go                   Options: WithPgStore(), WithLogger()
+ui/                          Fragment handlers for explorer UI
+ui/explorer/                 Embeddable explorer server (Run, Mount, RunInBackground)
+ui/cmd/showcase/             Standalone showcase with seed data
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + extraction schemas
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 proto/entitystore/events/v1/ Standard lifecycle event protos

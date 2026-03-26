@@ -26,8 +26,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 - Migration: `entity_events` (partitioned, replaces `entity_provenance`), `publisher_lock`.
 - ADR-008: Outbox Publisher with TTL-Based Leader Election.
 
+- **Explorer UI** — embeddable visual debug tool for browsing entities, relations, and graph traversals. `explorer.Run(Config{Store: es})` for standalone, `explorer.Mount(r, es)` for existing routers, `explorer.RunInBackground(ctx, cfg)` for goroutine. Pages: search (debounced trigram), stats (server-rendered), entities, entity detail drawer with JSON viewer, anchors, and clickable relations.
+- **`Search(ctx, query, maxResults, filter)`** — fuzzy trigram search on `display_name` via `pg_trgm` extension, ranked by similarity, falls back to token search. Partial matches ("ali" → "Alice Dupont").
+- **`display_name` column** on entities — set via `WriteEntityOp.DisplayName` or `WithDisplayName()` option. Auto-set by generated `WriteOp` when `display_fields` proto annotation is present.
+- **`display_fields` proto annotation** on `MessageOptions` — lists proto field names to derive display name from. Generates `{Entity}DisplayName(msg)` function.
+- **`GetAnchorsForEntity(ctx, entityID)`** — returns stored anchor field+value pairs. Added to Store, EntityStore, ScopedStore, EntityStorer.
+- **`pg_trgm` migration** — adds extension and GIN trigram index on `display_name`.
+- **`StoredAnchor`** type re-exported from root package.
+- Entity detail drawer shows relations with resolved display names (via single Traverse call).
+
 ### Changed
 - ADR-001, ADR-002 status updated to "Implemented". ADR-003 updated to "Partially implemented".
+- `matching.BuildAnchors`, `matching.BuildTokens`, `matching.TextToEmbed` unexported (use generated functions).
+- `FindEntitiesByRelation` now has internal LIMIT 1000.
+- Explorer search handler uses `Search()` instead of manual anchor+token lookup.
 
 See [Migration Guide v0.20→v1.0](docs/migration-v1.0.md).
 
@@ -151,7 +163,12 @@ See [Migration Guide v0.7→v0.8](docs/migration-v0.8.md).
 
 See [ADR-001](docs/adr/001-llm-entity-extraction-schema-generation.md).
 
-[Unreleased]: https://github.com/laenen-partners/entitystore/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/laenen-partners/entitystore/compare/v0.25.0...HEAD
+[v0.25.0]: https://github.com/laenen-partners/entitystore/compare/v0.24.0...v0.25.0
+[v0.24.0]: https://github.com/laenen-partners/entitystore/compare/v0.23.0...v0.24.0
+[v0.23.0]: https://github.com/laenen-partners/entitystore/compare/v0.22.0...v0.23.0
+[v0.22.0]: https://github.com/laenen-partners/entitystore/compare/v0.21.0...v0.22.0
+[v0.21.0]: https://github.com/laenen-partners/entitystore/compare/v0.20.0...v0.21.0
 [v0.20.0]: https://github.com/laenen-partners/entitystore/compare/v0.19.0...v0.20.0
 [v0.19.0]: https://github.com/laenen-partners/entitystore/compare/v0.18.0...v0.19.0
 [v0.18.0]: https://github.com/laenen-partners/entitystore/compare/v0.17.0...v0.18.0
