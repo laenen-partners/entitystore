@@ -424,6 +424,62 @@ func (q *Queries) MergeEntityData(ctx context.Context, arg MergeEntityDataParams
 	return err
 }
 
+const searchByDisplayName = `-- name: SearchByDisplayName :many
+SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+FROM entities
+WHERE display_name ILIKE '%' || $1 || '%'
+  AND deleted_at IS NULL
+  AND (cardinality($2::text[]) = 0 OR tags @> $2::text[])
+ORDER BY similarity(display_name, $1) DESC, updated_at DESC
+LIMIT $3
+`
+
+type SearchByDisplayNameParams struct {
+	Query      pgtype.Text `json:"query"`
+	Tags       []string    `json:"tags"`
+	MaxResults int32       `json:"max_results"`
+}
+
+type SearchByDisplayNameRow struct {
+	ID          uuid.UUID       `json:"id"`
+	EntityType  string          `json:"entity_type"`
+	Data        json.RawMessage `json:"data"`
+	Confidence  float64         `json:"confidence"`
+	Tags        []string        `json:"tags"`
+	DisplayName string          `json:"display_name"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+func (q *Queries) SearchByDisplayName(ctx context.Context, arg SearchByDisplayNameParams) ([]SearchByDisplayNameRow, error) {
+	rows, err := q.db.Query(ctx, searchByDisplayName, arg.Query, arg.Tags, arg.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchByDisplayNameRow
+	for rows.Next() {
+		var i SearchByDisplayNameRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.EntityType,
+			&i.Data,
+			&i.Confidence,
+			&i.Tags,
+			&i.DisplayName,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateEntityData = `-- name: UpdateEntityData :exec
 UPDATE entities
 SET data = $2, confidence = $3, display_name = $4, updated_at = now()

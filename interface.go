@@ -13,6 +13,9 @@ import (
 // EntityStorer is the interface satisfied by both EntityStore and ScopedStore.
 // Use this type for dependency injection and testing.
 type EntityStorer interface {
+	// Search
+	Search(ctx context.Context, query string, maxResults int, filter *matching.QueryFilter) ([]matching.StoredEntity, error)
+
 	// Entity reads
 	GetEntity(ctx context.Context, id string) (matching.StoredEntity, error)
 	GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error)

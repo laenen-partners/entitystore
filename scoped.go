@@ -116,6 +116,11 @@ func (s *ScopedStore) GetEntitiesByType(ctx context.Context, entityType string, 
 	return s.inner.GetEntitiesByType(ctx, entityType, pageSize, cursor, s.mergeFilter(filter))
 }
 
+// Search performs a fuzzy search with scope filters applied.
+func (s *ScopedStore) Search(ctx context.Context, query string, maxResults int, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	return s.inner.Search(ctx, query, maxResults, s.mergeFilter(filter))
+}
+
 // GetByAnchor returns a single entity matching the given anchor, or ErrNotFound.
 func (s *ScopedStore) GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error) {
 	ent, err := s.inner.GetByAnchor(ctx, entityType, field, value, s.mergeFilter(filter))

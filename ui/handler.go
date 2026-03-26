@@ -68,20 +68,7 @@ func (h *Handlers) SearchFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	entityType := "google.protobuf.Struct"
-
-	// Try anchor lookup first, then token search.
-	results, _ := h.es.FindByAnchors(ctx, entityType, []matching.AnchorQuery{
-		{Field: "email", Value: q},
-		{Field: "domain", Value: q},
-		{Field: "invoice_number", Value: q},
-	}, nil)
-
-	if len(results) == 0 {
-		tokens := matching.Tokenize(q)
-		results, _ = h.es.FindByTokens(ctx, entityType, tokens, 20, nil)
-	}
+	results, _ := h.es.Search(r.Context(), q, 20, nil)
 
 	ds.Send.Patch(sse, searchResults(q, results))
 }

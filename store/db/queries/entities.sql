@@ -70,3 +70,12 @@ SELECT relation_type, count(*) AS count FROM entity_relations GROUP BY relation_
 
 -- name: CountSoftDeleted :one
 SELECT count(*) FROM entities WHERE deleted_at IS NOT NULL;
+
+-- name: SearchByDisplayName :many
+SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+FROM entities
+WHERE display_name ILIKE '%' || @query || '%'
+  AND deleted_at IS NULL
+  AND (cardinality(@tags::text[]) = 0 OR tags @> @tags::text[])
+ORDER BY similarity(display_name, @query) DESC, updated_at DESC
+LIMIT @max_results;

@@ -100,6 +100,12 @@ func (es *EntityStore) GetEntitiesByType(ctx context.Context, entityType string,
 	return es.store.GetEntitiesByTypeFiltered(ctx, entityType, pageSize, cursor, filter)
 }
 
+// Search performs a fuzzy search across entity display names with trigram matching,
+// falling back to token search. Results are ranked by similarity.
+func (es *EntityStore) Search(ctx context.Context, query string, maxResults int, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	return es.store.Search(ctx, query, maxResults, filter)
+}
+
 // GetByAnchor returns a single entity matching the given anchor, or ErrNotFound.
 func (es *EntityStore) GetByAnchor(ctx context.Context, entityType, field, value string, filter *matching.QueryFilter) (matching.StoredEntity, error) {
 	return es.store.GetByAnchor(ctx, entityType, field, value, filter)

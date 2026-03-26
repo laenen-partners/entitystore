@@ -234,6 +234,50 @@ func (s *Store) FindByAnchors(ctx context.Context, entityType string, anchors []
 // ErrNotFound is returned when a single-entity lookup finds no match.
 var ErrNotFound = fmt.Errorf("entitystore: not found")
 
+// Search performs a fuzzy search across entity display names using trigram
+// matching. Results are ranked by similarity. Falls back to token search
+// if no display name matches are found.
+func (s *Store) Search(ctx context.Context, query string, maxResults int, filter *matching.QueryFilter) ([]matching.StoredEntity, error) {
+	if query == "" {
+		return nil, nil
+	}
+	if maxResults <= 0 {
+		maxResults = 20
+	}
+
+	// Try display name trigram search first.
+	rows, err := s.queries.SearchByDisplayName(ctx, dbgen.SearchByDisplayNameParams{
+		Query:      pgtype.Text{String: query, Valid: true},
+		Tags:       tagsParam(filter),
+		MaxResults: int32(maxResults),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("search by display name: %w", err)
+	}
+
+	if len(rows) > 0 {
+		result := make([]matching.StoredEntity, len(rows))
+		for i, row := range rows {
+			result[i] = entityFromRow(row)
+		}
+		s.log.DebugContext(ctx, "Search", "query", query, "method", "display_name", "results", len(result))
+		return result, nil
+	}
+
+	// Fallback: token search across all entity types.
+	tokens := matching.Tokenize(query)
+	if len(tokens) == 0 {
+		return nil, nil
+	}
+	// Search with empty entity type to match all types.
+	result, err := s.FindByTokens(ctx, "", tokens, maxResults, filter)
+	if err != nil {
+		return nil, err
+	}
+	s.log.DebugContext(ctx, "Search", "query", query, "method", "tokens", "results", len(result))
+	return result, nil
+}
+
 // StoredAnchor represents a single anchor field+value pair for an entity.
 type StoredAnchor struct {
 	Field string
@@ -606,7 +650,8 @@ type entityRow interface {
 		dbgen.InsertEntityRow | dbgen.InsertEntityWithIDRow |
 		dbgen.ConnectedEntitiesRow |
 		dbgen.FindConnectedByTypeOutboundRow | dbgen.FindConnectedByTypeInboundRow |
-		dbgen.FindEntitiesByRelationSourceRow | dbgen.FindEntitiesByRelationTargetRow
+		dbgen.FindEntitiesByRelationSourceRow | dbgen.FindEntitiesByRelationTargetRow |
+		dbgen.SearchByDisplayNameRow
 }
 
 func entityFromRow[R entityRow](row R) matching.StoredEntity {
@@ -636,6 +681,8 @@ func entityFromRow[R entityRow](row R) matching.StoredEntity {
 	case dbgen.FindEntitiesByRelationSourceRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindEntitiesByRelationTargetRow:
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+	case dbgen.SearchByDisplayNameRow:
 		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
 	default:
 		panic("unreachable")
