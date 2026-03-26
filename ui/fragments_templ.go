@@ -693,7 +693,7 @@ func entityCard(e matching.StoredEntity) templ.Component {
 // ---------------------------------------------------------------------------
 // Entity Detail
 // ---------------------------------------------------------------------------
-func entityDetail(e matching.StoredEntity, prettyData string, anchors []store.StoredAnchor, outbound []matching.StoredRelation, inbound []matching.StoredRelation) templ.Component {
+func entityDetail(e matching.StoredEntity, prettyData string, anchors []store.StoredAnchor, outbound []matching.StoredRelation, inbound []matching.StoredRelation, names map[string]string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1149,20 +1149,20 @@ func entityDetail(e matching.StoredEntity, prettyData string, anchors []store.St
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<span class=\"font-mono text-xs\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<span class=\"text-sm font-medium\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var58 string
-							templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(rel.TargetID[:8])
+							templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(displayNameOrID(rel.TargetID, names))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `fragments.templ`, Line: 225, Col: 60}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `fragments.templ`, Line: 225, Col: 82}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "...</span> <span class=\"text-xs text-base-content/50\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</span> <span class=\"text-xs text-base-content/50\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -1257,20 +1257,20 @@ func entityDetail(e matching.StoredEntity, prettyData string, anchors []store.St
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<span class=\"font-mono text-xs\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<span class=\"text-sm font-medium\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var63 string
-							templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(rel.SourceID[:8])
+							templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(displayNameOrID(rel.SourceID, names))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `fragments.templ`, Line: 245, Col: 60}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `fragments.templ`, Line: 245, Col: 82}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "...</span> <span class=\"text-xs text-base-content/50\">")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</span> <span class=\"text-xs text-base-content/50\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
@@ -2088,6 +2088,16 @@ func entityGraph(center matching.StoredEntity, neighbors []store.TraverseResult)
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+func displayNameOrID(id string, names map[string]string) string {
+	if name, ok := names[id]; ok {
+		return name
+	}
+	if len(id) > 8 {
+		return id[:8] + "..."
+	}
+	return id
+}
 
 func shortType(entityType string) string {
 	parts := strings.Split(entityType, ".")

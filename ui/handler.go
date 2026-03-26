@@ -2,6 +2,7 @@
 package ui
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -108,8 +109,11 @@ func (h *Handlers) EntityDetailFragment(w http.ResponseWriter, r *http.Request) 
 	outbound, _ := h.es.GetRelationsFromEntity(r.Context(), id, 20, nil)
 	inbound, _ := h.es.GetRelationsToEntity(r.Context(), id, 20, nil)
 
+	// Resolve display names via single traverse call.
+	names := h.resolveNames(r.Context(), id)
+
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound), ds.WithDrawerMaxWidth("max-w-2xl"))
+	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound, names), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityRelationsFragment returns relations for an entity.
@@ -139,6 +143,20 @@ func (h *Handlers) EntityGraphFragment(w http.ResponseWriter, r *http.Request) {
 
 	sse := datastar.NewSSE(w, r)
 	ds.Send.Patch(sse, entityGraph(center, results))
+}
+
+// resolveNames builds a map of entity ID → display name using Traverse depth 1.
+func (h *Handlers) resolveNames(ctx context.Context, entityID string) map[string]string {
+	names := make(map[string]string)
+	neighbors, _ := h.es.Traverse(ctx, entityID, &store.TraverseOpts{MaxDepth: 1, MaxResults: 50})
+	for _, n := range neighbors {
+		if n.Entity.DisplayName != "" {
+			names[n.Entity.ID] = n.Entity.DisplayName
+		} else {
+			names[n.Entity.ID] = n.Entity.ID[:8] + "..."
+		}
+	}
+	return names
 }
 
 // EntityTypesFragment returns a list of entity types with counts.

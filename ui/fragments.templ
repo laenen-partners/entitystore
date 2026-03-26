@@ -154,7 +154,7 @@ templ entityCard(e matching.StoredEntity) {
 // Entity Detail
 // ---------------------------------------------------------------------------
 
-templ entityDetail(e matching.StoredEntity, prettyData string, anchors []store.StoredAnchor, outbound []matching.StoredRelation, inbound []matching.StoredRelation) {
+templ entityDetail(e matching.StoredEntity, prettyData string, anchors []store.StoredAnchor, outbound []matching.StoredRelation, inbound []matching.StoredRelation, names map[string]string) {
 	<div class="space-y-4">
 		@card.Card() {
 			@card.Body() {
@@ -222,7 +222,7 @@ templ entityDetail(e matching.StoredEntity, prettyData string, anchors []store.S
 										{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", rel.TargetID)))... }
 									>
 										@badge.Badge(badge.Props{Style: badge.StyleOutline}) { { rel.RelationType } }
-										<span class="font-mono text-xs">{ rel.TargetID[:8] }...</span>
+										<span class="text-sm font-medium">{ displayNameOrID(rel.TargetID, names) }</span>
 										<span class="text-xs text-base-content/50">{ fmt.Sprintf("%.0f%%", rel.Confidence*100) }</span>
 										if rel.Evidence != "" {
 											<span class="text-xs text-base-content/40 truncate max-w-48">{ rel.Evidence }</span>
@@ -242,7 +242,7 @@ templ entityDetail(e matching.StoredEntity, prettyData string, anchors []store.S
 										{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", rel.SourceID)))... }
 									>
 										@badge.Badge(badge.Props{Style: badge.StyleOutline}) { { rel.RelationType } }
-										<span class="font-mono text-xs">{ rel.SourceID[:8] }...</span>
+										<span class="text-sm font-medium">{ displayNameOrID(rel.SourceID, names) }</span>
 										<span class="text-xs text-base-content/50">{ fmt.Sprintf("%.0f%%", rel.Confidence*100) }</span>
 										if rel.Evidence != "" {
 											<span class="text-xs text-base-content/40 truncate max-w-48">{ rel.Evidence }</span>
@@ -403,6 +403,16 @@ templ entityGraph(center matching.StoredEntity, neighbors []store.TraverseResult
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+func displayNameOrID(id string, names map[string]string) string {
+	if name, ok := names[id]; ok {
+		return name
+	}
+	if len(id) > 8 {
+		return id[:8] + "..."
+	}
+	return id
+}
 
 func shortType(entityType string) string {
 	parts := strings.Split(entityType, ".")
