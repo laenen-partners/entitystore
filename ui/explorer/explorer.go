@@ -13,6 +13,8 @@ package explorer
 
 import (
 	"context"
+	"sort"
+	"time"
 	"log/slog"
 	"net/http"
 	"os"
@@ -53,6 +55,7 @@ func Run(cfg Config) error {
 			// Server-side rendered pages (fetch data, render full page).
 			r.Get("/stats", pageHandler(cfg.Store, "stats"))
 			r.Get("/entities", pageHandler(cfg.Store, "entities"))
+			r.Get("/events", pageHandler(cfg.Store, "events"))
 
 			return nil
 		},
@@ -79,6 +82,35 @@ func pageHandler(es entitystore.EntityStorer, page string) http.HandlerFunc {
 				all = append(all, entities...)
 			}
 			templ.Handler(EntitiesPage(all)).ServeHTTP(w, r)
+		case "events":
+			limit := 50
+			var eventTypes []string
+			if et := r.URL.Query().Get("type"); et != "" {
+				eventTypes = []string{et}
+			}
+			var cursor *time.Time
+			if c := r.URL.Query().Get("cursor"); c != "" {
+				if t, err := time.Parse(time.RFC3339Nano, c); err == nil {
+					cursor = &t
+				}
+			}
+			events, _ := es.GetAllEvents(ctx, &entitystore.EventQueryOpts{
+				Limit:      limit,
+				EventTypes: eventTypes,
+			}, cursor)
+			// Get distinct event types for the filter dropdown.
+			allEvents, _ := es.GetAllEvents(ctx, &entitystore.EventQueryOpts{Limit: 200}, nil)
+			typeSet := make(map[string]struct{})
+			for _, e := range allEvents {
+				typeSet[e.EventType] = struct{}{}
+			}
+			var types []string
+			for t := range typeSet {
+				types = append(types, t)
+			}
+			sort.Strings(types)
+			activeType := r.URL.Query().Get("type")
+			templ.Handler(EventsPage(events, types, activeType)).ServeHTTP(w, r)
 		}
 	}
 }

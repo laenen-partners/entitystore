@@ -192,6 +192,11 @@ func (es *EntityStore) GetEventsForEntity(ctx context.Context, entityID string, 
 	return es.store.GetEventsForEntity(ctx, entityID, opts)
 }
 
+// GetAllEvents returns all events across all entities with cursor pagination, newest first.
+func (es *EntityStore) GetAllEvents(ctx context.Context, opts *EventQueryOpts, cursor *time.Time) ([]Event, error) {
+	return es.store.GetAllEvents(ctx, opts, cursor)
+}
+
 // ---------------------------------------------------------------------------
 // Writes
 // ---------------------------------------------------------------------------

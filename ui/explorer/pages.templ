@@ -2,6 +2,8 @@ package explorer
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/laenen-partners/dsx/ds"
 	"github.com/laenen-partners/dsx/ui/badge"
@@ -154,6 +156,108 @@ templ EntitiesPage(entities []matching.StoredEntity) {
 			}
 			if len(entities) == 0 {
 				<p class="text-base-content/50">No entities in the store.</p>
+			}
+		</div>
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Events (server-side rendered with cursor pagination)
+// ---------------------------------------------------------------------------
+
+func shortEventType(eventType string) string {
+	parts := strings.Split(eventType, ".")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return eventType
+}
+
+func eventsNextURL(cursor time.Time, activeType string) string {
+	url := fmt.Sprintf("/events?cursor=%s", cursor.Format("2006-01-02T15:04:05.000000Z"))
+	if activeType != "" {
+		url += "&type=" + activeType
+	}
+	return url
+}
+
+templ EventsPage(events []store.Event, eventTypes []string, activeType string) {
+	@explorerLayout(explorerProps{Title: "Events", Path: "/events"}) {
+		<div class="space-y-6">
+			<div class="flex items-center justify-between">
+				<h2 class="text-2xl font-bold">
+					{ fmt.Sprintf("Events (%d)", len(events)) }
+				</h2>
+				<div class="flex gap-2 items-center">
+					<select class="select select-bordered select-sm" onchange="window.location.href = this.value ? '/events?type=' + this.value : '/events'">
+						<option value="" selected?={ activeType == "" }>All event types</option>
+						for _, et := range eventTypes {
+							<option value={ et } selected?={ et == activeType }>{ shortEventType(et) }</option>
+						}
+					</select>
+					if activeType != "" {
+						<a href="/events" class="btn btn-ghost btn-sm">Clear</a>
+					}
+				</div>
+			</div>
+
+			if len(events) > 0 {
+				@table.Table(table.Props{Class: "table-sm"}) {
+					<thead>
+						<tr>
+							<th>Time</th>
+							<th>Event</th>
+							<th>Entity</th>
+							<th>Tags</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, evt := range events {
+							<tr>
+								<td class="text-xs whitespace-nowrap">{ evt.OccurredAt.Format("2006-01-02 15:04:05") }</td>
+								<td>
+									@badge.Badge(badge.Props{Style: badge.StyleOutline}) {
+										{ shortEventType(evt.EventType) }
+									}
+								</td>
+								<td>
+									if evt.EntityID != "" {
+										<span
+											class="text-xs font-mono cursor-pointer hover:text-primary"
+											{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", evt.EntityID)))... }
+										>
+											{ evt.EntityID[:8] }...
+										</span>
+									} else if evt.RelationKey != "" {
+										<span class="text-xs font-mono text-base-content/50">rel</span>
+									}
+								</td>
+								<td>
+									<div class="flex gap-1">
+										for _, tag := range evt.Tags {
+											@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+												{ tag }
+											}
+										}
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				}
+
+				if len(events) >= 50 {
+					<div class="text-center">
+						<a
+							href={ templ.SafeURL(eventsNextURL(events[len(events)-1].OccurredAt, activeType)) }
+							class="btn btn-outline btn-sm"
+						>
+							Load older events
+						</a>
+					</div>
+				}
+			} else {
+				<p class="text-base-content/50">No events recorded yet.</p>
 			}
 		</div>
 	}

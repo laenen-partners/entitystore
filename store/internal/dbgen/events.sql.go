@@ -25,6 +25,51 @@ func (q *Queries) CountUnpublishedEvents(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const getAllEvents = `-- name: GetAllEvents :many
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+FROM entity_events
+WHERE (cardinality($1::text[]) = 0 OR event_type = ANY($1))
+  AND ($2::timestamptz IS NULL OR occurred_at < $2::timestamptz)
+ORDER BY occurred_at DESC
+LIMIT $3
+`
+
+type GetAllEventsParams struct {
+	EventTypes []string           `json:"event_types"`
+	Cursor     pgtype.Timestamptz `json:"cursor"`
+	MaxResults int32              `json:"max_results"`
+}
+
+func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]EntityEvent, error) {
+	rows, err := q.db.Query(ctx, getAllEvents, arg.EventTypes, arg.Cursor, arg.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []EntityEvent
+	for rows.Next() {
+		var i EntityEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.EventType,
+			&i.PayloadType,
+			&i.Payload,
+			&i.EntityID,
+			&i.RelationKey,
+			&i.Tags,
+			&i.OccurredAt,
+			&i.PublishedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEventsForEntity = `-- name: GetEventsForEntity :many
 SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
 FROM entity_events

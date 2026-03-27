@@ -80,6 +80,43 @@ func (s *Store) GetEventsForEntity(ctx context.Context, entityID string, opts *E
 	return result, nil
 }
 
+// GetAllEvents returns all events across all entities, newest first, with cursor pagination.
+func (s *Store) GetAllEvents(ctx context.Context, opts *EventQueryOpts, cursor *time.Time) ([]Event, error) {
+	limit := int32(50)
+	var eventTypes []string
+	if opts != nil {
+		if opts.Limit > 0 {
+			limit = int32(opts.Limit)
+		}
+		if len(opts.EventTypes) > 0 {
+			eventTypes = opts.EventTypes
+		}
+	}
+	if eventTypes == nil {
+		eventTypes = []string{}
+	}
+
+	var pgCursor pgtype.Timestamptz
+	if cursor != nil {
+		pgCursor = pgtype.Timestamptz{Time: *cursor, Valid: true}
+	}
+
+	rows, err := s.queries.GetAllEvents(ctx, dbgen.GetAllEventsParams{
+		EventTypes: eventTypes,
+		Cursor:     pgCursor,
+		MaxResults: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get all events: %w", err)
+	}
+
+	result := make([]Event, len(rows))
+	for i, row := range rows {
+		result[i] = eventFromRow(row)
+	}
+	return result, nil
+}
+
 func eventFromRow(row dbgen.EntityEvent) Event {
 	e := Event{
 		ID:          row.ID.String(),

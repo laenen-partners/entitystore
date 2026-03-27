@@ -226,6 +226,11 @@ func (s *ScopedStore) GetEventsForEntity(ctx context.Context, entityID string, o
 	return s.inner.GetEventsForEntity(ctx, entityID, opts)
 }
 
+// GetAllEvents returns all events with cursor pagination, newest first.
+func (s *ScopedStore) GetAllEvents(ctx context.Context, opts *store.EventQueryOpts, cursor *time.Time) ([]store.Event, error) {
+	return s.inner.GetAllEvents(ctx, opts, cursor)
+}
+
 // ---------------------------------------------------------------------------
 // Writes
 // ---------------------------------------------------------------------------

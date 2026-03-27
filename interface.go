@@ -37,6 +37,7 @@ type EntityStorer interface {
 
 	// Events
 	GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error)
+	GetAllEvents(ctx context.Context, opts *EventQueryOpts, cursor *time.Time) ([]Event, error)
 
 	// Writes
 	BatchWrite(ctx context.Context, ops []store.BatchWriteOp) ([]store.BatchWriteResult, error)

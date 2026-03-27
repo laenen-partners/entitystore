@@ -14,6 +14,14 @@ SELECT holder_id, acquired_at, expires_at, renewed_at FROM publisher_lock WHERE 
 -- name: GetLastPublishedTime :one
 SELECT published_at FROM entity_events WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 1;
 
+-- name: GetAllEvents :many
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+FROM entity_events
+WHERE (cardinality(@event_types::text[]) = 0 OR event_type = ANY(@event_types))
+  AND (sqlc.narg('cursor')::timestamptz IS NULL OR occurred_at < sqlc.narg('cursor')::timestamptz)
+ORDER BY occurred_at DESC
+LIMIT @max_results;
+
 -- name: GetEventsForEntity :many
 SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
 FROM entity_events
