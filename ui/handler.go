@@ -182,7 +182,7 @@ func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload, entity, source, target, relationType), ds.WithDrawerMaxWidth("max-w-2xl"))
+	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload, entity, source, target, relationType), ds.WithDrawerMaxWidth("max-w-3xl"))
 }
 
 // EntityEventsFragment returns events for an entity.
