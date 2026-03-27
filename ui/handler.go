@@ -153,7 +153,9 @@ func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// For relation events, extract sourceId/targetId from payload and resolve entities.
-	var sourceName, targetName, sourceID, targetID, relationType string
+	// For relation events, extract entities from payload.
+	var source, target *matching.StoredEntity
+	var relationType string
 	if evt.RelationKey != "" {
 		var payload struct {
 			SourceID     string `json:"sourceId"`
@@ -161,38 +163,26 @@ func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
 			RelationType string `json:"relationType"`
 		}
 		if err := json.Unmarshal(evt.RawPayload, &payload); err == nil && payload.SourceID != "" {
-			sourceID = payload.SourceID
-			targetID = payload.TargetID
 			relationType = payload.RelationType
-		} else {
-			// Fallback: parse relation key (format: sourceUUID:targetUUID:type)
-			parts := strings.Split(evt.RelationKey, ":")
-			if len(parts) >= 3 {
-				sourceID = parts[0]
-				targetID = parts[1]
-				relationType = strings.Join(parts[2:], ":")
+			if e, err := h.es.GetEntity(r.Context(), payload.SourceID); err == nil {
+				source = &e
 			}
-		}
-		if sourceID != "" {
-			if e, err := h.es.GetEntity(r.Context(), sourceID); err == nil {
-				sourceName = e.DisplayName
-				if sourceName == "" {
-					sourceName = sourceID[:8] + "..."
-				}
-			}
-		}
-		if targetID != "" {
-			if e, err := h.es.GetEntity(r.Context(), targetID); err == nil {
-				targetName = e.DisplayName
-				if targetName == "" {
-					targetName = targetID[:8] + "..."
-				}
+			if e, err := h.es.GetEntity(r.Context(), payload.TargetID); err == nil {
+				target = &e
 			}
 		}
 	}
 
+	// For entity events, fetch the entity.
+	var entity *matching.StoredEntity
+	if evt.EntityID != "" && entityName != "" {
+		if e, err := h.es.GetEntity(r.Context(), evt.EntityID); err == nil {
+			entity = &e
+		}
+	}
+
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload, entityName, sourceID, targetID, sourceName, targetName, relationType), ds.WithDrawerMaxWidth("max-w-xl"))
+	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload, entity, source, target, relationType), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityEventsFragment returns events for an entity.
