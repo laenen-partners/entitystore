@@ -220,9 +220,11 @@ templ EventsPage(events []store.Event, eventTypes []string, activeType string) {
 							<tr>
 								<td class="text-xs whitespace-nowrap">{ evt.OccurredAt.Format("2006-01-02 15:04:05") }</td>
 								<td>
-									@badge.Badge(badge.Props{Style: badge.StyleOutline}) {
-										{ shortEventType(evt.EventType) }
-									}
+									<span class="cursor-pointer" { ds.OnClick(ds.Get(fmt.Sprintf("/fragments/events/%s", evt.ID)))... }>
+										@badge.Badge(badge.Props{Style: badge.StyleOutline}) {
+											{ shortEventType(evt.EventType) }
+										}
+									</span>
 								</td>
 								<td>
 									if evt.EntityID != "" {

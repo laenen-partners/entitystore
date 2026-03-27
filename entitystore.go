@@ -187,6 +187,11 @@ func (es *EntityStore) GetRelationsToEntity(ctx context.Context, entityID string
 // Events
 // ---------------------------------------------------------------------------
 
+// GetEventByID returns a single event by ID.
+func (es *EntityStore) GetEventByID(ctx context.Context, eventID string) (Event, error) {
+	return es.store.GetEventByID(ctx, eventID)
+}
+
 // GetEventsForEntity returns events for the given entity, newest first.
 func (es *EntityStore) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {
 	return es.store.GetEventsForEntity(ctx, entityID, opts)

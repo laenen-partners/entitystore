@@ -39,6 +39,19 @@ type EventQueryOpts struct {
 	Limit      int       // max results (default 100)
 }
 
+// GetEventByID returns a single event by ID.
+func (s *Store) GetEventByID(ctx context.Context, eventID string) (Event, error) {
+	uid, err := uuid.Parse(eventID)
+	if err != nil {
+		return Event{}, fmt.Errorf("parse event id: %w", err)
+	}
+	row, err := s.queries.GetEventByID(ctx, uid)
+	if err != nil {
+		return Event{}, fmt.Errorf("get event: %w", err)
+	}
+	return eventFromRow(row), nil
+}
+
 // GetEventsForEntity returns events for the given entity, newest first.
 func (s *Store) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {
 	uid, err := uuid.Parse(entityID)

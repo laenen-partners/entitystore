@@ -14,6 +14,11 @@ SELECT holder_id, acquired_at, expires_at, renewed_at FROM publisher_lock WHERE 
 -- name: GetLastPublishedTime :one
 SELECT published_at FROM entity_events WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 1;
 
+-- name: GetEventByID :one
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+FROM entity_events
+WHERE id = $1;
+
 -- name: GetAllEvents :many
 SELECT ev.id, ev.event_type, ev.payload_type, ev.payload, ev.entity_id, ev.relation_key, ev.tags, ev.occurred_at, ev.published_at,
        COALESCE(e.display_name, '') AS entity_display_name

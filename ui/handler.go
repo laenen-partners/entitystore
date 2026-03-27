@@ -33,6 +33,7 @@ func (h *Handlers) RegisterRoutes(r chi.Router) {
 	r.Get("/fragments/entities", h.EntityListFragment)
 	r.Get("/fragments/entities/{id}", h.EntityDetailFragment)
 	r.Get("/fragments/entities/{id}/relations", h.EntityRelationsFragment)
+	r.Get("/fragments/events/{id}", h.EventDetailFragment)
 	r.Get("/fragments/entities/{id}/events", h.EntityEventsFragment)
 	r.Get("/fragments/entities/{id}/graph", h.EntityGraphFragment)
 	r.Get("/fragments/entity-types", h.EntityTypesFragment)
@@ -127,6 +128,24 @@ func (h *Handlers) EntityRelationsFragment(w http.ResponseWriter, r *http.Reques
 
 	sse := datastar.NewSSE(w, r)
 	ds.Send.Drawer(sse, entityRelations(id, outbound, inbound), ds.WithDrawerMaxWidth("max-w-2xl"))
+}
+
+// EventDetailFragment shows a single event's full payload in a drawer.
+func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	evt, err := h.es.GetEventByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), 404)
+		return
+	}
+
+	prettyPayload := string(evt.RawPayload)
+	if raw, err := json.MarshalIndent(json.RawMessage(evt.RawPayload), "", "  "); err == nil {
+		prettyPayload = string(raw)
+	}
+
+	sse := datastar.NewSSE(w, r)
+	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload), ds.WithDrawerMaxWidth("max-w-xl"))
 }
 
 // EntityEventsFragment returns events for an entity.

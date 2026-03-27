@@ -36,6 +36,7 @@ type EntityStorer interface {
 	GetRelationsToEntity(ctx context.Context, entityID string, pageSize int32, cursor *time.Time) ([]matching.StoredRelation, error)
 
 	// Events
+	GetEventByID(ctx context.Context, eventID string) (Event, error)
 	GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error)
 	GetAllEvents(ctx context.Context, opts *EventQueryOpts, cursor *time.Time) ([]Event, error)
 

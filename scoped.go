@@ -212,6 +212,11 @@ func (s *ScopedStore) GetRelationsToEntity(ctx context.Context, entityID string,
 // Events
 // ---------------------------------------------------------------------------
 
+// GetEventByID returns a single event by ID.
+func (s *ScopedStore) GetEventByID(ctx context.Context, eventID string) (store.Event, error) {
+	return s.inner.GetEventByID(ctx, eventID)
+}
+
 // GetEventsForEntity returns events for the given entity.
 // The entity must be visible in the current scope.
 func (s *ScopedStore) GetEventsForEntity(ctx context.Context, entityID string, opts *EventQueryOpts) ([]Event, error) {

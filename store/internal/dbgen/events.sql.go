@@ -86,6 +86,29 @@ func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]G
 	return items, nil
 }
 
+const getEventByID = `-- name: GetEventByID :one
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+FROM entity_events
+WHERE id = $1
+`
+
+func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (EntityEvent, error) {
+	row := q.db.QueryRow(ctx, getEventByID, id)
+	var i EntityEvent
+	err := row.Scan(
+		&i.ID,
+		&i.EventType,
+		&i.PayloadType,
+		&i.Payload,
+		&i.EntityID,
+		&i.RelationKey,
+		&i.Tags,
+		&i.OccurredAt,
+		&i.PublishedAt,
+	)
+	return i, err
+}
+
 const getEventsForEntity = `-- name: GetEventsForEntity :many
 SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
 FROM entity_events

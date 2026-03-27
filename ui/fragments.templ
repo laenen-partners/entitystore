@@ -439,3 +439,61 @@ func shortType(entityType string) string {
 	}
 	return entityType
 }
+
+// ---------------------------------------------------------------------------
+// Event Detail
+// ---------------------------------------------------------------------------
+
+templ eventDetail(evt store.Event, prettyPayload string) {
+	<div class="space-y-4">
+		@card.Card() {
+			@card.Body() {
+				@card.Title() {
+					{ shortType(evt.EventType) }
+				}
+				<div class="grid grid-cols-2 gap-2 text-sm">
+					<div><span class="text-base-content/50">Event ID:</span> <span class="font-mono text-xs">{ evt.ID }</span></div>
+					<div><span class="text-base-content/50">Type:</span> <span class="font-mono text-xs">{ evt.EventType }</span></div>
+					<div><span class="text-base-content/50">Payload Type:</span> <span class="font-mono text-xs">{ evt.PayloadType }</span></div>
+					<div><span class="text-base-content/50">Occurred:</span> { evt.OccurredAt.Format("2006-01-02 15:04:05") }</div>
+					if evt.EntityID != "" {
+						<div>
+							<span class="text-base-content/50">Entity:</span>
+							<span
+								class="font-mono text-xs cursor-pointer hover:text-primary"
+								{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", evt.EntityID)))... }
+							>
+								if evt.EntityDisplayName != "" {
+									{ evt.EntityDisplayName }
+								} else {
+									{ evt.EntityID[:8] }...
+								}
+							</span>
+						</div>
+					}
+					if evt.RelationKey != "" {
+						<div><span class="text-base-content/50">Relation:</span> <span class="font-mono text-xs">{ evt.RelationKey }</span></div>
+					}
+				</div>
+				if len(evt.Tags) > 0 {
+					<div class="flex gap-1 mt-2">
+						for _, tag := range evt.Tags {
+							@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
+								{ tag }
+							}
+						}
+					</div>
+				}
+			}
+		}
+
+		@card.Card() {
+			@card.Body() {
+				@card.Title() {
+					Payload
+				}
+				@jsonview.JSONView(jsonview.Props{Value: prettyPayload, Copyable: true})
+			}
+		}
+	</div>
+}
