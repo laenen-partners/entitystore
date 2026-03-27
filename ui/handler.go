@@ -144,8 +144,39 @@ func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
 		prettyPayload = string(raw)
 	}
 
+	// Resolve entity display name if present.
+	var entityName string
+	if evt.EntityID != "" {
+		if e, err := h.es.GetEntity(r.Context(), evt.EntityID); err == nil && e.DisplayName != "" {
+			entityName = e.DisplayName
+		}
+	}
+
+	// For relation events, parse the relation key and resolve both entities.
+	var sourceName, targetName, sourceID, targetID, relationType string
+	if evt.RelationKey != "" {
+		parts := strings.Split(evt.RelationKey, "|")
+		if len(parts) == 3 {
+			sourceID, targetID, relationType = parts[0], parts[1], parts[2]
+			if e, err := h.es.GetEntity(r.Context(), sourceID); err == nil {
+				if e.DisplayName != "" {
+					sourceName = e.DisplayName
+				} else {
+					sourceName = sourceID[:8] + "..."
+				}
+			}
+			if e, err := h.es.GetEntity(r.Context(), targetID); err == nil {
+				if e.DisplayName != "" {
+					targetName = e.DisplayName
+				} else {
+					targetName = targetID[:8] + "..."
+				}
+			}
+		}
+	}
+
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload), ds.WithDrawerMaxWidth("max-w-xl"))
+	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload, entityName, sourceID, targetID, sourceName, targetName, relationType), ds.WithDrawerMaxWidth("max-w-xl"))
 }
 
 // EntityEventsFragment returns events for an entity.

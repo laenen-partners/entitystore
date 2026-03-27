@@ -444,7 +444,7 @@ func shortType(entityType string) string {
 // Event Detail
 // ---------------------------------------------------------------------------
 
-templ eventDetail(evt store.Event, prettyPayload string) {
+templ eventDetail(evt store.Event, prettyPayload string, entityName string, sourceID, targetID, sourceName, targetName, relationType string) {
 	<div class="space-y-4">
 		@card.Card() {
 			@card.Body() {
@@ -454,29 +454,52 @@ templ eventDetail(evt store.Event, prettyPayload string) {
 				<div class="grid grid-cols-2 gap-2 text-sm">
 					<div><span class="text-base-content/50">Event ID:</span> <span class="font-mono text-xs">{ evt.ID }</span></div>
 					<div><span class="text-base-content/50">Type:</span> <span class="font-mono text-xs">{ evt.EventType }</span></div>
-					<div><span class="text-base-content/50">Payload Type:</span> <span class="font-mono text-xs">{ evt.PayloadType }</span></div>
 					<div><span class="text-base-content/50">Occurred:</span> { evt.OccurredAt.Format("2006-01-02 15:04:05") }</div>
-					if evt.EntityID != "" {
-						<div>
-							<span class="text-base-content/50">Entity:</span>
-							<span
-								class="font-mono text-xs cursor-pointer hover:text-primary"
-								{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", evt.EntityID)))... }
-							>
-								if evt.EntityDisplayName != "" {
-									{ evt.EntityDisplayName }
-								} else {
-									{ evt.EntityID[:8] }...
-								}
-							</span>
-						</div>
-					}
-					if evt.RelationKey != "" {
-						<div><span class="text-base-content/50">Relation:</span> <span class="font-mono text-xs">{ evt.RelationKey }</span></div>
-					}
+					<div><span class="text-base-content/50">Payload Type:</span> <span class="font-mono text-xs">{ evt.PayloadType }</span></div>
 				</div>
+
+				if evt.EntityID != "" {
+					<div class="mt-3 p-3 bg-base-200 rounded-lg">
+						<span class="text-xs text-base-content/50 uppercase tracking-wide">Entity</span>
+						<div
+							class="mt-1 cursor-pointer hover:text-primary"
+							{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", evt.EntityID)))... }
+						>
+							if entityName != "" {
+								<span class="font-semibold">{ entityName }</span>
+							}
+							<span class="font-mono text-xs text-base-content/40">{ evt.EntityID[:8] }...</span>
+						</div>
+					</div>
+				}
+
+				if sourceID != "" && targetID != "" {
+					<div class="mt-3 p-3 bg-base-200 rounded-lg">
+						<span class="text-xs text-base-content/50 uppercase tracking-wide">Relation</span>
+						<div class="flex items-center gap-2 mt-1">
+							<div
+								class="cursor-pointer hover:text-primary"
+								{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", sourceID)))... }
+							>
+								<span class="font-semibold">{ sourceName }</span>
+							</div>
+							<span class="text-base-content/50">→</span>
+							@badge.Badge(badge.Props{Style: badge.StyleOutline}) {
+								{ relationType }
+							}
+							<span class="text-base-content/50">→</span>
+							<div
+								class="cursor-pointer hover:text-primary"
+								{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", targetID)))... }
+							>
+								<span class="font-semibold">{ targetName }</span>
+							</div>
+						</div>
+					</div>
+				}
+
 				if len(evt.Tags) > 0 {
-					<div class="flex gap-1 mt-2">
+					<div class="flex gap-1 mt-3">
 						for _, tag := range evt.Tags {
 							@badge.Badge(badge.Props{Style: badge.StyleGhost}) {
 								{ tag }

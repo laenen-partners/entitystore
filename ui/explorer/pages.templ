@@ -238,7 +238,12 @@ templ EventsPage(events []store.Event, eventTypes []string, activeType string) {
 											<span class="text-xs font-mono text-base-content/40">{ evt.EntityID[:8] }...</span>
 										</div>
 									} else if evt.RelationKey != "" {
-										<span class="text-xs font-mono text-base-content/50">relation</span>
+										<span
+											class="text-xs text-base-content/50 cursor-pointer hover:text-primary"
+											{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/events/%s", evt.ID)))... }
+										>
+											relation
+										</span>
 									}
 								</td>
 								<td>
