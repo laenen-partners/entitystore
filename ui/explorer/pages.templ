@@ -188,17 +188,21 @@ templ EventsPage(events []store.Event, eventTypes []string, activeType string) {
 				<h2 class="text-2xl font-bold">
 					{ fmt.Sprintf("Events (%d)", len(events)) }
 				</h2>
-				<div class="flex gap-2 items-center">
-					<select class="select select-bordered select-sm" onchange="window.location.href = this.value ? '/events?type=' + this.value : '/events'">
-						<option value="" selected?={ activeType == "" }>All event types</option>
+				<form method="get" action="/events" class="flex gap-2 items-center">
+					<select name="type" class="select select-bordered select-sm" onchange="this.form.submit()">
+						<option value="">All event types</option>
 						for _, et := range eventTypes {
-							<option value={ et } selected?={ et == activeType }>{ shortEventType(et) }</option>
+							if et == activeType {
+								<option value={ et } selected>{ shortEventType(et) }</option>
+							} else {
+								<option value={ et }>{ shortEventType(et) }</option>
+							}
 						}
 					</select>
 					if activeType != "" {
 						<a href="/events" class="btn btn-ghost btn-sm">Clear</a>
 					}
-				</div>
+				</form>
 			</div>
 
 			if len(events) > 0 {
@@ -222,14 +226,17 @@ templ EventsPage(events []store.Event, eventTypes []string, activeType string) {
 								</td>
 								<td>
 									if evt.EntityID != "" {
-										<span
-											class="text-xs font-mono cursor-pointer hover:text-primary"
+										<div
+											class="cursor-pointer hover:text-primary"
 											{ ds.OnClick(ds.Get(fmt.Sprintf("/fragments/entities/%s", evt.EntityID)))... }
 										>
-											{ evt.EntityID[:8] }...
-										</span>
+											if evt.EntityDisplayName != "" {
+												<span class="text-sm font-medium">{ evt.EntityDisplayName }</span>
+											}
+											<span class="text-xs font-mono text-base-content/40">{ evt.EntityID[:8] }...</span>
+										</div>
 									} else if evt.RelationKey != "" {
-										<span class="text-xs font-mono text-base-content/50">rel</span>
+										<span class="text-xs font-mono text-base-content/50">relation</span>
 									}
 								</td>
 								<td>

@@ -26,11 +26,13 @@ func (q *Queries) CountUnpublishedEvents(ctx context.Context) (int64, error) {
 }
 
 const getAllEvents = `-- name: GetAllEvents :many
-SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
-FROM entity_events
-WHERE (cardinality($1::text[]) = 0 OR event_type = ANY($1))
-  AND ($2::timestamptz IS NULL OR occurred_at < $2::timestamptz)
-ORDER BY occurred_at DESC
+SELECT ev.id, ev.event_type, ev.payload_type, ev.payload, ev.entity_id, ev.relation_key, ev.tags, ev.occurred_at, ev.published_at,
+       COALESCE(e.display_name, '') AS entity_display_name
+FROM entity_events ev
+LEFT JOIN entities e ON e.id = ev.entity_id
+WHERE (cardinality($1::text[]) = 0 OR ev.event_type = ANY($1))
+  AND ($2::timestamptz IS NULL OR ev.occurred_at < $2::timestamptz)
+ORDER BY ev.occurred_at DESC
 LIMIT $3
 `
 
@@ -40,15 +42,28 @@ type GetAllEventsParams struct {
 	MaxResults int32              `json:"max_results"`
 }
 
-func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]EntityEvent, error) {
+type GetAllEventsRow struct {
+	ID                uuid.UUID          `json:"id"`
+	EventType         string             `json:"event_type"`
+	PayloadType       string             `json:"payload_type"`
+	Payload           json.RawMessage    `json:"payload"`
+	EntityID          pgtype.UUID        `json:"entity_id"`
+	RelationKey       pgtype.Text        `json:"relation_key"`
+	Tags              []string           `json:"tags"`
+	OccurredAt        time.Time          `json:"occurred_at"`
+	PublishedAt       pgtype.Timestamptz `json:"published_at"`
+	EntityDisplayName string             `json:"entity_display_name"`
+}
+
+func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]GetAllEventsRow, error) {
 	rows, err := q.db.Query(ctx, getAllEvents, arg.EventTypes, arg.Cursor, arg.MaxResults)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityEvent
+	var items []GetAllEventsRow
 	for rows.Next() {
-		var i EntityEvent
+		var i GetAllEventsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EventType,
@@ -59,6 +74,7 @@ func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]E
 			&i.Tags,
 			&i.OccurredAt,
 			&i.PublishedAt,
+			&i.EntityDisplayName,
 		); err != nil {
 			return nil, err
 		}

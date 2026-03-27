@@ -19,16 +19,17 @@ import (
 
 // Event is a stored event with its metadata.
 type Event struct {
-	ID          string        `json:"id"`
-	EventType   string        `json:"event_type"`
-	PayloadType string        `json:"payload_type"`
-	Payload     proto.Message `json:"payload"`
-	RawPayload  json.RawMessage `json:"raw_payload"`
-	EntityID    string        `json:"entity_id,omitempty"`
-	RelationKey string        `json:"relation_key,omitempty"`
-	Tags        []string      `json:"tags,omitempty"`
-	OccurredAt  time.Time     `json:"occurred_at"`
-	PublishedAt *time.Time    `json:"published_at,omitempty"`
+	ID                string          `json:"id"`
+	EventType         string          `json:"event_type"`
+	PayloadType       string          `json:"payload_type"`
+	Payload           proto.Message   `json:"payload"`
+	RawPayload        json.RawMessage `json:"raw_payload"`
+	EntityID          string          `json:"entity_id,omitempty"`
+	EntityDisplayName string          `json:"entity_display_name,omitempty"`
+	RelationKey       string          `json:"relation_key,omitempty"`
+	Tags              []string        `json:"tags,omitempty"`
+	OccurredAt        time.Time       `json:"occurred_at"`
+	PublishedAt       *time.Time      `json:"published_at,omitempty"`
 }
 
 // EventQueryOpts filters event queries.
@@ -112,9 +113,40 @@ func (s *Store) GetAllEvents(ctx context.Context, opts *EventQueryOpts, cursor *
 
 	result := make([]Event, len(rows))
 	for i, row := range rows {
-		result[i] = eventFromRow(row)
+		result[i] = eventFromAllEventsRow(row)
 	}
 	return result, nil
+}
+
+func eventFromAllEventsRow(row dbgen.GetAllEventsRow) Event {
+	e := Event{
+		ID:                row.ID.String(),
+		EventType:         row.EventType,
+		PayloadType:       row.PayloadType,
+		RawPayload:        row.Payload,
+		EntityDisplayName: row.EntityDisplayName,
+		Tags:              row.Tags,
+		OccurredAt:        row.OccurredAt,
+	}
+	if row.EntityID.Valid {
+		e.EntityID = uuid.UUID(row.EntityID.Bytes).String()
+	}
+	if row.RelationKey.Valid {
+		e.RelationKey = row.RelationKey.String
+	}
+	if row.PublishedAt.Valid {
+		t := row.PublishedAt.Time
+		e.PublishedAt = &t
+	}
+	fullName := protoreflect.FullName(row.PayloadType)
+	msgType, err := protoregistry.GlobalTypes.FindMessageByName(fullName)
+	if err == nil {
+		msg := msgType.New().Interface()
+		if err := protojson.Unmarshal(row.Payload, msg); err == nil {
+			e.Payload = msg
+		}
+	}
+	return e
 }
 
 func eventFromRow(row dbgen.EntityEvent) Event {
