@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/laenen-partners/dsx/ds"
@@ -109,11 +110,11 @@ func (h *Handlers) EntityDetailFragment(w http.ResponseWriter, r *http.Request) 
 	outbound, _ := h.es.GetRelationsFromEntity(r.Context(), id, 20, nil)
 	inbound, _ := h.es.GetRelationsToEntity(r.Context(), id, 20, nil)
 
-	// Resolve display names via single traverse call.
-	names := h.resolveNames(r.Context(), id)
+	// Resolve display info via single traverse call.
+	resolved := h.resolveEntities(r.Context(), id)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound, names), ds.WithDrawerMaxWidth("max-w-2xl"))
+	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound, resolved), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityRelationsFragment returns relations for an entity.
@@ -145,18 +146,35 @@ func (h *Handlers) EntityGraphFragment(w http.ResponseWriter, r *http.Request) {
 	ds.Send.Patch(sse, entityGraph(center, results))
 }
 
-// resolveNames builds a map of entity ID → display name using Traverse depth 1.
-func (h *Handlers) resolveNames(ctx context.Context, entityID string) map[string]string {
-	names := make(map[string]string)
+// ResolvedEntity holds display info for a related entity.
+type ResolvedEntity struct {
+	Name       string
+	EntityType string
+}
+
+// resolveEntities builds a map of entity ID → display info using Traverse depth 1.
+func (h *Handlers) resolveEntities(ctx context.Context, entityID string) map[string]ResolvedEntity {
+	resolved := make(map[string]ResolvedEntity)
 	neighbors, _ := h.es.Traverse(ctx, entityID, &store.TraverseOpts{MaxDepth: 1, MaxResults: 50})
 	for _, n := range neighbors {
+		name := n.Entity.ID[:8] + "..."
 		if n.Entity.DisplayName != "" {
-			names[n.Entity.ID] = n.Entity.DisplayName
-		} else {
-			names[n.Entity.ID] = n.Entity.ID[:8] + "..."
+			name = n.Entity.DisplayName
+		}
+		resolved[n.Entity.ID] = ResolvedEntity{
+			Name:       name,
+			EntityType: shortEntityType(n.Entity.EntityType),
 		}
 	}
-	return names
+	return resolved
+}
+
+func shortEntityType(t string) string {
+	parts := strings.Split(t, ".")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return t
 }
 
 // EntityTypesFragment returns a list of entity types with counts.
