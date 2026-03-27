@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -432,6 +433,23 @@ func resolvedType(id string, resolved map[string]ResolvedEntity) string {
 	return ""
 }
 
+func entityDataTitle(e *matching.StoredEntity) string {
+	if e.DisplayName != "" {
+		return e.DisplayName + " — Data"
+	}
+	return shortType(e.EntityType) + " — Data"
+}
+
+func prettyJSON(data json.RawMessage) string {
+	var parsed json.RawMessage
+	if err := json.Unmarshal(data, &parsed); err == nil {
+		if pretty, err := json.MarshalIndent(parsed, "", "  "); err == nil {
+			return string(pretty)
+		}
+	}
+	return string(data)
+}
+
 func shortType(entityType string) string {
 	parts := strings.Split(entityType, ".")
 	if len(parts) > 0 {
@@ -494,9 +512,42 @@ templ eventDetail(evt store.Event, prettyPayload string, entity *matching.Stored
 		@card.Card() {
 			@card.Body() {
 				@card.Title() {
-					Payload
+					Event Payload
 				}
 				@jsonview.JSONView(jsonview.Props{Value: prettyPayload, Copyable: true})
+			}
+		}
+
+		if entity != nil {
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						{ entityDataTitle(entity) }
+					}
+					@jsonview.JSONView(jsonview.Props{Value: prettyJSON(entity.Data), Copyable: true})
+				}
+			}
+		}
+
+		if source != nil {
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						{ entityDataTitle(source) }
+					}
+					@jsonview.JSONView(jsonview.Props{Value: prettyJSON(source.Data), Copyable: true})
+				}
+			}
+		}
+
+		if target != nil {
+			@card.Card() {
+				@card.Body() {
+					@card.Title() {
+						{ entityDataTitle(target) }
+					}
+					@jsonview.JSONView(jsonview.Props{Value: prettyJSON(target.Data), Copyable: true})
+				}
 			}
 		}
 	</div>
