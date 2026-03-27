@@ -152,23 +152,39 @@ func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// For relation events, parse the relation key and resolve both entities.
+	// For relation events, extract sourceId/targetId from payload and resolve entities.
 	var sourceName, targetName, sourceID, targetID, relationType string
 	if evt.RelationKey != "" {
-		parts := strings.Split(evt.RelationKey, "|")
-		if len(parts) == 3 {
-			sourceID, targetID, relationType = parts[0], parts[1], parts[2]
+		var payload struct {
+			SourceID     string `json:"sourceId"`
+			TargetID     string `json:"targetId"`
+			RelationType string `json:"relationType"`
+		}
+		if err := json.Unmarshal(evt.RawPayload, &payload); err == nil && payload.SourceID != "" {
+			sourceID = payload.SourceID
+			targetID = payload.TargetID
+			relationType = payload.RelationType
+		} else {
+			// Fallback: parse relation key (format: sourceUUID:targetUUID:type)
+			parts := strings.Split(evt.RelationKey, ":")
+			if len(parts) >= 3 {
+				sourceID = parts[0]
+				targetID = parts[1]
+				relationType = strings.Join(parts[2:], ":")
+			}
+		}
+		if sourceID != "" {
 			if e, err := h.es.GetEntity(r.Context(), sourceID); err == nil {
-				if e.DisplayName != "" {
-					sourceName = e.DisplayName
-				} else {
+				sourceName = e.DisplayName
+				if sourceName == "" {
 					sourceName = sourceID[:8] + "..."
 				}
 			}
+		}
+		if targetID != "" {
 			if e, err := h.es.GetEntity(r.Context(), targetID); err == nil {
-				if e.DisplayName != "" {
-					targetName = e.DisplayName
-				} else {
+				targetName = e.DisplayName
+				if targetName == "" {
 					targetName = targetID[:8] + "..."
 				}
 			}
