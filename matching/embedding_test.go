@@ -18,10 +18,10 @@ func (m *mockEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, 
 }
 
 // ---------------------------------------------------------------------------
-// textToEmbed
+// TextToEmbed
 // ---------------------------------------------------------------------------
 
-func Test_textToEmbed(t *testing.T) {
+func Test_TextToEmbed(t *testing.T) {
 	data := json.RawMessage(`{
 		"email": "alice@example.com",
 		"full_name": "Alice Johnson",
@@ -43,43 +43,43 @@ func Test_textToEmbed(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := textToEmbed(data, tc.fields)
+			got := TextToEmbed(data, tc.fields)
 			if got != tc.want {
-				t.Errorf("textToEmbed() = %q, want %q", got, tc.want)
+				t.Errorf("TextToEmbed() = %q, want %q", got, tc.want)
 			}
 		})
 	}
 }
 
-func Test_textToEmbed_InvalidJSON(t *testing.T) {
-	got := textToEmbed(json.RawMessage(`not json`), []string{"name"})
+func Test_TextToEmbed_InvalidJSON(t *testing.T) {
+	got := TextToEmbed(json.RawMessage(`not json`), []string{"name"})
 	if got != "" {
 		t.Errorf("expected empty for invalid JSON, got %q", got)
 	}
 }
 
-func Test_textToEmbed_EmptyValues(t *testing.T) {
+func Test_TextToEmbed_EmptyValues(t *testing.T) {
 	data := json.RawMessage(`{"name":"","title":"  "}`)
-	got := textToEmbed(data, []string{"name", "title"})
+	got := TextToEmbed(data, []string{"name", "title"})
 	if got != "" {
 		t.Errorf("expected empty for blank values, got %q", got)
 	}
 }
 
-func Test_textToEmbed_CamelCaseFallback(t *testing.T) {
+func Test_TextToEmbed_CamelCaseFallback(t *testing.T) {
 	data := json.RawMessage(`{"fullName":"Alice","jobTitle":"PM"}`)
-	got := textToEmbed(data, []string{"full_name", "job_title"})
+	got := TextToEmbed(data, []string{"full_name", "job_title"})
 	if got != "Alice PM" {
 		t.Errorf("camelCase fallback = %q, want %q", got, "Alice PM")
 	}
 }
 
-// textToEmbed backward compat alias.
-func Test_textToEmbed_BackwardCompat(t *testing.T) {
+// TextToEmbed backward compat alias.
+func Test_TextToEmbed_BackwardCompat(t *testing.T) {
 	data := json.RawMessage(`{"name":"Alice"}`)
-	got := textToEmbed(data, []string{"name"})
+	got := TextToEmbed(data, []string{"name"})
 	if got != "Alice" {
-		t.Errorf("textToEmbed = %q", got)
+		t.Errorf("TextToEmbed = %q", got)
 	}
 }
 

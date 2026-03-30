@@ -559,35 +559,38 @@ for _, e := range events {
 - Table is partitioned by `occurred_at` with an outbox-ready `published_at` column
 - Events carry a tag snapshot from write time (enables scoped queries without joins)
 
-## Outbox Publisher
+## Event Consumers
 
-The publisher polls `entity_events` for unpublished rows and delivers them via a caller-provided function. TTL-based leader election ensures only one publisher runs across all instances.
+Named consumers independently process the event stream with cursor-based progress tracking. Each consumer has its own position and lock — multiple consumers run simultaneously without conflict.
 
 ```go
-pub := es.NewPublisher(
-    func(ctx context.Context, events []entitystore.Event) error {
-        // Deliver to Kafka, SQS, webhook, etc.
-        for _, evt := range events {
-            fmt.Printf("publishing %s: %s\n", evt.EventType, evt.ID)
-        }
-        return nil // Return error to retry the batch.
-    },
-    entitystore.PublisherConfig{
-        BatchSize:    100,
-        PollInterval: 5 * time.Second,
-        LockTTL:      30 * time.Second,
-    },
-)
+// Realtime consumer — wakes instantly on new events via LISTEN/NOTIFY.
+notifier := es.NewConsumer(func(ctx context.Context, events []entitystore.Event) error {
+    for _, evt := range events {
+        pubsub.Publish(evt.EventType, evt)
+    }
+    return nil
+}, entitystore.ConsumerConfig{
+    Name:         "notifier",
+    PollInterval: 5 * time.Second, // fallback if NOTIFY missed
+})
+go notifier.RunRealtime(ctx)
 
-// Blocks until ctx is cancelled. Run in a goroutine.
-go pub.Run(ctx)
+// Polling consumer — for heavyweight processing (embeddings, projections).
+projector := es.NewConsumer(projectFunc, entitystore.ConsumerConfig{
+    Name:         "projector",
+    BatchSize:    50,
+    PollInterval: 5 * time.Second,
+})
+go projector.Run(ctx)
 ```
 
 Key properties:
-- **Single leader** — `publisher_lock` table with TTL-based lease; auto-expires if holder crashes
-- **At-least-once delivery** — events stay unpublished until `PublishFunc` returns nil
-- **FOR UPDATE SKIP LOCKED** — doesn't block on events still being written by concurrent `BatchWrite`
-- **Graceful shutdown** — lock released on context cancellation
+- **Named cursors** — each consumer tracks its own position via `entity_event_consumers` table
+- **LISTEN/NOTIFY** — `RunRealtime` wakes instantly on new events, with polling fallback
+- **Single leader per consumer** — TTL-based lock ensures only one instance runs per name
+- **At-least-once delivery** — cursor advances only after `ConsumerFunc` returns nil
+- **Idempotent** — consumers must handle redelivery on error/restart
 
 ## Health
 
@@ -596,9 +599,8 @@ status, _ := es.Health(ctx)
 fmt.Printf("DB OK: %v (latency %v)\n", status.DB.OK, status.DB.Latency)
 fmt.Printf("Pool: %d/%d connections\n", status.DB.TotalConns, status.DB.MaxConns)
 fmt.Printf("Unpublished events: %d\n", status.Events.UnpublishedCount)
-if status.Publisher != nil {
-    fmt.Printf("Publisher leader: %s (expires %v)\n",
-        status.Publisher.HolderID, status.Publisher.LockExpiresAt)
+for _, c := range status.Consumers {
+    fmt.Printf("Consumer %s: lag %s, holder %s\n", c.Name, c.Lag, c.HolderID)
 }
 
 // Wire to HTTP for k8s probes:

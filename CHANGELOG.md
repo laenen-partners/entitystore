@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 
 ## [Unreleased]
 
+### Breaking
+- **Publisher removed** — `NewPublisher`, `PublishFunc`, `PublisherConfig`, `Publisher`, `PublisherHealth` all removed. Replaced by named consumers (see below).
+
+### Added
+- **Named event consumers** — `NewConsumer(fn, cfg)` with cursor-based progress tracking per consumer name. `Run(ctx)` for polling, `RunRealtime(ctx)` for LISTEN/NOTIFY + polling fallback. Each consumer has its own lock and cursor in `entity_event_consumers` table.
+- **LISTEN/NOTIFY trigger** — `entity_events` table fires a Postgres notification on each insert, enabling sub-second latency for realtime consumers.
+- **Consumer health** — `Health()` now reports per-consumer status (name, lag, lock holder) instead of publisher status.
+
 ## [v0.25.0] - 2026-03-26
 
 ### Breaking
@@ -20,13 +28,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 - **`WithEvents(...proto.Message)`** — write option to attach custom domain events to entity/relation writes.
 - **Event type derivation** — `payload_type` keeps the full proto name (e.g. `entitystore.events.v1.EntityCreated`); `event_type` strips the version segment for routing stability (e.g. `entitystore.events.EntityCreated`).
 - **Standard event protos** — `proto/entitystore/events/v1/events.proto` with 8 lifecycle event messages.
-- **Outbox publisher** — `Publisher` polls `entity_events` for unpublished rows and delivers them via a caller-provided `PublishFunc`. TTL-based leader election via `publisher_lock` table ensures only one publisher runs across all instances. Lock auto-expires if holder crashes. Created via `es.NewPublisher(fn, cfg)`. See ADR-008.
-- **Health API** — `es.Health(ctx)` returns `HealthStatus` with DB health (ping latency, pool stats), event activity (last event time, unpublished count), and publisher status (leader state, lock expiry, last publish time). `es.store.HealthError(ctx)` for simple liveness probes.
+- **Health API** — `es.Health(ctx)` returns `HealthStatus` with DB health (ping latency, pool stats), event activity (last event, unpublished count), and consumer status. `HealthError(ctx)` for liveness probes.
 - `FindConnectedOpts` struct for cleaner `FindConnectedByType` calls.
 - `TxStore` wrapper in root package with full read + write surface (GetEntity, FindByAnchors, GetRelationsFrom/To, WriteEntity, UpsertRelation, DeleteRelationByKey, UpdateRelationData, GetEventsForEntity).
 - Expanded godoc package comment with quick-start example and pointers to key types.
-- Migration: `entity_events` (partitioned, replaces `entity_provenance`), `publisher_lock`.
-- ADR-008: Outbox Publisher with TTL-Based Leader Election.
+- Migration: `entity_events` (partitioned, replaces `entity_provenance`).
 
 - **Explorer UI** — embeddable visual debug tool for browsing entities, relations, and graph traversals. `explorer.Run(Config{Store: es})` for standalone, `explorer.Mount(r, es)` for existing routers, `explorer.RunInBackground(ctx, cfg)` for goroutine. Pages: search (debounced trigram), stats (server-rendered), entities, entity detail drawer with JSON viewer, anchors, and clickable relations.
 - **`Search(ctx, query, maxResults, filter)`** — fuzzy trigram search on `display_name` via `pg_trgm` extension, ranked by similarity, falls back to token search. Partial matches ("ali" → "Alice Dupont").

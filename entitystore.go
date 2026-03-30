@@ -464,31 +464,9 @@ type DBHealth = store.DBHealth
 // EventHealth reports event store activity.
 type EventHealth = store.EventHealth
 
-// PublisherHealth reports outbox publisher status.
-type PublisherHealth = store.PublisherHealth
-
 // Health returns the current health status of the store.
 func (es *EntityStore) Health(ctx context.Context) (HealthStatus, error) {
 	return es.store.Health(ctx)
-}
-
-// ---------------------------------------------------------------------------
-// Publisher
-// ---------------------------------------------------------------------------
-
-// PublishFunc is called by the publisher to deliver a batch of events.
-type PublishFunc = store.PublishFunc
-
-// PublisherConfig configures the outbox publisher.
-type PublisherConfig = store.PublisherConfig
-
-// Publisher polls entity_events for unpublished rows and delivers them
-// via a caller-provided PublishFunc. Only one publisher runs at a time.
-type Publisher = store.Publisher
-
-// NewPublisher creates an outbox publisher using the EntityStore's pool.
-func (es *EntityStore) NewPublisher(fn PublishFunc, cfg PublisherConfig) *Publisher {
-	return store.NewPublisher(es.store.Pool(), fn, cfg)
 }
 
 // ---------------------------------------------------------------------------

@@ -269,6 +269,14 @@ func (c *Consumer) releaseLock(ctx context.Context) {
 		"name", c.cfg.Name, "holder_id", c.cfg.HolderID)
 }
 
+// pgIntervalFromDuration converts a Go duration to a pgtype.Interval.
+func pgIntervalFromDuration(d time.Duration) pgtype.Interval {
+	return pgtype.Interval{
+		Microseconds: d.Microseconds(),
+		Valid:        true,
+	}
+}
+
 // ConsumerHealth reports the status of a named consumer.
 type ConsumerHealth struct {
 	Name          string     `json:"name"`
