@@ -45,6 +45,16 @@ type EntityEvent struct {
 	PublishedAt pgtype.Timestamptz `json:"published_at"`
 }
 
+type EntityEventConsumer struct {
+	Name        string             `json:"name"`
+	LastEventAt time.Time          `json:"last_event_at"`
+	LastEventID pgtype.UUID        `json:"last_event_id"`
+	HolderID    pgtype.Text        `json:"holder_id"`
+	AcquiredAt  pgtype.Timestamptz `json:"acquired_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
+	UpdatedAt   time.Time          `json:"updated_at"`
+}
+
 type EntityEventsDefault struct {
 	ID          uuid.UUID          `json:"id"`
 	EventType   string             `json:"event_type"`

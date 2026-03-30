@@ -22,7 +22,7 @@ func ComputeEmbedding(ctx context.Context, data json.RawMessage, config EntityMa
 	if len(config.EmbedFields) == 0 || embedder == nil {
 		return nil, nil
 	}
-	text := textToEmbed(data, config.EmbedFields)
+	text := TextToEmbed(data, config.EmbedFields)
 	if text == "" {
 		return nil, nil
 	}
@@ -36,9 +36,10 @@ func ComputeEmbedding(ctx context.Context, data json.RawMessage, config EntityMa
 	return vecs[0], nil
 }
 
-// textToEmbed extracts and concatenates field values from entity data for
-// embedding. Used internally by ComputeEmbedding.
-func textToEmbed(data json.RawMessage, fields []string) string {
+// TextToEmbed extracts and concatenates field values from entity data for
+// embedding. Fields are matched by snake_case or camelCase name. Values are
+// trimmed and joined with spaces. Returns empty string if no fields match.
+func TextToEmbed(data json.RawMessage, fields []string) string {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(data, &obj); err != nil {
 		return ""

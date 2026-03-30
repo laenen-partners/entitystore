@@ -491,3 +491,24 @@ func (es *EntityStore) NewPublisher(fn PublishFunc, cfg PublisherConfig) *Publis
 	return store.NewPublisher(es.store.Pool(), fn, cfg)
 }
 
+// ---------------------------------------------------------------------------
+// Consumer
+// ---------------------------------------------------------------------------
+
+// ConsumerFunc receives a batch of events. Must be idempotent.
+type ConsumerFunc = store.ConsumerFunc
+
+// ConsumerConfig configures a named event consumer.
+type ConsumerConfig = store.ConsumerConfig
+
+// Consumer reads entity events from a named cursor position.
+type Consumer = store.Consumer
+
+// ConsumerHealth reports the status of a named consumer.
+type ConsumerHealth = store.ConsumerHealth
+
+// NewConsumer creates a named event consumer.
+func (es *EntityStore) NewConsumer(fn ConsumerFunc, cfg ConsumerConfig) *Consumer {
+	return store.NewConsumer(es.store.Pool(), fn, cfg)
+}
+

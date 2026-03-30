@@ -8,9 +8,10 @@ import (
 
 // HealthStatus is the overall health of the entity store.
 type HealthStatus struct {
-	DB        DBHealth        `json:"db"`
-	Events    EventHealth     `json:"events"`
-	Publisher *PublisherHealth `json:"publisher,omitempty"`
+	DB        DBHealth         `json:"db"`
+	Events    EventHealth      `json:"events"`
+	Publisher *PublisherHealth  `json:"publisher,omitempty"`
+	Consumers []ConsumerHealth `json:"consumers,omitempty"`
 }
 
 // Healthy returns true if the database connection is OK.
@@ -88,6 +89,27 @@ func (s *Store) Health(ctx context.Context) (HealthStatus, error) {
 		t := lastPub.Time
 		if lastPub.Valid {
 			status.Publisher.LastPublishAt = &t
+		}
+	}
+
+	// Consumer health: list all consumers with lag.
+	consumers, err := s.queries.ListConsumers(ctx)
+	if err == nil && len(consumers) > 0 {
+		status.Consumers = make([]ConsumerHealth, len(consumers))
+		for i, c := range consumers {
+			ch := ConsumerHealth{
+				Name:        c.Name,
+				LastEventAt: c.LastEventAt,
+				Lag:         time.Since(c.LastEventAt).Truncate(time.Second).String(),
+			}
+			if c.HolderID.Valid {
+				ch.HolderID = c.HolderID.String
+			}
+			if c.ExpiresAt.Valid {
+				t := c.ExpiresAt.Time
+				ch.LockExpiresAt = &t
+			}
+			status.Consumers[i] = ch
 		}
 	}
 
