@@ -61,6 +61,11 @@ tasks:
     cmds:
       - go mod tidy
 
+  build:explorer:
+    desc: Build the standalone explorer binary
+    cmds:
+      - go build -o bin/entitystore-explorer ./cmd/entitystore-explorer
+
   clean:
     desc: Remove build artifacts and local data
     cmds:

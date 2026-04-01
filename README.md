@@ -664,7 +664,30 @@ explorer.RunInBackground(ctx, explorer.Config{Store: es})
 explorer.Mount(r, es)
 ```
 
-Features:
+### Standalone binary
+
+Point it at any database with entitystore tables:
+
+```sh
+# Install
+go install github.com/laenen-partners/entitystore/cmd/entitystore-explorer@latest
+
+# Run against your database
+entitystore-explorer -dsn "postgres://user:pass@host:5432/mydb?sslmode=disable"
+entitystore-explorer -port 3336  # uses DATABASE_URL env var
+```
+
+### Embed in your service
+
+```go
+import "github.com/laenen-partners/entitystore/ui/explorer"
+
+explorer.Run(explorer.Config{Store: es, Port: 3336})           // standalone
+explorer.RunInBackground(ctx, explorer.Config{Store: es})       // goroutine
+explorer.Mount(r, es)                                           // existing router
+```
+
+### Features
 - **Search** — fuzzy trigram search on display names with 300ms debounce, falls back to token search
 - **Entity detail** — opens in a drawer with JSON viewer, anchors, tags, and clickable relations
 - **Relations** — display names resolved via single Traverse call, click to navigate
@@ -710,6 +733,7 @@ ui/                          Fragment handlers for explorer UI
 ui/explorer/                 Embeddable explorer server (Run, Mount, RunInBackground)
 ui/cmd/showcase/             Standalone showcase with seed data
 cmd/protoc-gen-entitystore/  Buf plugin: proto annotations → matching configs + extraction schemas
+cmd/entitystore-explorer/    Standalone explorer binary (go install)
 proto/entitystore/v1/        Proto annotation definitions (options.proto)
 proto/entitystore/events/v1/ Standard lifecycle event protos
 gen/                         Generated protobuf code (do not edit)
