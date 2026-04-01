@@ -7,7 +7,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/laenen-partners/dsx v0.9.2
+	github.com/laenen-partners/dsx v0.9.3
 	github.com/laenen-partners/migrate v0.2.0
 	github.com/laenen-partners/pubsub v0.3.1
 	github.com/pgvector/pgvector-go v0.3.0
