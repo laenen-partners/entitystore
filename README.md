@@ -598,7 +598,6 @@ Key properties:
 status, _ := es.Health(ctx)
 fmt.Printf("DB OK: %v (latency %v)\n", status.DB.OK, status.DB.Latency)
 fmt.Printf("Pool: %d/%d connections\n", status.DB.TotalConns, status.DB.MaxConns)
-fmt.Printf("Unpublished events: %d\n", status.Events.UnpublishedCount)
 for _, c := range status.Consumers {
     fmt.Printf("Consumer %s: lag %s, holder %s\n", c.Name, c.Lag, c.HolderID)
 }

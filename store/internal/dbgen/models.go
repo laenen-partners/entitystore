@@ -87,11 +87,3 @@ type EntityToken struct {
 	TokenField string    `json:"token_field"`
 	Tokens     []string  `json:"tokens"`
 }
-
-type PublisherLock struct {
-	ID         string    `json:"id"`
-	HolderID   string    `json:"holder_id"`
-	AcquiredAt time.Time `json:"acquired_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	RenewedAt  time.Time `json:"renewed_at"`
-}

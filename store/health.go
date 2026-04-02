@@ -29,8 +29,7 @@ type DBHealth struct {
 
 // EventHealth reports event store activity.
 type EventHealth struct {
-	LastEventAt      *time.Time `json:"last_event_at,omitempty"`
-	UnpublishedCount int64      `json:"unpublished_count"`
+	LastEventAt *time.Time `json:"last_event_at,omitempty"`
 }
 
 // Health returns the current health status of the store.
@@ -53,14 +52,10 @@ func (s *Store) Health(ctx context.Context) (HealthStatus, error) {
 	status.DB.TotalConns = stat.TotalConns()
 	status.DB.MaxConns = stat.MaxConns()
 
-	// Event health: last event time + unpublished count.
+	// Event health: last event time.
 	lastTime, err := s.queries.GetLastEventTime(ctx)
 	if err == nil {
 		status.Events.LastEventAt = &lastTime
-	}
-	unpub, err := s.queries.CountUnpublishedEvents(ctx)
-	if err == nil {
-		status.Events.UnpublishedCount = unpub
 	}
 
 	// Consumer health: list all consumers with lag.

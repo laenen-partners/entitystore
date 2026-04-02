@@ -14,17 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countUnpublishedEvents = `-- name: CountUnpublishedEvents :one
-SELECT count(*) FROM entity_events WHERE published_at IS NULL
-`
-
-func (q *Queries) CountUnpublishedEvents(ctx context.Context) (int64, error) {
-	row := q.db.QueryRow(ctx, countUnpublishedEvents)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const getAllEvents = `-- name: GetAllEvents :many
 SELECT ev.id, ev.event_type, ev.payload_type, ev.payload, ev.entity_id, ev.relation_key, ev.tags, ev.occurred_at, ev.published_at,
        COALESCE(e.display_name, '') AS entity_display_name
@@ -170,40 +159,6 @@ func (q *Queries) GetLastEventTime(ctx context.Context) (time.Time, error) {
 	var occurred_at time.Time
 	err := row.Scan(&occurred_at)
 	return occurred_at, err
-}
-
-const getLastPublishedTime = `-- name: GetLastPublishedTime :one
-SELECT published_at FROM entity_events WHERE published_at IS NOT NULL ORDER BY published_at DESC LIMIT 1
-`
-
-func (q *Queries) GetLastPublishedTime(ctx context.Context) (pgtype.Timestamptz, error) {
-	row := q.db.QueryRow(ctx, getLastPublishedTime)
-	var published_at pgtype.Timestamptz
-	err := row.Scan(&published_at)
-	return published_at, err
-}
-
-const getPublisherLock = `-- name: GetPublisherLock :one
-SELECT holder_id, acquired_at, expires_at, renewed_at FROM publisher_lock WHERE id = 'singleton'
-`
-
-type GetPublisherLockRow struct {
-	HolderID   string    `json:"holder_id"`
-	AcquiredAt time.Time `json:"acquired_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	RenewedAt  time.Time `json:"renewed_at"`
-}
-
-func (q *Queries) GetPublisherLock(ctx context.Context) (GetPublisherLockRow, error) {
-	row := q.db.QueryRow(ctx, getPublisherLock)
-	var i GetPublisherLockRow
-	err := row.Scan(
-		&i.HolderID,
-		&i.AcquiredAt,
-		&i.ExpiresAt,
-		&i.RenewedAt,
-	)
-	return i, err
 }
 
 const insertEvent = `-- name: InsertEvent :exec
