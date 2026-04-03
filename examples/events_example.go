@@ -4,6 +4,7 @@ package examples
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -283,7 +284,60 @@ func AnchorsExample(ctx context.Context, es *entitystore.EntityStore, entityID s
 }
 
 // ---------------------------------------------------------------------------
-// 8. Health check
+// 8. Optimistic locking
+// ---------------------------------------------------------------------------
+
+// OptimisticLockingExample shows how version checks prevent lost updates.
+func OptimisticLockingExample(ctx context.Context, es *entitystore.EntityStore) {
+	// Create an entity (starts at version 0).
+	data, _ := structpb.NewStruct(map[string]any{"name": "Eve", "email": "eve@startup.io"})
+	results, _ := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:      entitystore.WriteActionCreate,
+			Data:        data,
+			Confidence:  0.90,
+			DisplayName: "Eve Laurent",
+		}},
+	})
+	entity := *results[0].Entity
+	fmt.Printf("Created: version=%d\n", entity.Version) // version=0
+
+	// Update with correct version — succeeds.
+	updatedData, _ := structpb.NewStruct(map[string]any{"name": "Eve Laurent", "email": "eve@startup.io", "title": "CEO"})
+	_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:          entitystore.WriteActionUpdate,
+			MatchedEntityID: entity.ID,
+			Version:         entity.Version, // 0
+			Data:            updatedData,
+			Confidence:      0.95,
+			DisplayName:     "Eve Laurent",
+		}},
+	})
+	fmt.Printf("Update with correct version: err=%v\n", err) // nil
+
+	// Try to update with stale version — fails.
+	_, err = es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+		{WriteEntity: &entitystore.WriteEntityOp{
+			Action:          entitystore.WriteActionUpdate,
+			MatchedEntityID: entity.ID,
+			Version:         0, // stale! entity is now at version 1
+			Data:            updatedData,
+			Confidence:      0.98,
+		}},
+	})
+	fmt.Printf("Update with stale version: err=%v\n", err) // ErrConflict
+
+	// Correct pattern: re-read and retry.
+	if errors.Is(err, entitystore.ErrConflict) {
+		fresh, _ := es.GetEntity(ctx, entity.ID)
+		fmt.Printf("Re-read: version=%d\n", fresh.Version) // version=1
+		// Re-apply changes with fresh.Version...
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 9. Health check
 // ---------------------------------------------------------------------------
 
 // HealthExample shows how to check the store's health status.
@@ -301,7 +355,7 @@ func HealthExample(ctx context.Context, es *entitystore.EntityStore) {
 }
 
 // ---------------------------------------------------------------------------
-// 9. Explorer UI
+// 10. Explorer UI
 // ---------------------------------------------------------------------------
 
 // ExplorerExample shows how to embed the explorer in any service.

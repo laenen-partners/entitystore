@@ -611,6 +611,49 @@ http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 })
 ```
 
+## Optimistic Locking
+
+Every entity has a `version` that starts at 0 and increments on every update or merge. When you update an entity, pass the version you read — if someone else wrote first, you get `ErrConflict` and must retry.
+
+**When to use:** always pass `Version` on updates and merges. This is required — updates without the correct version will return `ErrConflict`.
+
+```go
+// 1. Read the entity
+entity, _ := es.GetEntity(ctx, id)
+
+// 2. Update with version check
+_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {WriteEntity: &entitystore.WriteEntityOp{
+        Action:          entitystore.WriteActionUpdate,
+        MatchedEntityID: entity.ID,
+        Version:         entity.Version,  // from the entity you read
+        Data:            updatedData,
+        Confidence:      0.98,
+    }},
+})
+
+// 3. Handle conflict
+if errors.Is(err, entitystore.ErrConflict) {
+    // Entity was modified by another writer — re-read and retry
+    entity, _ = es.GetEntity(ctx, id)
+    // ... re-apply your changes and retry
+}
+```
+
+With generated `WriteOp`:
+
+```go
+entity, _ := es.GetEntity(ctx, id)
+op := personv1.PersonWriteOp(updatedPerson, entitystore.WriteActionUpdate,
+    entitystore.WithMatchedEntityID(entity.ID),
+    entitystore.WithVersion(entity.Version),
+    entitystore.WithTags("active"),
+)
+_, err := es.BatchWrite(ctx, []entitystore.BatchWriteOp{{WriteEntity: op}})
+```
+
+**Creates don't need a version** — they always start at version 0. Only updates and merges require it.
+
 ## Soft deletes
 
 `DeleteEntity` sets `deleted_at` instead of removing the row — data is preserved for audit. All read queries automatically filter deleted entities. Use `HardDeleteEntity` for permanent cleanup.

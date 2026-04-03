@@ -8,11 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 
 ### Breaking
 - **Publisher removed** — `NewPublisher`, `PublishFunc`, `PublisherConfig`, `Publisher`, `PublisherHealth` all removed. Replaced by named consumers (see below).
+- **Optimistic locking on updates/merges** — `WriteActionUpdate` and `WriteActionMerge` now require `Version` field on `WriteEntityOp`. Pass the version from the entity you read. Returns `ErrConflict` if the entity was modified by another writer since you read it. See "Optimistic Locking" section in README.
 
 ### Added
+- **Optimistic locking** — `version` column on entities (starts at 0, increments on every update/merge). Prevents lost updates when multiple writers modify the same entity concurrently. New `ErrConflict` sentinel error and `WithVersion(v)` write option.
 - **Named event consumers** — `NewConsumer(fn, cfg)` with cursor-based progress tracking per consumer name. `Run(ctx)` for polling, `RunRealtime(ctx)` for LISTEN/NOTIFY + polling fallback. Each consumer has its own lock and cursor in `entity_event_consumers` table.
 - **LISTEN/NOTIFY trigger** — `entity_events` table fires a Postgres notification on each insert, enabling sub-second latency for realtime consumers.
 - **Consumer health** — `Health()` now reports per-consumer status (name, lag, lock holder) instead of publisher status.
+- **Soft delete guard** — UPDATE and MERGE queries now include `AND deleted_at IS NULL`. Soft-deleted entities cannot be mutated.
 
 ## [v0.25.0] - 2026-03-26
 
