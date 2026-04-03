@@ -47,13 +47,29 @@ type EntityEvent struct {
 }
 
 type EntityEventConsumer struct {
-	Name        string             `json:"name"`
-	LastEventAt time.Time          `json:"last_event_at"`
-	LastEventID pgtype.UUID        `json:"last_event_id"`
-	HolderID    pgtype.Text        `json:"holder_id"`
-	AcquiredAt  pgtype.Timestamptz `json:"acquired_at"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
+	Name                string             `json:"name"`
+	LastEventAt         time.Time          `json:"last_event_at"`
+	LastEventID         pgtype.UUID        `json:"last_event_id"`
+	HolderID            pgtype.Text        `json:"holder_id"`
+	AcquiredAt          pgtype.Timestamptz `json:"acquired_at"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+	UpdatedAt           time.Time          `json:"updated_at"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	LastError           pgtype.Text        `json:"last_error"`
+	BackoffUntil        pgtype.Timestamptz `json:"backoff_until"`
+}
+
+type EntityEventDeadLetter struct {
+	ID           int64       `json:"id"`
+	ConsumerName string      `json:"consumer_name"`
+	EventID      uuid.UUID   `json:"event_id"`
+	EventType    string      `json:"event_type"`
+	PayloadType  string      `json:"payload_type"`
+	EntityID     pgtype.Text `json:"entity_id"`
+	Payload      []byte      `json:"payload"`
+	ErrorMessage string      `json:"error_message"`
+	RetryCount   int32       `json:"retry_count"`
+	CreatedAt    time.Time   `json:"created_at"`
 }
 
 type EntityEventsDefault struct {

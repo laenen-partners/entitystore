@@ -58,15 +58,16 @@ func (s *Store) Health(ctx context.Context) (HealthStatus, error) {
 		status.Events.LastEventAt = &lastTime
 	}
 
-	// Consumer health: list all consumers with lag.
+	// Consumer health: list all consumers with lag and failure state.
 	consumers, err := s.queries.ListConsumers(ctx)
 	if err == nil && len(consumers) > 0 {
 		status.Consumers = make([]ConsumerHealth, len(consumers))
 		for i, c := range consumers {
 			ch := ConsumerHealth{
-				Name:        c.Name,
-				LastEventAt: c.LastEventAt,
-				Lag:         time.Since(c.LastEventAt).Truncate(time.Second).String(),
+				Name:                c.Name,
+				LastEventAt:         c.LastEventAt,
+				Lag:                 time.Since(c.LastEventAt).Truncate(time.Second).String(),
+				ConsecutiveFailures: int(c.ConsecutiveFailures),
 			}
 			if c.HolderID.Valid {
 				ch.HolderID = c.HolderID.String
@@ -75,6 +76,30 @@ func (s *Store) Health(ctx context.Context) (HealthStatus, error) {
 				t := c.ExpiresAt.Time
 				ch.LockExpiresAt = &t
 			}
+			if c.LastError.Valid {
+				ch.LastError = c.LastError.String
+			}
+			if c.BackoffUntil.Valid {
+				t := c.BackoffUntil.Time
+				ch.BackoffUntil = &t
+			}
+
+			// Dead letter count.
+			dlCount, err := s.queries.CountDeadLetters(ctx, c.Name)
+			if err == nil {
+				ch.DeadLetterCount = dlCount
+			}
+
+			// State derivation.
+			switch {
+			case ch.ConsecutiveFailures == 0 && ch.DeadLetterCount == 0:
+				ch.State = "healthy"
+			case ch.DeadLetterCount > 0:
+				ch.State = "failing"
+			default:
+				ch.State = "degraded"
+			}
+
 			status.Consumers[i] = ch
 		}
 	}

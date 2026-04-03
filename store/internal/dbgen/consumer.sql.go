@@ -18,6 +18,9 @@ const advanceConsumerCursor = `-- name: AdvanceConsumerCursor :exec
 UPDATE entity_event_consumers
 SET last_event_at = $1,
     last_event_id = $2,
+    consecutive_failures = 0,
+    last_error = NULL,
+    backoff_until = NULL,
     updated_at = now()
 WHERE name = $3 AND holder_id = $4
 `
@@ -40,18 +43,22 @@ func (q *Queries) AdvanceConsumerCursor(ctx context.Context, arg AdvanceConsumer
 }
 
 const getConsumerCursor = `-- name: GetConsumerCursor :one
-SELECT last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at
+SELECT last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at,
+       consecutive_failures, last_error, backoff_until
 FROM entity_event_consumers
 WHERE name = $1
 `
 
 type GetConsumerCursorRow struct {
-	LastEventAt time.Time          `json:"last_event_at"`
-	LastEventID pgtype.UUID        `json:"last_event_id"`
-	HolderID    pgtype.Text        `json:"holder_id"`
-	AcquiredAt  pgtype.Timestamptz `json:"acquired_at"`
-	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
-	UpdatedAt   time.Time          `json:"updated_at"`
+	LastEventAt         time.Time          `json:"last_event_at"`
+	LastEventID         pgtype.UUID        `json:"last_event_id"`
+	HolderID            pgtype.Text        `json:"holder_id"`
+	AcquiredAt          pgtype.Timestamptz `json:"acquired_at"`
+	ExpiresAt           pgtype.Timestamptz `json:"expires_at"`
+	UpdatedAt           time.Time          `json:"updated_at"`
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	LastError           pgtype.Text        `json:"last_error"`
+	BackoffUntil        pgtype.Timestamptz `json:"backoff_until"`
 }
 
 func (q *Queries) GetConsumerCursor(ctx context.Context, name string) (GetConsumerCursorRow, error) {
@@ -64,6 +71,9 @@ func (q *Queries) GetConsumerCursor(ctx context.Context, name string) (GetConsum
 		&i.AcquiredAt,
 		&i.ExpiresAt,
 		&i.UpdatedAt,
+		&i.ConsecutiveFailures,
+		&i.LastError,
+		&i.BackoffUntil,
 	)
 	return i, err
 }
@@ -114,7 +124,8 @@ func (q *Queries) GetEventsAfterCursor(ctx context.Context, arg GetEventsAfterCu
 }
 
 const listConsumers = `-- name: ListConsumers :many
-SELECT name, last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at
+SELECT name, last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at,
+       consecutive_failures, last_error, backoff_until
 FROM entity_event_consumers
 ORDER BY name
 `
@@ -136,6 +147,9 @@ func (q *Queries) ListConsumers(ctx context.Context) ([]EntityEventConsumer, err
 			&i.AcquiredAt,
 			&i.ExpiresAt,
 			&i.UpdatedAt,
+			&i.ConsecutiveFailures,
+			&i.LastError,
+			&i.BackoffUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -198,4 +212,32 @@ type TryAcquireConsumerLockParams struct {
 
 func (q *Queries) TryAcquireConsumerLock(ctx context.Context, arg TryAcquireConsumerLockParams) (pgconn.CommandTag, error) {
 	return q.db.Exec(ctx, tryAcquireConsumerLock, arg.Name, arg.HolderID, arg.Ttl)
+}
+
+const updateConsumerFailureState = `-- name: UpdateConsumerFailureState :exec
+UPDATE entity_event_consumers
+SET consecutive_failures = $1,
+    last_error = $2,
+    backoff_until = $3::timestamptz,
+    updated_at = now()
+WHERE name = $4 AND holder_id = $5
+`
+
+type UpdateConsumerFailureStateParams struct {
+	ConsecutiveFailures int32              `json:"consecutive_failures"`
+	LastError           pgtype.Text        `json:"last_error"`
+	BackoffUntil        pgtype.Timestamptz `json:"backoff_until"`
+	Name                string             `json:"name"`
+	HolderID            pgtype.Text        `json:"holder_id"`
+}
+
+func (q *Queries) UpdateConsumerFailureState(ctx context.Context, arg UpdateConsumerFailureStateParams) error {
+	_, err := q.db.Exec(ctx, updateConsumerFailureState,
+		arg.ConsecutiveFailures,
+		arg.LastError,
+		arg.BackoffUntil,
+		arg.Name,
+		arg.HolderID,
+	)
+	return err
 }

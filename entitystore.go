@@ -489,6 +489,9 @@ type Consumer = store.Consumer
 // ConsumerHealth reports the status of a named consumer.
 type ConsumerHealth = store.ConsumerHealth
 
+// ReplayOpts configures dead letter replay.
+type ReplayOpts = store.ReplayOpts
+
 // NewConsumer creates a named event consumer.
 func (es *EntityStore) NewConsumer(fn ConsumerFunc, cfg ConsumerConfig) *Consumer {
 	return store.NewConsumer(es.store.Pool(), fn, cfg)

@@ -7,7 +7,8 @@ ORDER BY occurred_at, id
 LIMIT @batch_size;
 
 -- name: GetConsumerCursor :one
-SELECT last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at
+SELECT last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at,
+       consecutive_failures, last_error, backoff_until
 FROM entity_event_consumers
 WHERE name = @name;
 
@@ -15,6 +16,17 @@ WHERE name = @name;
 UPDATE entity_event_consumers
 SET last_event_at = @last_event_at,
     last_event_id = @last_event_id,
+    consecutive_failures = 0,
+    last_error = NULL,
+    backoff_until = NULL,
+    updated_at = now()
+WHERE name = @name AND holder_id = @holder_id;
+
+-- name: UpdateConsumerFailureState :exec
+UPDATE entity_event_consumers
+SET consecutive_failures = @consecutive_failures,
+    last_error = @last_error,
+    backoff_until = sqlc.narg('backoff_until')::timestamptz,
     updated_at = now()
 WHERE name = @name AND holder_id = @holder_id;
 
@@ -39,6 +51,7 @@ SET holder_id = NULL, expires_at = NULL
 WHERE name = @name AND holder_id = @holder_id;
 
 -- name: ListConsumers :many
-SELECT name, last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at
+SELECT name, last_event_at, last_event_id, holder_id, acquired_at, expires_at, updated_at,
+       consecutive_failures, last_error, backoff_until
 FROM entity_event_consumers
 ORDER BY name;
