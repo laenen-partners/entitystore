@@ -1,5 +1,5 @@
 -- name: FindByAnchors :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3

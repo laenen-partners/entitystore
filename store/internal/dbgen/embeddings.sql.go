@@ -15,7 +15,7 @@ import (
 )
 
 const findByEmbedding = `-- name: FindByEmbedding :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entities e
 WHERE (cardinality($1::text[]) = 0 OR e.entity_type = ANY($1))
   AND e.deleted_at IS NULL
@@ -44,6 +44,7 @@ type FindByEmbeddingRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -72,6 +73,7 @@ func (q *Queries) FindByEmbedding(ctx context.Context, arg FindByEmbeddingParams
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

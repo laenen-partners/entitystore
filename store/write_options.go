@@ -30,6 +30,11 @@ func WithID(id string) WriteOpOption {
 	return func(op *WriteEntityOp) { op.ID = id }
 }
 
+// WithVersion sets the expected version for optimistic locking on updates/merges.
+func WithVersion(v int) WriteOpOption {
+	return func(op *WriteEntityOp) { op.Version = v }
+}
+
 // WithDisplayName sets the display name for the entity.
 func WithDisplayName(name string) WriteOpOption {
 	return func(op *WriteEntityOp) { op.DisplayName = name }

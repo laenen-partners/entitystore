@@ -74,6 +74,7 @@ type StoredEntity struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name,omitempty"`
+	Version     int             `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }

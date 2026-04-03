@@ -1,10 +1,10 @@
 -- name: GetEntity :one
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: GetEntitiesByType :many
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE entity_type = @entity_type
   AND deleted_at IS NULL
@@ -13,7 +13,7 @@ ORDER BY updated_at DESC
 LIMIT @page_size;
 
 -- name: GetEntitiesByTypeFiltered :many
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE entity_type = @entity_type
   AND deleted_at IS NULL
@@ -25,24 +25,24 @@ ORDER BY updated_at DESC
 LIMIT @page_size;
 
 -- name: InsertEntity :one
-INSERT INTO entities (entity_type, data, confidence, tags, display_name)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, entity_type, data, confidence, tags, display_name, created_at, updated_at;
+INSERT INTO entities (entity_type, data, confidence, tags, display_name, version)
+VALUES ($1, $2, $3, $4, $5, 0)
+RETURNING id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at;
 
 -- name: InsertEntityWithID :one
-INSERT INTO entities (id, entity_type, data, confidence, tags, display_name)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, entity_type, data, confidence, tags, display_name, created_at, updated_at;
+INSERT INTO entities (id, entity_type, data, confidence, tags, display_name, version)
+VALUES ($1, $2, $3, $4, $5, $6, 0)
+RETURNING id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at;
 
--- name: UpdateEntityData :exec
+-- name: UpdateEntityData :execresult
 UPDATE entities
-SET data = $2, confidence = $3, display_name = $4, updated_at = now()
-WHERE id = $1;
+SET data = $2, confidence = $3, display_name = $4, version = version + 1, updated_at = now()
+WHERE id = $1 AND version = @expected_version AND deleted_at IS NULL;
 
--- name: MergeEntityData :exec
+-- name: MergeEntityData :execresult
 UPDATE entities
-SET data = data || $2, confidence = $3, display_name = $4, updated_at = now()
-WHERE id = $1;
+SET data = data || $2, confidence = $3, display_name = $4, version = version + 1, updated_at = now()
+WHERE id = $1 AND version = @expected_version AND deleted_at IS NULL;
 
 -- name: DeleteEntity :exec
 UPDATE entities SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL;
@@ -72,7 +72,7 @@ SELECT relation_type, count(*) AS count FROM entity_relations GROUP BY relation_
 SELECT count(*) FROM entities WHERE deleted_at IS NOT NULL;
 
 -- name: SearchByDisplayName :many
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE display_name ILIKE '%' || @query || '%'
   AND deleted_at IS NULL

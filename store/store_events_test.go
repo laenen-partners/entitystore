@@ -107,6 +107,7 @@ func TestEvents_UpdateEmitsEntityUpdated(t *testing.T) {
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionUpdate,
 			MatchedEntityID: id,
+			Version:         results[0].Entity.Version,
 			Data:            testData(t, map[string]any{"name": "bob updated"}),
 			Confidence:      0.98,
 		}},
@@ -165,6 +166,7 @@ func TestEvents_MergeEmitsEntityMerged(t *testing.T) {
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionMerge,
 			MatchedEntityID: id,
+			Version:         results[0].Entity.Version,
 			Data:            testData(t, map[string]any{"phone": "555-0123"}),
 			Confidence:      0.85,
 		}},
@@ -449,6 +451,7 @@ func TestEvents_FilterByEventType(t *testing.T) {
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionUpdate,
 			MatchedEntityID: id,
+			Version:         results[0].Entity.Version,
 			Data:            testData(t, map[string]any{"name": "grace updated"}),
 			Confidence:      0.95,
 		}},
@@ -518,10 +521,15 @@ func TestEvents_FilterByLimit(t *testing.T) {
 	id := results[0].Entity.ID
 
 	for i := 0; i < 2; i++ {
+		ent, err := s.GetEntity(ctx, id)
+		if err != nil {
+			t.Fatalf("get entity for update %d: %v", i, err)
+		}
 		_, err = s.BatchWrite(ctx, []store.BatchWriteOp{
 			{WriteEntity: &store.WriteEntityOp{
 				Action:          store.WriteActionUpdate,
 				MatchedEntityID: id,
+				Version:         ent.Version,
 				Data:            testData(t, map[string]any{"name": "iris updated"}),
 				Confidence:      0.95,
 			}},
@@ -562,10 +570,15 @@ func TestEvents_UUIDv7TimeOrdering(t *testing.T) {
 	}
 	id := results[0].Entity.ID
 
+	ent, err := s.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity: %v", err)
+	}
 	_, err = s.BatchWrite(ctx, []store.BatchWriteOp{
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionUpdate,
 			MatchedEntityID: id,
+			Version:         ent.Version,
 			Data:            testData(t, map[string]any{"name": "jack updated"}),
 			Confidence:      0.95,
 		}},

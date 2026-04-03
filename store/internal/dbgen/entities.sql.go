@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -137,7 +138,7 @@ func (q *Queries) DeleteEntity(ctx context.Context, id uuid.UUID) error {
 }
 
 const getEntitiesByType = `-- name: GetEntitiesByType :many
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE entity_type = $1
   AND deleted_at IS NULL
@@ -159,6 +160,7 @@ type GetEntitiesByTypeRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -179,6 +181,7 @@ func (q *Queries) GetEntitiesByType(ctx context.Context, arg GetEntitiesByTypePa
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -193,7 +196,7 @@ func (q *Queries) GetEntitiesByType(ctx context.Context, arg GetEntitiesByTypePa
 }
 
 const getEntitiesByTypeFiltered = `-- name: GetEntitiesByTypeFiltered :many
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE entity_type = $1
   AND deleted_at IS NULL
@@ -222,6 +225,7 @@ type GetEntitiesByTypeFilteredRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -250,6 +254,7 @@ func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntities
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -264,7 +269,7 @@ func (q *Queries) GetEntitiesByTypeFiltered(ctx context.Context, arg GetEntities
 }
 
 const getEntity = `-- name: GetEntity :one
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -276,6 +281,7 @@ type GetEntityRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -290,6 +296,7 @@ func (q *Queries) GetEntity(ctx context.Context, id uuid.UUID) (GetEntityRow, er
 		&i.Confidence,
 		&i.Tags,
 		&i.DisplayName,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -306,9 +313,9 @@ func (q *Queries) HardDeleteEntity(ctx context.Context, id uuid.UUID) error {
 }
 
 const insertEntity = `-- name: InsertEntity :one
-INSERT INTO entities (entity_type, data, confidence, tags, display_name)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+INSERT INTO entities (entity_type, data, confidence, tags, display_name, version)
+VALUES ($1, $2, $3, $4, $5, 0)
+RETURNING id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 `
 
 type InsertEntityParams struct {
@@ -326,6 +333,7 @@ type InsertEntityRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -346,6 +354,7 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (Ins
 		&i.Confidence,
 		&i.Tags,
 		&i.DisplayName,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -353,9 +362,9 @@ func (q *Queries) InsertEntity(ctx context.Context, arg InsertEntityParams) (Ins
 }
 
 const insertEntityWithID = `-- name: InsertEntityWithID :one
-INSERT INTO entities (id, entity_type, data, confidence, tags, display_name)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+INSERT INTO entities (id, entity_type, data, confidence, tags, display_name, version)
+VALUES ($1, $2, $3, $4, $5, $6, 0)
+RETURNING id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 `
 
 type InsertEntityWithIDParams struct {
@@ -374,6 +383,7 @@ type InsertEntityWithIDRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -395,37 +405,39 @@ func (q *Queries) InsertEntityWithID(ctx context.Context, arg InsertEntityWithID
 		&i.Confidence,
 		&i.Tags,
 		&i.DisplayName,
+		&i.Version,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const mergeEntityData = `-- name: MergeEntityData :exec
+const mergeEntityData = `-- name: MergeEntityData :execresult
 UPDATE entities
-SET data = data || $2, confidence = $3, display_name = $4, updated_at = now()
-WHERE id = $1
+SET data = data || $2, confidence = $3, display_name = $4, version = version + 1, updated_at = now()
+WHERE id = $1 AND version = $5 AND deleted_at IS NULL
 `
 
 type MergeEntityDataParams struct {
-	ID          uuid.UUID       `json:"id"`
-	Data        json.RawMessage `json:"data"`
-	Confidence  float64         `json:"confidence"`
-	DisplayName string          `json:"display_name"`
+	ID              uuid.UUID       `json:"id"`
+	Data            json.RawMessage `json:"data"`
+	Confidence      float64         `json:"confidence"`
+	DisplayName     string          `json:"display_name"`
+	ExpectedVersion int32           `json:"expected_version"`
 }
 
-func (q *Queries) MergeEntityData(ctx context.Context, arg MergeEntityDataParams) error {
-	_, err := q.db.Exec(ctx, mergeEntityData,
+func (q *Queries) MergeEntityData(ctx context.Context, arg MergeEntityDataParams) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, mergeEntityData,
 		arg.ID,
 		arg.Data,
 		arg.Confidence,
 		arg.DisplayName,
+		arg.ExpectedVersion,
 	)
-	return err
 }
 
 const searchByDisplayName = `-- name: SearchByDisplayName :many
-SELECT id, entity_type, data, confidence, tags, display_name, created_at, updated_at
+SELECT id, entity_type, data, confidence, tags, display_name, version, created_at, updated_at
 FROM entities
 WHERE display_name ILIKE '%' || $1 || '%'
   AND deleted_at IS NULL
@@ -447,6 +459,7 @@ type SearchByDisplayNameRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -467,6 +480,7 @@ func (q *Queries) SearchByDisplayName(ctx context.Context, arg SearchByDisplayNa
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -480,25 +494,26 @@ func (q *Queries) SearchByDisplayName(ctx context.Context, arg SearchByDisplayNa
 	return items, nil
 }
 
-const updateEntityData = `-- name: UpdateEntityData :exec
+const updateEntityData = `-- name: UpdateEntityData :execresult
 UPDATE entities
-SET data = $2, confidence = $3, display_name = $4, updated_at = now()
-WHERE id = $1
+SET data = $2, confidence = $3, display_name = $4, version = version + 1, updated_at = now()
+WHERE id = $1 AND version = $5 AND deleted_at IS NULL
 `
 
 type UpdateEntityDataParams struct {
-	ID          uuid.UUID       `json:"id"`
-	Data        json.RawMessage `json:"data"`
-	Confidence  float64         `json:"confidence"`
-	DisplayName string          `json:"display_name"`
+	ID              uuid.UUID       `json:"id"`
+	Data            json.RawMessage `json:"data"`
+	Confidence      float64         `json:"confidence"`
+	DisplayName     string          `json:"display_name"`
+	ExpectedVersion int32           `json:"expected_version"`
 }
 
-func (q *Queries) UpdateEntityData(ctx context.Context, arg UpdateEntityDataParams) error {
-	_, err := q.db.Exec(ctx, updateEntityData,
+func (q *Queries) UpdateEntityData(ctx context.Context, arg UpdateEntityDataParams) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, updateEntityData,
 		arg.ID,
 		arg.Data,
 		arg.Confidence,
 		arg.DisplayName,
+		arg.ExpectedVersion,
 	)
-	return err
 }

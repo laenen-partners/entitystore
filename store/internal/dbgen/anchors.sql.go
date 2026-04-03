@@ -23,7 +23,7 @@ func (q *Queries) DeleteAnchorsForEntity(ctx context.Context, entityID uuid.UUID
 }
 
 const findByAnchors = `-- name: FindByAnchors :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_anchors a
 JOIN entities e ON e.id = a.entity_id
 WHERE a.entity_type = $1 AND a.anchor_field = $2 AND a.normalized_value = $3
@@ -50,6 +50,7 @@ type FindByAnchorsRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -78,6 +79,7 @@ func (q *Queries) FindByAnchors(ctx context.Context, arg FindByAnchorsParams) ([
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

@@ -204,10 +204,15 @@ func TestScopedStore_AutoTags_NotOnUpdate(t *testing.T) {
 		AutoTags: []string{"auto:should-not-appear"},
 	})
 
-	_, err := scoped.BatchWrite(ctx, []store.BatchWriteOp{
+	ent, err := es.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity: %v", err)
+	}
+	_, err = scoped.BatchWrite(ctx, []store.BatchWriteOp{
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionUpdate,
 			MatchedEntityID: id,
+			Version:         ent.Version,
 			Data:            testData(t, map[string]any{"name": "updated"}),
 			Confidence:      0.95,
 		}},
@@ -216,7 +221,7 @@ func TestScopedStore_AutoTags_NotOnUpdate(t *testing.T) {
 		t.Fatalf("batch write: %v", err)
 	}
 
-	ent, err := es.GetEntity(ctx, id)
+	ent, err = es.GetEntity(ctx, id)
 	if err != nil {
 		t.Fatalf("get entity: %v", err)
 	}

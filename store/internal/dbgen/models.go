@@ -24,6 +24,7 @@ type Entity struct {
 	UpdatedAt   time.Time          `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	DisplayName string             `json:"display_name"`
+	Version     int32              `json:"version"`
 }
 
 type EntityAnchor struct {

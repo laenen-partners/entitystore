@@ -44,11 +44,16 @@ func TestBatchWrite_Update(t *testing.T) {
 	id := createTestEntity(t, s,
 		testData(t, map[string]any{"name": "Alice", "title": "Engineer"}))
 
+	ent, err := s.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity: %v", err)
+	}
 	newData := testData(t, map[string]any{"name": "Alice Updated", "title": "Senior Engineer", "phone": "+1234"})
-	_, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+	_, err = s.BatchWrite(ctx, []store.BatchWriteOp{
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionUpdate,
 			MatchedEntityID: id,
+			Version:         ent.Version,
 			Data:            newData,
 			Confidence:      0.98,
 		}},
@@ -81,11 +86,16 @@ func TestBatchWrite_Merge(t *testing.T) {
 	id := createTestEntity(t, s,
 		testData(t, map[string]any{"name": "Bob", "title": "Engineer", "email": "bob@test.com"}))
 
+	ent, err := s.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity: %v", err)
+	}
 	mergeData := testData(t, map[string]any{"title": "Senior Engineer", "phone": "+9999"})
-	_, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+	_, err = s.BatchWrite(ctx, []store.BatchWriteOp{
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionMerge,
 			MatchedEntityID: id,
+			Version:         ent.Version,
 			Data:            mergeData,
 			Confidence:      0.95,
 		}},
@@ -639,10 +649,15 @@ func TestBatchWrite_UpdateAddsTagsAndAnchors(t *testing.T) {
 
 	id := createTestEntity(t, s, testData(t, map[string]any{"email": "update-anchor@test.com"}))
 
-	_, err := s.BatchWrite(ctx, []store.BatchWriteOp{
+	ent, err := s.GetEntity(ctx, id)
+	if err != nil {
+		t.Fatalf("get entity: %v", err)
+	}
+	_, err = s.BatchWrite(ctx, []store.BatchWriteOp{
 		{WriteEntity: &store.WriteEntityOp{
 			Action:          store.WriteActionUpdate,
 			MatchedEntityID: id,
+			Version:         ent.Version,
 			Data:            testData(t, map[string]any{"email": "update-anchor@test.com", "phone": "+1234"}),
 			Confidence:      0.95,
 			Tags:            []string{"updated:true"},

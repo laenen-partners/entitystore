@@ -15,7 +15,7 @@ import (
 )
 
 const connectedEntities = `-- name: ConnectedEntities :many
-SELECT DISTINCT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT DISTINCT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM (
     SELECT r.target_id AS connected_id FROM entity_relations r WHERE r.source_id = $1
     UNION
@@ -38,6 +38,7 @@ type ConnectedEntitiesRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -58,6 +59,7 @@ func (q *Queries) ConnectedEntities(ctx context.Context, arg ConnectedEntitiesPa
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -108,7 +110,7 @@ func (q *Queries) DeleteRelationsForEntity(ctx context.Context, sourceID uuid.UU
 }
 
 const findConnectedByTypeInbound = `-- name: FindConnectedByTypeInbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE r.target_id = $1
@@ -142,6 +144,7 @@ type FindConnectedByTypeInboundRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -172,6 +175,7 @@ func (q *Queries) FindConnectedByTypeInbound(ctx context.Context, arg FindConnec
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -186,7 +190,7 @@ func (q *Queries) FindConnectedByTypeInbound(ctx context.Context, arg FindConnec
 }
 
 const findConnectedByTypeOutbound = `-- name: FindConnectedByTypeOutbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE r.source_id = $1
@@ -220,6 +224,7 @@ type FindConnectedByTypeOutboundRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -250,6 +255,7 @@ func (q *Queries) FindConnectedByTypeOutbound(ctx context.Context, arg FindConne
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -264,7 +270,7 @@ func (q *Queries) FindConnectedByTypeOutbound(ctx context.Context, arg FindConne
 }
 
 const findEntitiesByRelationSource = `-- name: FindEntitiesByRelationSource :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE e.entity_type = $1
@@ -293,6 +299,7 @@ type FindEntitiesByRelationSourceRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -321,6 +328,7 @@ func (q *Queries) FindEntitiesByRelationSource(ctx context.Context, arg FindEnti
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -335,7 +343,7 @@ func (q *Queries) FindEntitiesByRelationSource(ctx context.Context, arg FindEnti
 }
 
 const findEntitiesByRelationTarget = `-- name: FindEntitiesByRelationTarget :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE e.entity_type = $1
@@ -364,6 +372,7 @@ type FindEntitiesByRelationTargetRow struct {
 	Confidence  float64         `json:"confidence"`
 	Tags        []string        `json:"tags"`
 	DisplayName string          `json:"display_name"`
+	Version     int32           `json:"version"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
@@ -392,6 +401,7 @@ func (q *Queries) FindEntitiesByRelationTarget(ctx context.Context, arg FindEnti
 			&i.Confidence,
 			&i.Tags,
 			&i.DisplayName,
+			&i.Version,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

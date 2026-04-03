@@ -39,6 +39,7 @@ type WriteEntityOp struct {
 	Tokens          map[string][]string
 	Embedding       []float32
 	DisplayName     string
+	Version         int // Required for update and merge. Ignored for create.
 	Events          []proto.Message
 }
 
@@ -513,16 +514,26 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 
 	switch op.Action {
 	case WriteActionUpdate:
-		if err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
+		tag, err := q.UpdateEntityData(ctx, dbgen.UpdateEntityDataParams{
 			ID: uid, Data: data, Confidence: op.Confidence, DisplayName: op.DisplayName,
-		}); err != nil {
+			ExpectedVersion: int32(op.Version),
+		})
+		if err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("update entity: %w", err)
 		}
+		if tag.RowsAffected() == 0 {
+			return matching.StoredEntity{}, ErrConflict
+		}
 	case WriteActionMerge:
-		if err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
+		tag, err := q.MergeEntityData(ctx, dbgen.MergeEntityDataParams{
 			ID: uid, Data: data, Confidence: op.Confidence, DisplayName: op.DisplayName,
-		}); err != nil {
+			ExpectedVersion: int32(op.Version),
+		})
+		if err != nil {
 			return matching.StoredEntity{}, fmt.Errorf("merge entity: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return matching.StoredEntity{}, ErrConflict
 		}
 	}
 

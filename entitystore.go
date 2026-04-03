@@ -423,6 +423,9 @@ const MaxBatchSize = store.MaxBatchSize
 // ErrNotFound is returned when a single-entity lookup finds no match.
 var ErrNotFound = store.ErrNotFound
 
+// ErrConflict is returned when an update or merge fails due to a version mismatch.
+var ErrConflict = store.ErrConflict
+
 // WriteOpOption configures a WriteEntityOp built by generated code.
 type WriteOpOption = store.WriteOpOption
 
@@ -433,6 +436,7 @@ var (
 	WithTags            = store.WithTags
 	WithEmbedding       = store.WithEmbedding
 	WithID              = store.WithID
+	WithVersion         = store.WithVersion
 	WithDisplayName     = store.WithDisplayName
 	WithEvents          = store.WithEvents
 )

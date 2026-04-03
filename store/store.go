@@ -234,6 +234,10 @@ func (s *Store) FindByAnchors(ctx context.Context, entityType string, anchors []
 // ErrNotFound is returned when a single-entity lookup finds no match.
 var ErrNotFound = fmt.Errorf("entitystore: not found")
 
+// ErrConflict is returned when an update or merge fails due to a version
+// mismatch — another writer modified the entity since it was read.
+var ErrConflict = fmt.Errorf("entitystore: version conflict (entity was modified by another writer)")
+
 // Search performs a fuzzy search across entity display names using trigram
 // matching. Results are ranked by similarity. Falls back to token search
 // if no display name matches are found.
@@ -657,39 +661,39 @@ type entityRow interface {
 func entityFromRow[R entityRow](row R) matching.StoredEntity {
 	switch r := any(row).(type) {
 	case dbgen.FindByAnchorsRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindByTokenOverlapRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindByEmbeddingRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.GetEntityRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.GetEntitiesByTypeRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.GetEntitiesByTypeFilteredRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.InsertEntityRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.InsertEntityWithIDRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.ConnectedEntitiesRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindConnectedByTypeOutboundRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindConnectedByTypeInboundRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindEntitiesByRelationSourceRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.FindEntitiesByRelationTargetRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	case dbgen.SearchByDisplayNameRow:
-		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.CreatedAt, r.UpdatedAt)
+		return toStoredEntity(r.ID, r.EntityType, r.Data, r.Confidence, r.Tags, r.DisplayName, r.Version, r.CreatedAt, r.UpdatedAt)
 	default:
 		panic("unreachable")
 	}
 }
 
-func toStoredEntity(id uuid.UUID, entityType string, data json.RawMessage, confidence float64, tags []string, displayName string, createdAt, updatedAt time.Time) matching.StoredEntity {
+func toStoredEntity(id uuid.UUID, entityType string, data json.RawMessage, confidence float64, tags []string, displayName string, version int32, createdAt, updatedAt time.Time) matching.StoredEntity {
 	if tags == nil {
 		tags = []string{}
 	}
@@ -700,6 +704,7 @@ func toStoredEntity(id uuid.UUID, entityType string, data json.RawMessage, confi
 		Confidence:  confidence,
 		Tags:        tags,
 		DisplayName: displayName,
+		Version:     int(version),
 		CreatedAt:   createdAt,
 		UpdatedAt:   updatedAt,
 	}

@@ -54,7 +54,7 @@ RETURNING id, source_id, target_id, relation_type, confidence, evidence, implied
 DELETE FROM entity_relations WHERE source_id = $1 OR target_id = $1;
 
 -- name: ConnectedEntities :many
-SELECT DISTINCT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT DISTINCT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM (
     SELECT r.target_id AS connected_id FROM entity_relations r WHERE r.source_id = @entity_id
     UNION
@@ -65,7 +65,7 @@ WHERE e.deleted_at IS NULL
 LIMIT @page_size;
 
 -- name: FindConnectedByTypeOutbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE r.source_id = @entity_id
@@ -80,7 +80,7 @@ ORDER BY r.created_at DESC
 LIMIT @page_size;
 
 -- name: FindConnectedByTypeInbound :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE r.target_id = @entity_id
@@ -95,7 +95,7 @@ ORDER BY r.created_at DESC
 LIMIT @page_size;
 
 -- name: FindEntitiesByRelationSource :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.source_id
 WHERE e.entity_type = @entity_type
@@ -107,7 +107,7 @@ WHERE e.entity_type = @entity_type
 LIMIT @page_size;
 
 -- name: FindEntitiesByRelationTarget :many
-SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.created_at, e.updated_at
+SELECT e.id, e.entity_type, e.data, e.confidence, e.tags, e.display_name, e.version, e.created_at, e.updated_at
 FROM entity_relations r
 JOIN entities e ON e.id = r.target_id
 WHERE e.entity_type = @entity_type
