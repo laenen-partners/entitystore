@@ -593,6 +593,49 @@ Key properties:
 - **At-least-once delivery** — cursor advances only after `ConsumerFunc` returns nil
 - **Idempotent** — consumers must handle redelivery on error/restart
 
+### Resilience
+
+Configure backoff and dead-lettering to handle failures gracefully:
+
+```go
+consumer := es.NewConsumer(handler, entitystore.ConsumerConfig{
+    Name:           "projector",
+    PollInterval:   5 * time.Second,
+    InitialBackoff: 1 * time.Second,  // 1s, 2s, 4s, 8s... exponential with jitter
+    MaxBackoff:     5 * time.Minute,  // cap
+    MaxRetries:     10,               // dead-letter after 10 consecutive failures
+    OnDeadLetter: func(name string, events []entitystore.Event, err error) {
+        // Alert: Slack, PagerDuty, etc.
+        slog.Error("dead letter", "consumer", name, "events", len(events), "error", err)
+    },
+})
+```
+
+Dead-lettered events are stored in `entity_event_dead_letters` for investigation and replay:
+
+```go
+// Replay dead letters after fixing the root cause.
+replayed, failed, _ := consumer.ReplayDeadLetters(ctx, &entitystore.ReplayOpts{
+    Limit: 100,
+})
+
+// Purge old dead letters (retention policy).
+consumer.PurgeDeadLetters(ctx, 30 * 24 * time.Hour) // older than 30 days
+```
+
+Health reports consumer state:
+
+```go
+status, _ := es.Health(ctx)
+for _, c := range status.Consumers {
+    fmt.Printf("%s: state=%s lag=%s failures=%d dead_letters=%d\n",
+        c.Name, c.State, c.Lag, c.ConsecutiveFailures, c.DeadLetterCount)
+    // State: "healthy", "degraded" (retrying), or "failing" (dead letters exist)
+}
+```
+
+All resilience config is optional — zero values preserve default behaviour (retry forever, no backoff).
+
 ## Health
 
 ```go

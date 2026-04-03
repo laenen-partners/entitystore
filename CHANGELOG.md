@@ -16,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Entries are writ
 - **LISTEN/NOTIFY trigger** — `entity_events` table fires a Postgres notification on each insert, enabling sub-second latency for realtime consumers.
 - **Consumer health** — `Health()` now reports per-consumer status (name, lag, lock holder) instead of publisher status.
 - **Soft delete guard** — UPDATE and MERGE queries now include `AND deleted_at IS NULL`. Soft-deleted entities cannot be mutated.
+- **Consumer resilience** — exponential backoff with jitter (`InitialBackoff`, `MaxBackoff`), dead letter table (`MaxRetries`, `OnDeadLetter` callback), replay (`ReplayDeadLetters`), purge (`PurgeDeadLetters`), health state (`healthy`/`degraded`/`failing`). All zero-value defaults preserve previous behaviour. Failure state persisted to DB across restarts.
 
 ## [v0.25.0] - 2026-03-26
 
