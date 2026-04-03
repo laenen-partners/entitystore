@@ -185,19 +185,11 @@ es.BatchWrite(ctx, []entitystore.BatchWriteOp{
 
 This is already documented but not enforced — callers can skip preconditions. Add a prominent warning in the documentation and examples.
 
-### Change 4: Concurrent merge safety (future)
+### Change 4: Concurrent merge safety
 
-For the merge case, the proper fix is `SELECT FOR UPDATE` on the entity row before applying the merge. This serializes concurrent merges:
+Solved by the version column (Change 1). The `AND version = @expected_version` clause on MERGE prevents concurrent merges from silently overwriting each other. The loser gets `ErrConflict` and must retry (re-read, re-decide, re-merge).
 
-```go
-// Inside BatchWrite transaction:
-row := tx.QueryRow("SELECT * FROM entities WHERE id = $1 FOR UPDATE", entityID)
-// Now we hold the row lock — other merges wait
-// Apply merge logic
-// Commit releases the lock
-```
-
-This is a more invasive change to `BatchWrite` internals. Defer to a follow-up after version column ships.
+`SELECT FOR UPDATE` was considered but is unnecessary — optimistic locking is better because it doesn't hold row locks during the matching/scoring computation that happens before the write.
 
 ## Implementation Order
 

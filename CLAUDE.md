@@ -331,6 +331,29 @@ svc := &MyService{es: scoped}  // scoped satisfies EntityStorer
 // svc.es.Scoped(cfg) // won't compile
 ```
 
+## Concurrency
+
+- **Optimistic locking** — every entity has a `version` column (starts at 0, increments on update/merge). Pass `Version` from the entity you read on every update/merge. Returns `ErrConflict` if someone else wrote first. Retry by re-reading and re-applying.
+- **Anchor race prevention** — when creating entities, always use `PreConditions` with `MustNotExist` to prevent duplicate entities with the same anchor. Without this, concurrent creates can produce orphan entities:
+
+```go
+es.BatchWrite(ctx, []entitystore.BatchWriteOp{
+    {
+        WriteEntity: &entitystore.WriteEntityOp{
+            Action: entitystore.WriteActionCreate,
+            Data:   person,
+            Anchors: anchors,
+        },
+        PreConditions: []entitystore.PreCondition{
+            {EntityType: "persons.v1.Person", Anchors: anchors, MustNotExist: true},
+        },
+    },
+})
+```
+
+- **Soft delete guard** — UPDATE and MERGE queries include `AND deleted_at IS NULL`. A soft-deleted entity cannot be mutated (returns `ErrConflict`).
+- **Consumer locking** — each named consumer has a TTL-based lock in `entity_event_consumers`. Only one instance runs per consumer name.
+
 ## Code conventions
 
 - No `init()` functions; wire dependencies explicitly.

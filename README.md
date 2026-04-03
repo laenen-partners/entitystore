@@ -20,6 +20,7 @@ Pure Go library for entity storage, deduplication, and relationship management w
 - **Transactions** — atomic read + write operations via `TxStore` or shared `WithTx(pgx.Tx)`
 - **Stats** — aggregate counts by entity type, relation type, soft-deleted; `Stats()` for full overview
 - **EntityStorer interface** — for dependency injection and testing; satisfied by both `EntityStore` and `ScopedStore`
+- **Optimistic locking** — version column on entities prevents lost updates; `ErrConflict` on stale writes
 - **Input validation** — tag length/count limits, relation type validation, batch size cap (1000)
 - **Structured logging** — `WithLogger(*slog.Logger)` for debug-level operation tracing
 - **Code generation** — `protoc-gen-entitystore` generates matching configs, extraction schemas, typed token/anchor extractors, and `WriteOp` builders from proto annotations
