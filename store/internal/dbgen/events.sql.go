@@ -15,7 +15,7 @@ import (
 )
 
 const getAllEvents = `-- name: GetAllEvents :many
-SELECT ev.id, ev.event_type, ev.payload_type, ev.payload, ev.entity_id, ev.relation_key, ev.tags, ev.occurred_at, ev.published_at,
+SELECT ev.id, ev.event_type, ev.payload_type, ev.payload, ev.entity_id, ev.relation_key, ev.tags, ev.entity_type, ev.occurred_at, ev.published_at,
        COALESCE(e.display_name, '') AS entity_display_name
 FROM entity_events ev
 LEFT JOIN entities e ON e.id = ev.entity_id
@@ -39,6 +39,7 @@ type GetAllEventsRow struct {
 	EntityID          pgtype.UUID        `json:"entity_id"`
 	RelationKey       pgtype.Text        `json:"relation_key"`
 	Tags              []string           `json:"tags"`
+	EntityType        string             `json:"entity_type"`
 	OccurredAt        time.Time          `json:"occurred_at"`
 	PublishedAt       pgtype.Timestamptz `json:"published_at"`
 	EntityDisplayName string             `json:"entity_display_name"`
@@ -61,6 +62,7 @@ func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]G
 			&i.EntityID,
 			&i.RelationKey,
 			&i.Tags,
+			&i.EntityType,
 			&i.OccurredAt,
 			&i.PublishedAt,
 			&i.EntityDisplayName,
@@ -76,14 +78,27 @@ func (q *Queries) GetAllEvents(ctx context.Context, arg GetAllEventsParams) ([]G
 }
 
 const getEventByID = `-- name: GetEventByID :one
-SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, entity_type, occurred_at, published_at
 FROM entity_events
 WHERE id = $1
 `
 
-func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (EntityEvent, error) {
+type GetEventByIDRow struct {
+	ID          uuid.UUID          `json:"id"`
+	EventType   string             `json:"event_type"`
+	PayloadType string             `json:"payload_type"`
+	Payload     json.RawMessage    `json:"payload"`
+	EntityID    pgtype.UUID        `json:"entity_id"`
+	RelationKey pgtype.Text        `json:"relation_key"`
+	Tags        []string           `json:"tags"`
+	EntityType  string             `json:"entity_type"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+}
+
+func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (GetEventByIDRow, error) {
 	row := q.db.QueryRow(ctx, getEventByID, id)
-	var i EntityEvent
+	var i GetEventByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.EventType,
@@ -92,6 +107,7 @@ func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (EntityEvent, 
 		&i.EntityID,
 		&i.RelationKey,
 		&i.Tags,
+		&i.EntityType,
 		&i.OccurredAt,
 		&i.PublishedAt,
 	)
@@ -99,7 +115,7 @@ func (q *Queries) GetEventByID(ctx context.Context, id uuid.UUID) (EntityEvent, 
 }
 
 const getEventsForEntity = `-- name: GetEventsForEntity :many
-SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, entity_type, occurred_at, published_at
 FROM entity_events
 WHERE entity_id = $1
   AND (cardinality($2::text[]) = 0 OR event_type = ANY($2))
@@ -115,7 +131,20 @@ type GetEventsForEntityParams struct {
 	MaxResults int32       `json:"max_results"`
 }
 
-func (q *Queries) GetEventsForEntity(ctx context.Context, arg GetEventsForEntityParams) ([]EntityEvent, error) {
+type GetEventsForEntityRow struct {
+	ID          uuid.UUID          `json:"id"`
+	EventType   string             `json:"event_type"`
+	PayloadType string             `json:"payload_type"`
+	Payload     json.RawMessage    `json:"payload"`
+	EntityID    pgtype.UUID        `json:"entity_id"`
+	RelationKey pgtype.Text        `json:"relation_key"`
+	Tags        []string           `json:"tags"`
+	EntityType  string             `json:"entity_type"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+}
+
+func (q *Queries) GetEventsForEntity(ctx context.Context, arg GetEventsForEntityParams) ([]GetEventsForEntityRow, error) {
 	rows, err := q.db.Query(ctx, getEventsForEntity,
 		arg.EntityID,
 		arg.EventTypes,
@@ -126,9 +155,9 @@ func (q *Queries) GetEventsForEntity(ctx context.Context, arg GetEventsForEntity
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityEvent
+	var items []GetEventsForEntityRow
 	for rows.Next() {
-		var i EntityEvent
+		var i GetEventsForEntityRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EventType,
@@ -137,6 +166,7 @@ func (q *Queries) GetEventsForEntity(ctx context.Context, arg GetEventsForEntity
 			&i.EntityID,
 			&i.RelationKey,
 			&i.Tags,
+			&i.EntityType,
 			&i.OccurredAt,
 			&i.PublishedAt,
 		); err != nil {
@@ -162,8 +192,8 @@ func (q *Queries) GetLastEventTime(ctx context.Context) (time.Time, error) {
 }
 
 const insertEvent = `-- name: InsertEvent :exec
-INSERT INTO entity_events (id, event_type, payload_type, payload, entity_id, relation_key, tags)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO entity_events (id, event_type, payload_type, payload, entity_id, relation_key, tags, entity_type)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertEventParams struct {
@@ -174,6 +204,7 @@ type InsertEventParams struct {
 	EntityID    pgtype.UUID     `json:"entity_id"`
 	RelationKey pgtype.Text     `json:"relation_key"`
 	Tags        []string        `json:"tags"`
+	EntityType  string          `json:"entity_type"`
 }
 
 func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error {
@@ -185,6 +216,7 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.EntityID,
 		arg.RelationKey,
 		arg.Tags,
+		arg.EntityType,
 	)
 	return err
 }

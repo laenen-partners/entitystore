@@ -44,6 +44,7 @@ type EntityEvent struct {
 	Tags        []string           `json:"tags"`
 	OccurredAt  time.Time          `json:"occurred_at"`
 	PublishedAt pgtype.Timestamptz `json:"published_at"`
+	EntityType  string             `json:"entity_type"`
 }
 
 type EntityEventConsumer struct {

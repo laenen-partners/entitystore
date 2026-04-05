@@ -191,7 +191,7 @@ func (ts *TxStore) DeleteRelationByKey(ctx context.Context, sourceID, targetID, 
 		RelationType: relationType,
 	}
 	rk := relationKeyStr(sourceUID, targetUID, relationType)
-	return insertEvents(ctx, ts.queries, uuid.Nil, rk, nil, []proto.Message{evt})
+	return insertEvents(ctx, ts.queries, uuid.Nil, rk, nil, "", []proto.Message{evt})
 }
 
 // GetEventsForEntity returns events for the given entity within the transaction.

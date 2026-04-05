@@ -152,7 +152,7 @@ func (s *Store) HardDeleteEntity(ctx context.Context, id string) error {
 			EntityId:   id,
 			EntityType: entityType,
 		}
-		if err := insertEvents(ctx, q, uid, "", tags, []proto.Message{evt}); err != nil {
+		if err := insertEvents(ctx, q, uid, "", tags, entityType, []proto.Message{evt}); err != nil {
 			return fmt.Errorf("insert hard delete event: %w", err)
 		}
 		return q.HardDeleteEntity(ctx, uid)

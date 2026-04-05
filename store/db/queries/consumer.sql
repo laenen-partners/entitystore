@@ -1,5 +1,5 @@
 -- name: GetEventsAfterCursor :many
-SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, entity_type, occurred_at, published_at
 FROM entity_events
 WHERE occurred_at > @after_at
    OR (occurred_at = @after_at AND id > @after_id)

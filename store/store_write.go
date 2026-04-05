@@ -177,7 +177,7 @@ func (s *Store) executeBatchOps(ctx context.Context, q *dbgen.Queries, ops []Bat
 			targetUID, _ := uuid.Parse(rel.TargetID)
 			rk := relationKeyStr(sourceUID, targetUID, rel.RelationType)
 			allRelEvents := append([]proto.Message{stdEvent}, relOp.Events...)
-			if err := insertEvents(ctx, q, uuid.Nil, rk, nil, allRelEvents); err != nil {
+			if err := insertEvents(ctx, q, uuid.Nil, rk, nil, "", allRelEvents); err != nil {
 				return nil, fmt.Errorf("op %d (upsert_relation events): %w", i, err)
 			}
 			results = append(results, BatchWriteResult{Relation: &rel})
@@ -210,7 +210,7 @@ func (s *Store) DeleteEntity(ctx context.Context, id string) error {
 			EntityId:   id,
 			EntityType: row.EntityType,
 		}
-		return insertEvents(ctx, q, uid, "", row.Tags, []proto.Message{evt})
+		return insertEvents(ctx, q, uid, "", row.Tags, row.EntityType, []proto.Message{evt})
 	}
 
 	if s.tx != nil {
@@ -255,7 +255,7 @@ func (s *Store) DeleteRelationByKey(ctx context.Context, sourceID, targetID, rel
 			RelationType: relationType,
 		}
 		rk := relationKeyStr(sourceUID, targetUID, relationType)
-		return insertEvents(ctx, q, uuid.Nil, rk, nil, []proto.Message{evt})
+		return insertEvents(ctx, q, uuid.Nil, rk, nil, "", []proto.Message{evt})
 	}
 
 	if s.tx != nil {
@@ -494,7 +494,7 @@ func applyCreate(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp) (matc
 		Tags:       tags,
 	}
 	allEvents := append([]proto.Message{stdEvent}, op.Events...)
-	if err := insertEvents(ctx, q, entityID, "", tags, allEvents); err != nil {
+	if err := insertEvents(ctx, q, entityID, "", tags, entityType, allEvents); err != nil {
 		return matching.StoredEntity{}, err
 	}
 
@@ -578,7 +578,7 @@ func applyUpdateOrMerge(ctx context.Context, q *dbgen.Queries, op *WriteEntityOp
 		}
 	}
 	allEvents := append([]proto.Message{stdEvent}, op.Events...)
-	if err := insertEvents(ctx, q, uid, "", ent.Tags, allEvents); err != nil {
+	if err := insertEvents(ctx, q, uid, "", ent.Tags, entityType, allEvents); err != nil {
 		return matching.StoredEntity{}, err
 	}
 

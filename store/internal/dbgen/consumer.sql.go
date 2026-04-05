@@ -7,6 +7,7 @@ package dbgen
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -79,7 +80,7 @@ func (q *Queries) GetConsumerCursor(ctx context.Context, name string) (GetConsum
 }
 
 const getEventsAfterCursor = `-- name: GetEventsAfterCursor :many
-SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, occurred_at, published_at
+SELECT id, event_type, payload_type, payload, entity_id, relation_key, tags, entity_type, occurred_at, published_at
 FROM entity_events
 WHERE occurred_at > $1
    OR (occurred_at = $1 AND id > $2)
@@ -93,15 +94,28 @@ type GetEventsAfterCursorParams struct {
 	BatchSize int32     `json:"batch_size"`
 }
 
-func (q *Queries) GetEventsAfterCursor(ctx context.Context, arg GetEventsAfterCursorParams) ([]EntityEvent, error) {
+type GetEventsAfterCursorRow struct {
+	ID          uuid.UUID          `json:"id"`
+	EventType   string             `json:"event_type"`
+	PayloadType string             `json:"payload_type"`
+	Payload     json.RawMessage    `json:"payload"`
+	EntityID    pgtype.UUID        `json:"entity_id"`
+	RelationKey pgtype.Text        `json:"relation_key"`
+	Tags        []string           `json:"tags"`
+	EntityType  string             `json:"entity_type"`
+	OccurredAt  time.Time          `json:"occurred_at"`
+	PublishedAt pgtype.Timestamptz `json:"published_at"`
+}
+
+func (q *Queries) GetEventsAfterCursor(ctx context.Context, arg GetEventsAfterCursorParams) ([]GetEventsAfterCursorRow, error) {
 	rows, err := q.db.Query(ctx, getEventsAfterCursor, arg.AfterAt, arg.AfterID, arg.BatchSize)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []EntityEvent
+	var items []GetEventsAfterCursorRow
 	for rows.Next() {
-		var i EntityEvent
+		var i GetEventsAfterCursorRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.EventType,
@@ -110,6 +124,7 @@ func (q *Queries) GetEventsAfterCursor(ctx context.Context, arg GetEventsAfterCu
 			&i.EntityID,
 			&i.RelationKey,
 			&i.Tags,
+			&i.EntityType,
 			&i.OccurredAt,
 			&i.PublishedAt,
 		); err != nil {
