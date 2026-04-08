@@ -115,7 +115,7 @@ func (h *Handlers) EntityDetailFragment(w http.ResponseWriter, r *http.Request) 
 	resolved := h.resolveEntities(r.Context(), id)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound, resolved), ds.WithDrawerMaxWidth("max-w-2xl"))
+	ds.Send.Drawer(r.Context(), sse, entityDetail(entity, string(prettyJSON), anchors, outbound, inbound, resolved), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EntityRelationsFragment returns relations for an entity.
@@ -127,7 +127,7 @@ func (h *Handlers) EntityRelationsFragment(w http.ResponseWriter, r *http.Reques
 	inbound, _ := h.es.GetRelationsToEntity(ctx, id, 50, nil)
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, entityRelations(id, outbound, inbound), ds.WithDrawerMaxWidth("max-w-2xl"))
+	ds.Send.Drawer(r.Context(), sse, entityRelations(id, outbound, inbound), ds.WithDrawerMaxWidth("max-w-2xl"))
 }
 
 // EventDetailFragment shows a single event's full payload in a drawer.
@@ -182,7 +182,7 @@ func (h *Handlers) EventDetailFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sse := datastar.NewSSE(w, r)
-	ds.Send.Drawer(sse, eventDetail(evt, prettyPayload, entity, source, target, relationType), ds.WithDrawerMaxWidth("max-w-xl"))
+	ds.Send.Drawer(r.Context(), sse, eventDetail(evt, prettyPayload, entity, source, target, relationType), ds.WithDrawerMaxWidth("max-w-xl"))
 }
 
 // EntityEventsFragment returns events for an entity.
